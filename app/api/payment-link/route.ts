@@ -5,7 +5,7 @@ import { calculateInvoiceTotals } from '@/lib/tax'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const {
       data: { session },

@@ -1,7 +1,7 @@
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2025-02-24.acacia',
 })
 
 export async function createPaymentLink(
@@ -27,7 +27,7 @@ export async function createPaymentLink(
           },
           quantity: 1,
         },
-      ],
+      ] as any,
       after_completion: {
         type: 'hosted_confirmation',
         hosted_confirmation: {
