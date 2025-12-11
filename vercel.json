@@ -1,25 +1,7 @@
 {
   "version": 2,
-  "name": "yapmate",
-  "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["lhr1"],
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@next_public_supabase_url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@next_public_supabase_anon_key"
-  },
-  "build": {
-    "env": {
-      "NEXT_PUBLIC_SUPABASE_URL": "@next_public_supabase_url",
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@next_public_supabase_anon_key",
-      "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
-      "OPENAI_API_KEY": "@openai_api_key",
-      "STRIPE_SECRET_KEY": "@stripe_secret_key",
-      "RESEND_API_KEY": "@resend_api_key"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
