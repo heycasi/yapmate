@@ -142,9 +142,9 @@ export default function InvoiceEditPage() {
     invoice.labour_hours,
     invoice.labour_rate,
     materials.map((m) => ({ cost: m.cost, quantity: m.quantity })),
-    invoice.cis_job,
+    invoice.cis_job ?? false, // Treat null as false for calculations only
     invoice.cis_rate,
-    invoice.vat_registered,
+    invoice.vat_registered ?? false, // Treat null as false for calculations only
     invoice.vat_rate
   )
 
@@ -169,7 +169,7 @@ export default function InvoiceEditPage() {
           )}
 
           {/* AI Draft Warning - Show if any critical fields are null/empty */}
-          {(!invoice.customer_name || invoice.labour_hours === null) && (
+          {(!invoice.customer_name || invoice.labour_hours === null || invoice.cis_job === null || invoice.vat_registered === null) && (
             <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4 mb-6">
               <p className="text-yellow-200 text-sm font-semibold mb-1">
                 ⚠️ AI Draft - Please Review
@@ -327,35 +327,78 @@ export default function InvoiceEditPage() {
               </div>
             </div>
 
-            {/* Tax Toggles */}
+            {/* Tax Toggles - 3-State (Yes/No/Unknown) */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="cis"
-                  checked={invoice.cis_job}
-                  onChange={(e) =>
-                    setInvoice({ ...invoice, cis_job: e.target.checked })
-                  }
-                  className="w-5 h-5 mr-3"
-                />
-                <label htmlFor="cis" className="text-white">
+              {/* CIS Job */}
+              <div>
+                <label className="block text-white text-sm mb-2">
                   CIS Job ({invoice.cis_rate}%)
+                  {invoice.cis_job === null && (
+                    <span className="ml-2 text-xs text-yellow-400">⚠️ Unknown</span>
+                  )}
                 </label>
+                <div className={`flex gap-2 p-2 rounded-lg border ${
+                  invoice.cis_job === null
+                    ? 'border-yellow-500/70 bg-yellow-500/10'
+                    : 'border-white/20 bg-black/20'
+                }`}>
+                  <button
+                    onClick={() => setInvoice({ ...invoice, cis_job: true })}
+                    className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                      invoice.cis_job === true
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                    }`}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => setInvoice({ ...invoice, cis_job: false })}
+                    className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                      invoice.cis_job === false
+                        ? 'bg-red-600 text-white'
+                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                    }`}
+                  >
+                    No
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="vat"
-                  checked={invoice.vat_registered}
-                  onChange={(e) =>
-                    setInvoice({ ...invoice, vat_registered: e.target.checked })
-                  }
-                  className="w-5 h-5 mr-3"
-                />
-                <label htmlFor="vat" className="text-white">
+
+              {/* VAT Registered */}
+              <div>
+                <label className="block text-white text-sm mb-2">
                   VAT Registered ({invoice.vat_rate}%)
+                  {invoice.vat_registered === null && (
+                    <span className="ml-2 text-xs text-yellow-400">⚠️ Unknown</span>
+                  )}
                 </label>
+                <div className={`flex gap-2 p-2 rounded-lg border ${
+                  invoice.vat_registered === null
+                    ? 'border-yellow-500/70 bg-yellow-500/10'
+                    : 'border-white/20 bg-black/20'
+                }`}>
+                  <button
+                    onClick={() => setInvoice({ ...invoice, vat_registered: true })}
+                    className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                      invoice.vat_registered === true
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                    }`}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => setInvoice({ ...invoice, vat_registered: false })}
+                    className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                      invoice.vat_registered === false
+                        ? 'bg-red-600 text-white'
+                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                    }`}
+                  >
+                    No
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -287,8 +287,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Save invoice to database
-    // Note: null CIS/VAT values are converted to false for database compatibility
-    // The user will see these fields highlighted in the edit screen
+    // CIS/VAT values saved exactly as extracted (true/false/null)
     const { data: invoiceData, error: invoiceError } = await userSupabase
       .from('invoices')
       .insert({
@@ -297,9 +296,9 @@ export async function POST(request: NextRequest) {
         job_summary: extractedInvoice.jobSummary,
         labour_hours: extractedInvoice.labourHours,
         labour_rate: 45.0, // Default rate
-        cis_job: extractedInvoice.cisJob ?? false, // null → false for DB
+        cis_job: extractedInvoice.cisJob, // Saved as-is: true/false/null
         cis_rate: 20.0,
-        vat_registered: extractedInvoice.vatRegistered ?? false, // null → false for DB
+        vat_registered: extractedInvoice.vatRegistered, // Saved as-is: true/false/null
         vat_rate: 20.0,
         status: 'draft',
         notes: extractedInvoice.notes,

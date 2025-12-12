@@ -41,8 +41,13 @@ CRITICAL RULES - YOU MUST NOT CHANGE:
 
 YOU MAY NORMALISE:
 - Slang: "aye" → "yes", "naw/nae" → "no", "mibby" → "maybe", "an hoor" → "an hour", "hunner" → "hundred", "quid" → "pounds"
-- Filler words: "like", "ken", "ye know", "innit"
+- Filler words: "like", "ken", "ye know", "innit", "um", "uh", "er"
 - Casual grammar: "I done" → "I did", "we was" → "we were"
+
+YOU MUST REMOVE:
+- Garbage tokens that are NOT valid English words AND NOT numbers, currency, postcodes, names, or addresses
+- Examples of garbage to remove: random consonant clusters, transcription artifacts, nonsense syllables
+- ONLY remove if you are certain it is garbage - when in doubt, keep it
 
 CRITICAL: CIS AND VAT PHRASE NORMALISATION
 
