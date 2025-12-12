@@ -168,11 +168,26 @@ export default function InvoiceEditPage() {
             </div>
           )}
 
+          {/* AI Draft Warning - Show if any critical fields are null/empty */}
+          {(!invoice.customer_name || invoice.labour_hours === null) && (
+            <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4 mb-6">
+              <p className="text-yellow-200 text-sm font-semibold mb-1">
+                ⚠️ AI Draft - Please Review
+              </p>
+              <p className="text-yellow-100 text-sm">
+                Some fields couldn't be extracted from your recording. Highlighted fields need your confirmation before sending.
+              </p>
+            </div>
+          )}
+
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 space-y-6">
             {/* Customer Name */}
             <div>
               <label className="block text-white text-sm mb-2">
                 Customer Name
+                {!invoice.customer_name && (
+                  <span className="ml-2 text-xs text-yellow-400">⚠️ Please confirm</span>
+                )}
               </label>
               <input
                 type="text"
@@ -180,7 +195,11 @@ export default function InvoiceEditPage() {
                 onChange={(e) =>
                   setInvoice({ ...invoice, customer_name: e.target.value })
                 }
-                className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className={`w-full px-4 py-3 rounded-lg bg-black/20 border ${
+                  !invoice.customer_name
+                    ? 'border-yellow-500/70 ring-2 ring-yellow-500/30'
+                    : 'border-white/20'
+                } text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500`}
                 placeholder="Customer name"
               />
             </div>
@@ -205,6 +224,9 @@ export default function InvoiceEditPage() {
               <div>
                 <label className="block text-white text-sm mb-2">
                   Labour Hours
+                  {invoice.labour_hours === null && (
+                    <span className="ml-2 text-xs text-yellow-400">⚠️ Please confirm</span>
+                  )}
                 </label>
                 <input
                   type="number"
@@ -216,7 +238,12 @@ export default function InvoiceEditPage() {
                       labour_hours: parseFloat(e.target.value) || null,
                     })
                   }
-                  className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className={`w-full px-4 py-3 rounded-lg bg-black/20 border ${
+                    invoice.labour_hours === null
+                      ? 'border-yellow-500/70 ring-2 ring-yellow-500/30'
+                      : 'border-white/20'
+                  } text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                  placeholder="Hours worked"
                 />
               </div>
               <div>

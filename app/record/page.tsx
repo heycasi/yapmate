@@ -7,6 +7,7 @@ import type { Invoice } from '@/lib/invoice'
 import Navigation from '@/components/Navigation'
 
 export default function RecordPage() {
+  const [selectedTrade, setSelectedTrade] = useState<string>('Plumber') // Default to Plumber
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [transcript, setTranscript] = useState<string | null>(null)
@@ -213,7 +214,10 @@ export default function RecordPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ transcript: transcriptText }),
+        body: JSON.stringify({
+          transcript: transcriptText,
+          trade: selectedTrade // Pass selected trade for context
+        }),
       })
 
       if (!response.ok) {
@@ -246,6 +250,28 @@ export default function RecordPage() {
             <h1 className="text-4xl font-bold text-white mb-2">Record Your Job</h1>
             <p className="text-gray-300">
               Describe your job and we&apos;ll extract the invoice details
+            </p>
+          </div>
+
+          {/* Trade Selector - MANDATORY */}
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-6">
+            <label className="block text-white text-sm font-semibold mb-3">
+              Your Trade *
+            </label>
+            <select
+              value={selectedTrade}
+              onChange={(e) => setSelectedTrade(e.target.value)}
+              disabled={isRecording || isTranscribing || isExtracting}
+              className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+            >
+              <option value="Plumber">Plumber</option>
+              <option value="Electrician">Electrician</option>
+              <option value="Joiner">Joiner</option>
+              <option value="Painter & Decorator">Painter & Decorator</option>
+              <option value="Other">Other</option>
+            </select>
+            <p className="text-gray-400 text-xs mt-2">
+              Helps improve invoice accuracy for trade-specific terminology
             </p>
           </div>
 

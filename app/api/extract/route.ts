@@ -3,41 +3,34 @@ import { openai } from '@/lib/openai'
 import { createClient } from '@supabase/supabase-js'
 import type { Invoice } from '@/lib/invoice'
 
-const SYSTEM_PROMPT = `You extract clean, structured invoice data from messy voice transcripts from UK tradespeople (plumbers, sparkies, joiners, gas engineers, builders).
+const SYSTEM_PROMPT = `You extract clean, structured invoice data from voice transcripts from UK tradespeople.
 
-The transcript may contain Scottish or Northern English slang and normalised speech from regional UK accents (Glaswegian, Edinburgh, Geordie, Scouse, Mancunian, etc.).
+The user's trade will be provided to help you understand vocabulary and context. Use it ONLY for interpretation guidance - do NOT invent job details based on trade stereotypes.
 
 You must output JSON that matches this EXACT TypeScript type:
 
 Invoice {
   customerName: string | null;
-  jobSummary: string;
+  jobSummary: string; // REQUIRED: Never null
   labourHours: number | null;
   materials: { description: string; cost: number | null }[];
-  cisJob: boolean;
-  vatRegistered: boolean;
+  cisJob: boolean | null; // true/false if mentioned, null if unknown
+  vatRegistered: boolean | null; // true/false if mentioned, null if unknown
   notes: string | null;
 }
 
-GENERAL RULES
-- Work ONLY from the transcript text I give you.
-- If something is not clearly stated, return null instead of guessing.
-- Never invent customer names, hours, prices or materials.
-- If you are not 90%+ confident in a value, use null.
-- Always return valid JSON, no comments, no trailing commas.
+CORE RULE (NON-NEGOTIABLE):
+If you are unsure about a value, return null. NEVER guess.
 
 FIELD RULES
 
 1) customerName
-- Look for a named person or company the job is for.
-- Phrases to use:
-  - "job for Mrs Smith"
-  - "for John at Oak Tree Builders"
-  - "for Acme Plumbing Ltd"
-- Strip leading filler like "job for", "work for", "invoice for".
-- If multiple names appear, pick the one that clearly sounds like the client.
-- If no clear client is mentioned, use null.
-- PRESERVE the name exactly as stated (e.g., "Dahl", "Campbell", "O'Neill").
+- Extract EXACTLY as spoken in the transcript. Do NOT correct spelling.
+- Look for phrases like: "job for Mrs Smith", "for John Campbell", "invoice for Acme Ltd"
+- Strip leading filler ("job for", "work for", "invoice for").
+- CRITICAL: Preserve names exactly - if transcript says "Dahl", use "Dahl" (not "Dow" or "Doll")
+- If no customer name mentioned → null
+- If confidence is low (e.g., unclear audio, multiple names) → null
 
 2) jobSummary
 - One short sentence (max 35 words) that sums up the work done.
@@ -48,19 +41,20 @@ FIELD RULES
   - "Serviced boiler and replaced faulty pump."
 
 3) labourHours
-- Use the total time actually on site.
-- Accept common spoken forms AND UK slang:
-  - "3 hours", "three hours", "about 2 and a half hours", "couple of hours"
-  - "an hour", "an hoor" (Scottish: an hour)
-  - "couple of hoors", "a couple hours" (Scottish: couple of hours)
-  - "half an hour", "half an hoor"
-- Conversions:
-  - "half an hour" / "half an hoor" → 0.5
-  - "an hour and a half" / "an hoor and a half" → 1.5
-  - "two and a half hours" → 2.5
+- Extract ONLY if explicitly stated with a clear number.
+- Supported UK phrasing:
+  - "an hour" / "an hoor" → 1
+  - "hour and a half" / "hoor and a half" → 1.5
   - "couple of hours" / "couple of hoors" → 2
-- If they say a vague phrase with no clear number ("there for a wee while", "most of the afternoon", "a bit of time") → null.
-- Ignore travel time unless they clearly say it is billable labour.
+  - "half an hour" / "half an hoor" → 0.5
+  - "two and a half hours" → 2.5
+  - "three hours" → 3
+- VAGUE phrases return null:
+  - "wee while" → null
+  - "most of the afternoon" → null
+  - "quick job" → null
+  - "bit of time" → null
+- If no time mentioned → null
 
 4) materials
 - Each clearly separate part or material becomes one item.
@@ -71,63 +65,43 @@ FIELD RULES
     - "copper pipe and fittings"
   - Keep the description as stated (preserve terminology).
 - cost:
-  - Only use a number when an explicit price is spoken for that item.
-  - Handle UK slang for money:
-    - "quid" = pounds (e.g., "180 quid" → 180)
-    - "pound(s)" (e.g., "45 pounds" → 45)
-    - "hunner" / "hundred" (e.g., "a hunner and twenty quid" → 120)
-    - "ninety pounds" → 90
-  - Strip currency words; store numeric GBP value only (no £ symbol).
-- If they mention a material with no price:
-  - Set cost: null.
-- If they give one total for several items:
-  - Put that total on a single line item that best matches how they described it.
-- Do not invent extra materials.
+  - ONLY extract if explicitly stated. NO guessing.
+  - Supported UK money slang:
+    - "quid" → pounds (e.g., "180 quid" → 180)
+    - "hunner" → 100 (e.g., "a hunner and eighty quid" → 180)
+    - "one fifty" → 150
+    - "a hundred and twenty" → 120
+  - Return numeric value only (no £ symbol).
+  - If material mentioned with no price → cost: null
+  - If no materials mentioned → []
 
-5) cisJob
-- CRITICAL: Use explicit phrase matching for CIS status.
-
-- Set cisJob: true ONLY if transcript contains phrases like:
+5) cisJob (CRITICAL: Never guess)
+- Return true ONLY if transcript contains explicit CIS confirmation:
   - "This is a CIS job"
-  - "CIS job"
   - "aye it's CIS"
-  - "it's a CIS job"
-  - "CIS is on"
   - "CIS applies"
-  - "CIS is applied"
-  - "take 20 percent CIS off the labour"
-
-- Set cisJob: false if transcript explicitly says:
+  - "CIS job"
+  - "CIS is on"
+- Return false ONLY if transcript explicitly says NO to CIS:
   - "This is not a CIS job"
   - "no CIS"
-  - "naw/no CIS"
-  - "no CIS on it"
+  - "naw CIS"
   - "not a CIS job"
+- Return null if CIS is NOT mentioned at all
 
-- If CIS is NOT mentioned at all → default cisJob: false.
-
-6) vatRegistered
-- CRITICAL: Use explicit phrase matching for VAT status.
-
-- Set vatRegistered: true ONLY if transcript contains phrases like:
+6) vatRegistered (CRITICAL: Never guess)
+- Return true ONLY if transcript contains explicit VAT confirmation:
+  - "VAT is charged"
   - "I'm VAT registered"
-  - "VAT registered"
-  - "charge VAT on this"
   - "plus VAT"
   - "VAT to be added"
-  - "VAT is charged"
-
-- Set vatRegistered: false if transcript explicitly says:
+- Return false ONLY if transcript explicitly says NO to VAT:
   - "No VAT is charged"
-  - "no VAT on it"
-  - "naw/no VAT"
+  - "no VAT"
+  - "naw VAT"
   - "nae VAT"
-  - "others nae VAT"
-  - "no VAT to add"
-  - "VAT not applicable"
   - "not VAT registered"
-
-- If VAT status is unclear or never mentioned → default vatRegistered: false.
+- Return null if VAT is NOT mentioned at all
 
 7) notes
 - Short free-text field for any extra useful info that does not fit above:
@@ -172,52 +146,55 @@ JSON:
   "notes": null
 }
 
-Example 3 (Scottish dialect with CIS yes, VAT no):
+Example 3 (SUCCESS CRITERIA - Glaswegian plumber):
+User trade: Plumber
 Transcript:
-"Job for Conor Dahl at 24 Ashgill Road. Fitted a new radiator and replaced a leaking valve. Three hours labour. Materials were £180. This is a CIS job. No VAT is charged."
+"Job for Mrs Dahl at 24 Ashgill Road. Fitted a radiator, took a couple of hoors. Materials were a hunner and eighty quid. Aye it's CIS, naw VAT."
 
 JSON:
 {
-  "customerName": "Conor Dahl",
-  "jobSummary": "Fitted a new radiator and replaced a leaking valve.",
-  "labourHours": 3,
+  "customerName": "Mrs Dahl",
+  "jobSummary": "Fitted a radiator.",
+  "labourHours": 2,
   "materials": [
-    { "description": "radiator and parts", "cost": 180 }
+    { "description": "radiator materials", "cost": 180 }
   ],
   "cisJob": true,
   "vatRegistered": false,
   "notes": "Address: 24 Ashgill Road."
 }
 
-Example 4 (No VAT mentioned):
+Example 4 (CIS/VAT not mentioned → null):
+User trade: Electrician
 Transcript:
-"Job for Mrs Smith. Boiler service. Two hours. £120. No VAT is charged."
+"Fixed a socket for John. Took an hour."
 
 JSON:
 {
-  "customerName": "Mrs Smith",
-  "jobSummary": "Boiler service.",
-  "labourHours": 2,
-  "materials": [
-    { "description": "boiler parts", "cost": 120 }
-  ],
-  "cisJob": false,
-  "vatRegistered": false,
+  "customerName": "John",
+  "jobSummary": "Fixed a socket.",
+  "labourHours": 1,
+  "materials": [],
+  "cisJob": null,
+  "vatRegistered": null,
   "notes": null
 }
 
-Example 5 (CIS and VAT both present):
+Example 5 (Vague time phrase → null):
+User trade: Joiner
 Transcript:
-"Job for John Campbell. Fixed the pipe. One and a half hours. This is a CIS job. VAT is charged."
+"Fitted some skirting boards for wee while. Materials were one fifty."
 
 JSON:
 {
-  "customerName": "John Campbell",
-  "jobSummary": "Fixed the pipe.",
-  "labourHours": 1.5,
-  "materials": [],
-  "cisJob": true,
-  "vatRegistered": true,
+  "customerName": null,
+  "jobSummary": "Fitted skirting boards.",
+  "labourHours": null,
+  "materials": [
+    { "description": "skirting boards", "cost": 150 }
+  ],
+  "cisJob": null,
+  "vatRegistered": null,
   "notes": null
 }
 
@@ -266,7 +243,7 @@ export async function POST(request: NextRequest) {
     )
 
     const body = await request.json()
-    const { transcript } = body
+    const { transcript, trade } = body
 
     if (!transcript || typeof transcript !== 'string') {
       return NextResponse.json(
@@ -275,7 +252,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Call OpenAI to extract invoice data with lower temperature for determinism
+    // Trade is optional but recommended for better context
+    const tradeContext = trade ? `\n\nUser's trade: ${trade}` : ''
+
+    // Call OpenAI to extract invoice data with temperature=0 for determinism
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
@@ -285,10 +265,10 @@ export async function POST(request: NextRequest) {
         },
         {
           role: 'user',
-          content: `Extract invoice data from this transcript:\n\n${transcript}`,
+          content: `Extract invoice data from this transcript:${tradeContext}\n\nTranscript:\n${transcript}`,
         },
       ],
-      temperature: 0,
+      temperature: 0, // Maximum determinism - no creativity, no guessing
       response_format: { type: 'json_object' },
     })
 
@@ -307,6 +287,8 @@ export async function POST(request: NextRequest) {
     })
 
     // Save invoice to database
+    // Note: null CIS/VAT values are converted to false for database compatibility
+    // The user will see these fields highlighted in the edit screen
     const { data: invoiceData, error: invoiceError } = await userSupabase
       .from('invoices')
       .insert({
@@ -315,9 +297,9 @@ export async function POST(request: NextRequest) {
         job_summary: extractedInvoice.jobSummary,
         labour_hours: extractedInvoice.labourHours,
         labour_rate: 45.0, // Default rate
-        cis_job: extractedInvoice.cisJob,
+        cis_job: extractedInvoice.cisJob ?? false, // null → false for DB
         cis_rate: 20.0,
-        vat_registered: extractedInvoice.vatRegistered,
+        vat_registered: extractedInvoice.vatRegistered ?? false, // null → false for DB
         vat_rate: 20.0,
         status: 'draft',
         notes: extractedInvoice.notes,
