@@ -6,33 +6,28 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navigation from '@/components/Navigation'
 import { formatCurrency, calculateInvoiceTotals } from '@/lib/tax'
-import { PageShell } from '@/components/ui/PageShell'
-import { Card } from '@/components/ui/Card'
-import { StatusPill } from '@/components/ui/StatusPill'
-import { Button } from '@/components/ui/Button'
-import { SkeletonList } from '@/components/ui/Skeleton'
+
+type FilterType = 'ALL' | 'UNPAID' | 'PAID'
 
 export default function DashboardPage() {
   const [invoices, setInvoices] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
+  const [filter, setFilter] = useState<FilterType>('ALL')
   const router = useRouter()
   const supabase = createBrowserClient()
 
   useEffect(() => {
-    checkUser()
+    checkAuth()
     fetchInvoices()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const checkUser = async () => {
+  const checkAuth = async () => {
     const {
       data: { session },
     } = await supabase.auth.getSession()
     if (!session) {
       router.push('/login')
-    } else {
-      setUser(session.user)
     }
   }
 
@@ -48,55 +43,44 @@ export default function DashboardPage() {
     }
   }
 
-  const getStatusType = (status: string): 'draft' | 'sent' | 'paid' | 'cancelled' | 'overdue' => {
-    if (status === 'paid') return 'paid'
-    if (status === 'sent') return 'sent'
-    if (status === 'cancelled') return 'cancelled'
-    return 'draft'
+  const getStatusBadgeClass = (status: string) => {
+    if (status === 'paid') return 'status-paid'
+    if (status === 'sent') return 'status-sent'
+    return 'status-draft'
   }
 
-  // Calculate summary stats
-  const totalAmount = invoices.reduce((sum, inv) => {
-    const calc = calculateInvoiceTotals(
-      inv.labour_hours,
-      inv.labour_rate,
-      inv.materials?.map((m: any) => ({ cost: m.cost, quantity: m.quantity })) || [],
-      inv.cis_job,
-      inv.cis_rate,
-      inv.vat_registered,
-      inv.vat_rate
-    )
-    return sum + calc.grandTotal
-  }, 0)
+  const getStatusLabel = (status: string) => {
+    if (status === 'paid') return 'PAID'
+    if (status === 'sent') return 'SENT'
+    return 'DRAFT'
+  }
 
-  const paidAmount = invoices
-    .filter((inv) => inv.status === 'paid')
-    .reduce((sum, inv) => {
-      const calc = calculateInvoiceTotals(
-        inv.labour_hours,
-        inv.labour_rate,
-        inv.materials?.map((m: any) => ({ cost: m.cost, quantity: m.quantity })) || [],
-        inv.cis_job,
-        inv.cis_rate,
-        inv.vat_registered,
-        inv.vat_rate
-      )
-      return sum + calc.grandTotal
-    }, 0)
+  // Filter invoices based on selected filter
+  const filteredInvoices = invoices.filter((invoice) => {
+    if (filter === 'PAID') return invoice.status === 'paid'
+    if (filter === 'UNPAID') return invoice.status !== 'paid'
+    return true // ALL
+  })
 
-  const dueAmount = totalAmount - paidAmount
+  const formatInvoiceDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const day = date.getDate().toString().padStart(2, '0')
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    return `${day}/${month}`
+  }
+
+  const formatInvoiceId = (id: string) => {
+    // Extract numeric part if id is UUID, otherwise use last 4 chars
+    const numericId = id.split('-').pop() || id
+    return `#${numericId.slice(-4).toUpperCase()}`
+  }
 
   if (isLoading) {
     return (
       <>
-        <PageShell title="Dashboard">
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <SkeletonList count={2} />
-            </div>
-            <SkeletonList count={3} />
-          </div>
-        </PageShell>
+        <div className="min-h-screen flex items-center justify-center">
+          <span className="font-mono text-sm">{'/ / LOADING RECORDS'}</span>
+        </div>
         <Navigation />
       </>
     )
@@ -104,115 +88,102 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageShell
-        title="Dashboard"
-        description={user?.email}
-      >
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <Card>
-            <p className="text-yapmate-slate-400 text-sm mb-1 uppercase tracking-wide">
-              Outstanding
-            </p>
-            <p className="text-2xl font-bold text-white currency">
-              {formatCurrency(dueAmount)}
-            </p>
-          </Card>
-          <Card>
-            <p className="text-yapmate-slate-400 text-sm mb-1 uppercase tracking-wide">
-              Paid This Month
-            </p>
-            <p className="text-2xl font-bold text-green-400 currency">
-              {formatCurrency(paidAmount)}
-            </p>
-          </Card>
-        </div>
-
-        {/* Recent Invoices */}
-        <Card elevated className="mb-24">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-white">Recent Invoices</h2>
-            <Link
-              href="/customers"
-              className="text-yapmate-amber-500 text-sm font-semibold"
+      {/* FILTER BAR - Sticky Top */}
+      <div className="sticky top-0 z-10 bg-yapmate-black border-b border-yapmate-slate-700 dark:border-yapmate-slate-700">
+        <div className="flex h-12">
+          {(['ALL', 'UNPAID', 'PAID'] as FilterType[]).map((filterOption) => (
+            <button
+              key={filterOption}
+              onClick={() => setFilter(filterOption)}
+              className={`flex-1 font-mono text-xs font-semibold tracking-wide transition-colors duration-snap ${
+                filter === filterOption
+                  ? 'bg-yapmate-amber text-yapmate-black border-r-2 border-yapmate-black'
+                  : 'bg-yapmate-black text-yapmate-white border-r border-yapmate-slate-700 active:bg-yapmate-slate-900'
+              }`}
             >
-              View All
-            </Link>
+              {filterOption}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* MANIFEST DATA GRID - Full Bleed */}
+      <main className="min-h-screen">
+        {filteredInvoices.length === 0 ? (
+          // EMPTY STATE
+          <div className="flex items-center justify-center py-24">
+            <span className="font-mono text-sm text-yapmate-slate-300">
+              {'/ / NO RECORDS FOUND'}
+            </span>
           </div>
+        ) : (
+          // DATA ROWS
+          <div className="data-grid">
+            {filteredInvoices.map((invoice) => {
+              const calculations = calculateInvoiceTotals(
+                invoice.labour_hours,
+                invoice.labour_rate,
+                invoice.materials?.map((m: any) => ({
+                  cost: m.cost,
+                  quantity: m.quantity,
+                })) || [],
+                invoice.cis_job,
+                invoice.cis_rate,
+                invoice.vat_registered,
+                invoice.vat_rate
+              )
 
-          {invoices.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 rounded-full bg-yapmate-slate-700 flex items-center justify-center mx-auto mb-4">
-                <span className="text-3xl">🧾</span>
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                No invoices yet
-              </h3>
-              <p className="text-yapmate-slate-400 mb-6 text-sm">
-                Tap the button below to create your first invoice
-              </p>
-              <div className="animate-bounce text-yapmate-amber-500 text-2xl">
-                ↓
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {invoices.slice(0, 5).map((invoice) => {
-                const calculations = calculateInvoiceTotals(
-                  invoice.labour_hours,
-                  invoice.labour_rate,
-                  invoice.materials?.map((m: any) => ({
-                    cost: m.cost,
-                    quantity: m.quantity,
-                  })) || [],
-                  invoice.cis_job,
-                  invoice.cis_rate,
-                  invoice.vat_registered,
-                  invoice.vat_rate
-                )
-
-                return (
-                  <Link
-                    key={invoice.id}
-                    href={`/invoice/${invoice.id}`}
-                  >
-                    <Card interactive className="p-3">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-white font-semibold mb-1 truncate">
-                            {invoice.customer_name || 'Unnamed Customer'}
-                          </h3>
-                          <p className="text-yapmate-slate-400 text-sm truncate">
-                            {invoice.job_summary}
-                          </p>
-                          <p className="text-yapmate-slate-500 text-xs mt-1">
-                            {new Date(invoice.created_at).toLocaleDateString('en-GB')}
-                          </p>
-                        </div>
-                        <div className="text-right ml-4 flex-shrink-0">
-                          <p className="text-white font-bold currency mb-2">
-                            {formatCurrency(calculations.grandTotal)}
-                          </p>
-                          <StatusPill status={getStatusType(invoice.status)} />
-                        </div>
+              return (
+                <Link
+                  key={invoice.id}
+                  href={`/invoice/${invoice.id}`}
+                  className="block"
+                >
+                  <div className="h-20 flex items-center px-4 border-b border-yapmate-slate-700 dark:border-yapmate-slate-700 transition-colors duration-0 active:bg-yapmate-amber active:text-yapmate-black">
+                    {/* LEFT: Date + Invoice ID */}
+                    <div className="w-16 flex-shrink-0">
+                      <div className="data-label text-[0.625rem]">
+                        {formatInvoiceDate(invoice.created_at)}
                       </div>
-                    </Card>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
-        </Card>
+                      <div className="font-mono text-xs mt-0.5">
+                        {formatInvoiceId(invoice.id)}
+                      </div>
+                    </div>
 
-        {/* Floating Action Button */}
-        <Link
-          href="/record"
-          className="fixed bottom-24 right-4 w-16 h-16 bg-yapmate-amber-500 rounded-full shadow-amber-glow flex items-center justify-center active:scale-95 transition-transform"
-          aria-label="Create new invoice"
-        >
-          <span className="text-3xl text-yapmate-black">🎤</span>
+                    {/* CENTER: Client Name + Status */}
+                    <div className="flex-1 min-w-0 px-4">
+                      <div className="font-sans font-bold text-base truncate">
+                        {invoice.customer_name || 'UNNAMED'}
+                      </div>
+                      <div className={getStatusBadgeClass(invoice.status)}>
+                        {getStatusLabel(invoice.status)}
+                      </div>
+                    </div>
+
+                    {/* RIGHT: Amount */}
+                    <div className="w-28 flex-shrink-0 text-right">
+                      <div className="font-mono text-xl font-bold tabular-nums">
+                        {formatCurrency(calculations.grandTotal)}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Spacer for Navigation */}
+        <div className="h-20" />
+      </main>
+
+      {/* BOTTOM ACTION - Create New */}
+      <div className="fixed bottom-0 left-0 right-0 pb-safe">
+        <Link href="/record" className="bar-button h-14">
+          CREATE NEW RECORD
         </Link>
-      </PageShell>
+      </div>
+
       <Navigation />
     </>
   )
