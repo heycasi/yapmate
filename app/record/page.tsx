@@ -350,7 +350,7 @@ export default function RecordPage() {
             <h3 className="text-white font-semibold mb-3">What we heard:</h3>
             <div className="bg-yapmate-slate-900 rounded-lg p-4">
               <p className="text-yapmate-slate-200 leading-relaxed text-sm">
-                "{transcript}"
+                &ldquo;{transcript}&rdquo;
               </p>
             </div>
           </Card>
