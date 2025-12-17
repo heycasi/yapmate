@@ -14,18 +14,18 @@ export default function Navigation() {
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-lg border-t border-white/10">
-      <div className="flex justify-around items-center h-20">
+    <nav className="fixed bottom-0 left-0 right-0 bg-yapmate-black/95 backdrop-blur-lg border-t border-yapmate-slate-800 pb-safe">
+      <div className="flex justify-around items-center" style={{ height: '68px' }}>
         {navItems.map((item) => {
           const isActive = pathname === item.href
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 h-full transition-colors duration-200 ${
+              className={`flex flex-col items-center justify-center flex-1 h-full transition-colors duration-200 tap-highlight ${
                 isActive
-                  ? 'text-purple-400'
-                  : 'text-gray-400 hover:text-white'
+                  ? 'text-yapmate-amber-500'
+                  : 'text-yapmate-slate-400 active:text-yapmate-slate-200'
               }`}
             >
               <span className="text-2xl mb-1">{item.icon}</span>
