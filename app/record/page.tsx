@@ -5,9 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Invoice } from '@/lib/invoice'
 import Navigation from '@/components/Navigation'
-import { PageShell } from '@/components/ui/PageShell'
-import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
 
 export default function RecordPage() {
   const [selectedTrade, setSelectedTrade] = useState<string>('Plumber') // Default to Plumber
@@ -252,163 +249,168 @@ export default function RecordPage() {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
+    return { mins, secs }
   }
+
+  const getSystemStatus = () => {
+    if (isRecording) return '/ / RECORDING IN PROGRESS'
+    if (isTranscribing) return '/ / PROCESSING AUDIO'
+    if (isExtracting) return '/ / EXTRACTING DATA'
+    return '/ / SYSTEM READY'
+  }
+
+  const { mins, secs } = formatTime(recordingTime)
+  const colonBlink = isRecording && secs % 2 === 0
 
   return (
     <>
-      <PageShell
-        title="Create Invoice"
-        description="Describe your job and we'll handle the details"
+      {/* TALLY LIGHT BAR - Full Width, No Padding */}
+      <div
+        className={`w-full h-12 flex items-center justify-center border-b transition-colors duration-snap ${
+          isRecording
+            ? 'bg-yapmate-status-red border-yapmate-status-red'
+            : 'bg-yapmate-black border-yapmate-slate-700 dark:border-yapmate-slate-700'
+        }`}
+        style={!isRecording ? {
+          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(51, 65, 85, 0.3) 10px, rgba(51, 65, 85, 0.3) 20px)'
+        } : undefined}
       >
-        {/* Trade Selector */}
-        <Card className="mb-4">
-          <label className="block text-yapmate-slate-400 text-label mb-2">
-            Your Trade *
-          </label>
+        <span className="section-header border-0 py-0">
+          {getSystemStatus()}
+        </span>
+      </div>
+
+      {/* MAIN INTERFACE - Full Bleed */}
+      <main className="min-h-screen flex flex-col">
+        {/* TRADE SELECTOR - Full Width Data Row */}
+        <div className="data-row">
+          <span className="data-label">TRADE</span>
           <select
             value={selectedTrade}
             onChange={(e) => setSelectedTrade(e.target.value)}
             disabled={isRecording || isTranscribing || isExtracting}
-            className="w-full px-4 py-3 rounded-lg bg-yapmate-slate-900 border border-yapmate-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500 disabled:opacity-50"
+            className="bg-transparent border-none text-white font-mono text-sm uppercase focus:outline-none disabled:opacity-50"
           >
-            <option value="Plumber">Plumber</option>
-            <option value="Electrician">Electrician</option>
-            <option value="Joiner">Joiner</option>
-            <option value="Painter & Decorator">Painter & Decorator</option>
-            <option value="Other">Other</option>
+            <option value="Plumber">PLUMBER</option>
+            <option value="Electrician">ELECTRICIAN</option>
+            <option value="Joiner">JOINER</option>
+            <option value="Painter & Decorator">PAINTER</option>
+            <option value="Other">OTHER</option>
           </select>
-          <p className="text-yapmate-slate-500 text-xs mt-2">
-            Helps AI understand trade-specific terms
-          </p>
-        </Card>
+        </div>
 
-        {/* Recording Controls */}
-        <Card elevated className="mb-4">
-          <div className="flex flex-col items-center gap-6 py-4">
-            {/* Timer */}
-            <div className="text-6xl font-mono text-white tabular-nums">
-              {formatTime(recordingTime)}
-            </div>
-
-            {/* Record Button */}
-            {!isRecording ? (
-              <button
-                onClick={startRecording}
-                disabled={isTranscribing || isExtracting}
-                className="w-24 h-24 rounded-full bg-red-500 active:bg-red-600 disabled:bg-yapmate-slate-700 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 shadow-lg active:scale-95"
-              >
-                <div className="w-8 h-8 rounded-full bg-white" />
-              </button>
-            ) : (
-              <button
-                onClick={stopRecording}
-                className="w-24 h-24 rounded-full bg-yapmate-slate-700 active:bg-yapmate-slate-600 flex items-center justify-center transition-all duration-200 shadow-lg active:scale-95"
-              >
-                <div className="w-8 h-8 bg-white rounded-sm" />
-              </button>
-            )}
-
-            {/* Status Text */}
-            <div className="text-sm text-yapmate-slate-400 text-center">
-              {isRecording
-                ? 'Tap to stop recording'
-                : isTranscribing
-                  ? 'Transcribing your voice...'
-                  : isExtracting
-                    ? 'Creating your invoice...'
-                    : 'Tap to start recording (max 60 seconds)'}
-            </div>
-
-            {/* Audio Level Meter */}
-            {isRecording && (
-              <div className="w-full max-w-md">
-                <div className="w-full h-2 bg-yapmate-slate-900 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-yapmate-amber-500 transition-all duration-75"
-                    style={{ width: `${Math.min(100, (audioLevel / 128) * 100)}%` }}
-                  />
-                </div>
-                <div className="text-xs text-yapmate-slate-500 mt-2 text-center">
-                  {audioLevel === 0 ? '⚠️ No audio detected' : '🎤 Listening...'}
-                </div>
-              </div>
-            )}
+        {/* CENTER CONTROL AREA */}
+        <div className="flex-1 flex flex-col items-center justify-center px-4">
+          {/* TIMER - Hero Element */}
+          <div className="flex items-center justify-center mb-12">
+            <span className="text-8xl font-mono font-bold tabular-nums">
+              {mins.toString().padStart(2, '0')}
+            </span>
+            <span className={`text-8xl font-mono font-bold mx-2 transition-opacity duration-0 ${
+              colonBlink ? 'opacity-0' : 'opacity-100'
+            }`}>
+              :
+            </span>
+            <span className="text-8xl font-mono font-bold tabular-nums">
+              {secs.toString().padStart(2, '0')}
+            </span>
           </div>
-        </Card>
 
-        {/* Error Display */}
+          {/* DECIBEL METER - Raw Data Display */}
+          {isRecording && (
+            <div className="w-full max-w-md mb-8">
+              <div className="flex items-center justify-between mb-2">
+                <span className="data-label">INPUT LEVEL</span>
+                <span className="font-mono text-sm">{audioLevel} dB</span>
+              </div>
+              <div className="w-full h-3 border border-yapmate-slate-700 dark:border-yapmate-slate-700">
+                <div
+                  className="h-full bg-yapmate-status-green transition-none"
+                  style={{ width: `${Math.min(100, (audioLevel / 128) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* RECORD BUTTON - Massive Square Target */}
+          {!isRecording ? (
+            <button
+              onClick={startRecording}
+              disabled={isTranscribing || isExtracting}
+              className="w-32 h-32 bg-yapmate-status-red disabled:bg-yapmate-slate-700 disabled:cursor-not-allowed flex items-center justify-center transition-transform duration-0 active:scale-98 border-2 border-yapmate-black dark:border-yapmate-black"
+              style={{ transform: 'scale(1)' }}
+            >
+              <div className="w-12 h-12 bg-yapmate-white" />
+            </button>
+          ) : (
+            <button
+              onClick={stopRecording}
+              className="w-32 h-32 bg-yapmate-slate-900 flex items-center justify-center transition-transform duration-0 active:scale-98 border-2 border-yapmate-slate-700"
+              style={{ transform: 'scale(1)' }}
+            >
+              <div className="w-12 h-12 bg-yapmate-white" />
+            </button>
+          )}
+        </div>
+
+        {/* ERROR DISPLAY - Full Width Bar */}
         {error && (
-          <Card className="mb-4 border-2 border-red-500/50 bg-red-500/10">
-            <p className="text-red-400 text-sm">{error}</p>
-          </Card>
+          <div className="w-full bg-yapmate-status-red border-y border-yapmate-black py-3 px-4">
+            <span className="data-label text-yapmate-black">ERROR</span>
+            <p className="text-yapmate-black font-mono text-sm mt-1">{error}</p>
+          </div>
         )}
 
-        {/* Transcript Display */}
+        {/* TRANSCRIPT - Data Row Format */}
         {transcript && (
-          <Card elevated className="mb-4">
-            <h3 className="text-white font-semibold mb-3">What we heard:</h3>
-            <div className="bg-yapmate-slate-900 rounded-lg p-4">
-              <p className="text-yapmate-slate-200 leading-relaxed text-sm">
-                &ldquo;{transcript}&rdquo;
+          <>
+            <div className="section-header">{'// TRANSCRIPT'}</div>
+            <div className="px-4 py-4 border-b border-yapmate-slate-700 dark:border-yapmate-slate-700">
+              <p className="font-mono text-sm leading-relaxed">
+                {transcript}
               </p>
             </div>
-          </Card>
+          </>
         )}
 
-        {/* Invoice Preview */}
+        {/* INVOICE CREATED - Data Grid Format */}
         {invoice && invoiceId && (
-          <Card elevated className="mb-24">
-            <div className="text-center mb-4">
-              <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl">✓</span>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-1">
-                Invoice Created!
-              </h3>
-              <p className="text-yapmate-slate-400 text-sm">
-                Review and send when ready
-              </p>
+          <>
+            <div className="section-header">{'// INVOICE CREATED'}</div>
+            <div className="data-row">
+              <span className="data-label">STATUS</span>
+              <span className="status-badge text-yapmate-status-green">READY</span>
             </div>
-
-            <div className="bg-yapmate-slate-900 rounded-lg p-4 space-y-3 mb-4">
-              <div>
-                <p className="text-yapmate-slate-500 text-xs uppercase tracking-wide mb-1">
-                  Customer
-                </p>
-                <p className="text-white font-semibold">
-                  {invoice.customerName || 'Not specified'}
-                </p>
-              </div>
-              <div>
-                <p className="text-yapmate-slate-500 text-xs uppercase tracking-wide mb-1">
-                  Job Summary
-                </p>
-                <p className="text-yapmate-slate-200 text-sm">
-                  {invoice.jobSummary}
-                </p>
-              </div>
+            <div className="data-row">
+              <span className="data-label">CUSTOMER</span>
+              <span className="data-value mono text-base">
+                {invoice.customerName || 'UNSPECIFIED'}
+              </span>
             </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={() => router.push(`/invoice/${invoiceId}`)}
-                size="large"
-                className="flex-1"
-              >
-                Review Invoice
-              </Button>
-              <Button
-                onClick={() => router.push('/dashboard')}
-                variant="secondary"
-                size="large"
-              >
-                Done
-              </Button>
+            <div className="data-row border-b-0">
+              <span className="data-label">JOB</span>
+              <span className="font-mono text-sm text-right max-w-[60%]">
+                {invoice.jobSummary}
+              </span>
             </div>
-          </Card>
+          </>
         )}
-      </PageShell>
+
+        {/* BOTTOM ACTION BAR - Fixed */}
+        {invoice && invoiceId && (
+          <div className="fixed bottom-0 left-0 right-0 pb-safe">
+            <button
+              onClick={() => router.push(`/invoice/${invoiceId}`)}
+              className="bar-button h-14"
+            >
+              REVIEW INVOICE
+            </button>
+          </div>
+        )}
+
+        {/* Spacer for Navigation */}
+        <div className="h-20" />
+      </main>
       <Navigation />
     </>
   )

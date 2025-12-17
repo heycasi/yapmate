@@ -86,7 +86,7 @@
 
   /* Typography Primitives */
   .data-label {
-    @apply text-data-label text-yapmate-slate-300 dark:text-yapmate-slate-300;
+    @apply text-data-label text-yapmate-slate-300 dark:text-yapmate-slate-300 uppercase;
   }
 
   @media (prefers-color-scheme: light) {
@@ -104,7 +104,7 @@
   }
 
   .section-header {
-    @apply text-section-header text-yapmate-slate-300 dark:text-yapmate-slate-300;
+    @apply text-section-header text-yapmate-slate-300 dark:text-yapmate-slate-300 uppercase;
     @apply border-b border-yapmate-slate-700 dark:border-yapmate-slate-700;
     @apply py-2 px-4;
   }

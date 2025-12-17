@@ -1,0 +1,18 @@
+name: YapMatePreview
+options:
+  bundleIdPrefix: uk.co.yapmate
+targets:
+  YapMatePreview:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources: [Sources]
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: "YapMate (Dev)"
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true

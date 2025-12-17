@@ -69,8 +69,8 @@ const config: Config = {
         // Data-first sizing: numbers > labels
         'data-value': ['1.5rem', { lineHeight: '1.2', fontWeight: '600' }],
         'data-value-lg': ['2rem', { lineHeight: '1.1', fontWeight: '700' }],
-        'data-label': ['0.6875rem', { lineHeight: '1', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: '500' }],
-        'section-header': ['0.75rem', { lineHeight: '1', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: '600' }],
+        'data-label': ['0.6875rem', { lineHeight: '1', letterSpacing: '0.08em', fontWeight: '500' }],
+        'section-header': ['0.75rem', { lineHeight: '1', letterSpacing: '0.1em', fontWeight: '600' }],
       },
       backgroundImage: {
         // Keep for legacy landing page only
