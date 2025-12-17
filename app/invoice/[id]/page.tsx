@@ -34,7 +34,14 @@ export default function InvoiceEditPage() {
   const fetchInvoice = async () => {
     try {
       const response = await fetch(`/api/invoice/${params.id}`)
+      if (!response.ok) {
+        console.error('Fetch invoice failed:', response.status, response.statusText)
+        throw new Error(`Failed to fetch invoice: ${response.status}`)
+      }
       const data = await response.json()
+      if (!data.invoice) {
+        throw new Error('Invoice data not found in response')
+      }
       setInvoice(data.invoice)
       setMaterials(data.invoice.materials || [])
     } catch (error) {

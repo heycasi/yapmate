@@ -223,6 +223,7 @@ export async function POST(request: NextRequest) {
     // Get auth token from request
     const authHeader = request.headers.get('authorization')
     if (!authHeader) {
+      console.error('API/Extract: Missing Authorization header')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -233,6 +234,7 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
+      console.error('API/Extract: Invalid token or user not found', authError)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -259,6 +261,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log(`API/Extract: Processing for user ${user.id}`)
+
     // Trade is optional but recommended for better context
     const tradeContext = trade ? `\n\nUser's trade: ${trade}` : ''
 
@@ -282,15 +286,16 @@ export async function POST(request: NextRequest) {
     const responseContent = completion.choices[0]?.message?.content
 
     if (!responseContent) {
+      console.error('API/Extract: No response content from OpenAI')
       throw new Error('No response from OpenAI')
     }
 
     const extractedInvoice: Invoice = JSON.parse(responseContent)
 
     // Debug log to see how CIS and VAT are being extracted
-    console.log('Extracted invoice from transcript:', {
-      transcript,
-      extractedInvoice,
+    console.log('Extracted invoice data:', {
+      customerName: extractedInvoice.customerName,
+      jobSummary: extractedInvoice.jobSummary,
     })
 
     // Save invoice to database
@@ -314,9 +319,16 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (invoiceError) {
-      console.error('Error saving invoice:', invoiceError)
+      console.error('API/Extract: Error saving invoice:', invoiceError)
       throw new Error('Failed to save invoice')
     }
+
+    if (!invoiceData || !invoiceData.id) {
+       console.error('API/Extract: Invoice saved but no ID returned')
+       throw new Error('Failed to retrieve invoice ID')
+    }
+
+    console.log('API/Extract: Invoice saved successfully. ID:', invoiceData.id)
 
     // Save materials
     if (extractedInvoice.materials.length > 0) {
@@ -335,7 +347,8 @@ export async function POST(request: NextRequest) {
           .insert(materialsToInsert)
 
         if (materialsError) {
-          console.error('Error saving materials:', materialsError)
+          console.error('API/Extract: Error saving materials:', materialsError)
+          // Non-fatal, return success anyway
         }
       }
     }

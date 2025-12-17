@@ -222,11 +222,20 @@ export default function RecordPage() {
       })
 
       if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/login')
+          return
+        }
         const errorData = await response.json()
         throw new Error(errorData.error || 'Extraction failed')
       }
 
       const data = await response.json()
+      
+      if (!data.invoiceId) {
+        throw new Error('Failed to save invoice: No ID returned')
+      }
+
       setInvoice(data.invoice)
       setInvoiceId(data.invoiceId)
     } catch (err: any) {
