@@ -1,0 +1,12 @@
+YapMate Production Configuration
+Generated: Wed 17 Dec 2025 17:16:32 GMT
+
+Production URL: https://www.yapmate.co.uk
+Supabase Project: nidijdprgoauwkmuioer
+Supabase Dashboard: https://supabase.com/dashboard/project/nidijdprgoauwkmuioer
+
+Redirect URLs configured:
+- https://www.yapmate.co.uk/auth/callback
+- https://www.yapmate.co.uk/api/auth/callback
+- http://localhost:3000/auth/callback
+- http://localhost:3000/api/auth/callback

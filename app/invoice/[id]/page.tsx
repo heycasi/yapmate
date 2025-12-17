@@ -19,6 +19,7 @@ export default function InvoiceEditPage() {
   useEffect(() => {
     checkAuth()
     fetchInvoice()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id])
 
   const checkAuth = async () => {
@@ -111,7 +112,7 @@ export default function InvoiceEditPage() {
       })
 
       const data = await response.json()
-      
+
       if (data.paymentLink) {
         setInvoice({ ...invoice, stripe_payment_link: data.paymentLink })
         alert('Payment link generated!')
@@ -169,13 +170,13 @@ export default function InvoiceEditPage() {
           )}
 
           {/* AI Draft Warning - Show if any critical fields are null/empty */}
-          {(!invoice.customer_name || invoice.labour_hours === null || invoice.cis_job === null || invoice.vat_registered === null) && (
+          {(!invoice.customer_name || invoice.labour_hours === null || invoice.cis_job === null || invoice.vat_registered === null || materials.some(m => m.cost === null)) && (
             <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4 mb-6">
               <p className="text-yellow-200 text-sm font-semibold mb-1">
                 ⚠️ AI Draft - Please Review
               </p>
               <p className="text-yellow-100 text-sm">
-                Some fields couldn't be extracted from your recording. Highlighted fields need your confirmation before sending.
+                Some fields couldn&apos;t be extracted from your recording. Highlighted fields need your confirmation before sending.
               </p>
             </div>
           )}
@@ -279,7 +280,7 @@ export default function InvoiceEditPage() {
 
               <div className="space-y-3">
                 {materials.map((material, index) => (
-                  <div key={index} className="flex gap-3">
+                  <div key={index} className="flex gap-3 items-center">
                     <input
                       type="text"
                       value={material.description}
@@ -302,20 +303,31 @@ export default function InvoiceEditPage() {
                       placeholder="Qty"
                       className="w-20 px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={material.cost}
-                      onChange={(e) =>
-                        updateMaterial(
-                          index,
-                          'cost',
-                          parseFloat(e.target.value) || 0
-                        )
-                      }
-                      placeholder="Cost"
-                      className="w-28 px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
+                    <div className="relative">
+                        <input
+                        type="number"
+                        step="0.01"
+                        value={material.cost ?? ''}
+                        onChange={(e) =>
+                            updateMaterial(
+                            index,
+                            'cost',
+                            e.target.value === '' ? null : parseFloat(e.target.value)
+                            )
+                        }
+                        placeholder="Cost"
+                        className={`w-28 px-4 py-3 rounded-lg bg-black/20 border ${
+                            material.cost === null
+                            ? 'border-yellow-500/70 ring-2 ring-yellow-500/30'
+                            : 'border-white/20'
+                        } text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                        />
+                        {material.cost === null && (
+                        <div className="absolute -top-6 left-0 text-xs text-yellow-400 font-bold bg-black/80 px-1 rounded whitespace-nowrap">
+                            ⚠️ Check
+                        </div>
+                        )}
+                    </div>
                     <button
                       onClick={() => removeMaterial(index)}
                       className="px-4 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-colors duration-200"

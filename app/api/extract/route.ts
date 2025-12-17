@@ -7,6 +7,13 @@ const SYSTEM_PROMPT = `You extract clean, structured invoice data from voice tra
 
 The user's trade will be provided to help you understand vocabulary and context. Use it ONLY for interpretation guidance - do NOT invent job details based on trade stereotypes.
 
+TRADE VOCABULARY HINTS:
+- Plumber: radiator, valve, boiler, pipe, trap, leak, washer, ballcock, cistern, copper, flux, solder
+- Electrician: socket, switch, fuse, consumer unit, spur, rewire, cable, patress, backbox, breaker, rcd
+- Joiner: skirting, architrave, stud, ply, mdf, hinge, lock, door, frame, joist, batten
+- Painter & Decorator: emulsion, gloss, undercoat, primer, filler, caulk, masking, roller, cutting in
+- Other: Use general trade context
+
 You must output JSON that matches this EXACT TypeScript type:
 
 Invoice {

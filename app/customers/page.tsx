@@ -14,6 +14,7 @@ export default function CustomersPage() {
   useEffect(() => {
     checkAuth()
     fetchCustomers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const checkAuth = async () => {

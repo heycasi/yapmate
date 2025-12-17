@@ -205,14 +205,14 @@ export default function WaitlistPage() {
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-[#1A1A1A] p-6 rounded-xl border border-gray-800 hover:border-[#ffc422]/30 transition-colors">
             <p className="text-gray-200 italic mb-4">
-              "This would save me a few hours every Sunday night."
+              &quot;This would save me a few hours every Sunday night.&quot;
             </p>
             <p className="text-gray-400 text-sm">— Electrician, Manchester</p>
           </div>
 
           <div className="bg-[#1A1A1A] p-6 rounded-xl border border-gray-800 hover:border-[#ffc422]/30 transition-colors">
             <p className="text-gray-200 italic mb-4">
-              "It picked up my accent better than my phone ever has."
+              &quot;It picked up my accent better than my phone ever has.&quot;
             </p>
             <p className="text-gray-400 text-sm">— Plumber, Glasgow</p>
           </div>
