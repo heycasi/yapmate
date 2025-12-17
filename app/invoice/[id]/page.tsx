@@ -5,6 +5,10 @@ import { useRouter, useParams } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase'
 import Navigation from '@/components/Navigation'
 import { calculateInvoiceTotals, formatCurrency } from '@/lib/tax'
+import { PageShell } from '@/components/ui/PageShell'
+import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { BottomCTA } from '@/components/ui/BottomCTA'
 
 export default function InvoiceEditPage() {
   const params = useParams()
@@ -132,17 +136,27 @@ export default function InvoiceEditPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
+      <>
+        <PageShell title="Loading...">
+          <div className="text-yapmate-slate-400 text-center py-12">
+            Loading invoice...
+          </div>
+        </PageShell>
+        <Navigation />
+      </>
     )
   }
 
   if (!invoice) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white text-xl">Invoice not found</div>
-      </div>
+      <>
+        <PageShell title="Not Found">
+          <div className="text-yapmate-slate-400 text-center py-12">
+            Invoice not found
+          </div>
+        </PageShell>
+        <Navigation />
+      </>
     )
   }
 
@@ -158,82 +172,83 @@ export default function InvoiceEditPage() {
 
   return (
     <>
-      <main className="min-h-screen p-8 pb-24">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-4xl font-bold text-white">Edit Invoice</h1>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="text-gray-400 hover:text-white"
-            >
-              ← Back
-            </button>
+      <PageShell
+        title="Edit Invoice"
+        action={
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="text-yapmate-slate-400 active:text-yapmate-slate-200 text-sm font-semibold"
+          >
+            ← Back
+          </button>
+        }
+      >
+        {error && (
+          <div className="bg-red-500/20 border border-red-500 rounded-xl p-4 mb-4">
+            <p className="text-red-200 text-sm">{error}</p>
           </div>
+        )}
 
-          {error && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-4 mb-6">
-              <p className="text-red-200">{error}</p>
-            </div>
-          )}
+        {/* AI Draft Warning */}
+        {(!invoice.customer_name || invoice.labour_hours === null || invoice.cis_job === null || invoice.vat_registered === null || materials.some(m => m.cost === null)) && (
+          <div className="bg-yapmate-amber-500/20 border border-yapmate-amber-500/50 rounded-xl p-4 mb-4">
+            <p className="text-yapmate-amber-400 text-sm font-semibold mb-1">
+              ⚠️ AI Draft - Please Review
+            </p>
+            <p className="text-yapmate-amber-200 text-xs">
+              Some fields couldn&apos;t be extracted. Highlighted fields need confirmation.
+            </p>
+          </div>
+        )}
 
-          {/* AI Draft Warning - Show if any critical fields are null/empty */}
-          {(!invoice.customer_name || invoice.labour_hours === null || invoice.cis_job === null || invoice.vat_registered === null || materials.some(m => m.cost === null)) && (
-            <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4 mb-6">
-              <p className="text-yellow-200 text-sm font-semibold mb-1">
-                ⚠️ AI Draft - Please Review
-              </p>
-              <p className="text-yellow-100 text-sm">
-                Some fields couldn&apos;t be extracted from your recording. Highlighted fields need your confirmation before sending.
-              </p>
-            </div>
-          )}
+        <div className="space-y-4 mb-32">
+          {/* Customer Details */}
+          <Card>
+            <label className="block text-yapmate-slate-400 text-label mb-2">
+              Customer Name
+              {!invoice.customer_name && (
+                <span className="ml-2 text-yapmate-amber-400">⚠️ Required</span>
+              )}
+            </label>
+            <input
+              type="text"
+              value={invoice.customer_name || ''}
+              onChange={(e) =>
+                setInvoice({ ...invoice, customer_name: e.target.value })
+              }
+              className={`w-full px-4 py-3 rounded-lg bg-yapmate-slate-900 border ${
+                !invoice.customer_name
+                  ? 'border-yapmate-amber-500/70 ring-2 ring-yapmate-amber-500/30'
+                  : 'border-yapmate-slate-700'
+              } text-white placeholder-yapmate-slate-500 focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500`}
+              placeholder="Customer name"
+            />
+          </Card>
 
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 space-y-6">
-            {/* Customer Name */}
-            <div>
-              <label className="block text-white text-sm mb-2">
-                Customer Name
-                {!invoice.customer_name && (
-                  <span className="ml-2 text-xs text-yellow-400">⚠️ Please confirm</span>
-                )}
-              </label>
-              <input
-                type="text"
-                value={invoice.customer_name || ''}
-                onChange={(e) =>
-                  setInvoice({ ...invoice, customer_name: e.target.value })
-                }
-                className={`w-full px-4 py-3 rounded-lg bg-black/20 border ${
-                  !invoice.customer_name
-                    ? 'border-yellow-500/70 ring-2 ring-yellow-500/30'
-                    : 'border-white/20'
-                } text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500`}
-                placeholder="Customer name"
-              />
-            </div>
+          {/* Job Summary */}
+          <Card>
+            <label className="block text-yapmate-slate-400 text-label mb-2">
+              Job Summary
+            </label>
+            <textarea
+              value={invoice.job_summary}
+              onChange={(e) =>
+                setInvoice({ ...invoice, job_summary: e.target.value })
+              }
+              rows={3}
+              className="w-full px-4 py-3 rounded-lg bg-yapmate-slate-900 border border-yapmate-slate-700 text-white placeholder-yapmate-slate-500 focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500"
+            />
+          </Card>
 
-            {/* Job Summary */}
-            <div>
-              <label className="block text-white text-sm mb-2">
-                Job Summary
-              </label>
-              <textarea
-                value={invoice.job_summary}
-                onChange={(e) =>
-                  setInvoice({ ...invoice, job_summary: e.target.value })
-                }
-                rows={3}
-                className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-
-            {/* Labour */}
+          {/* Labour */}
+          <Card>
+            <h3 className="text-white font-semibold mb-4">Labour</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-white text-sm mb-2">
-                  Labour Hours
+                <label className="block text-yapmate-slate-400 text-label mb-2">
+                  Hours
                   {invoice.labour_hours === null && (
-                    <span className="ml-2 text-xs text-yellow-400">⚠️ Please confirm</span>
+                    <span className="ml-2 text-yapmate-amber-400">⚠️</span>
                   )}
                 </label>
                 <input
@@ -246,17 +261,17 @@ export default function InvoiceEditPage() {
                       labour_hours: parseFloat(e.target.value) || null,
                     })
                   }
-                  className={`w-full px-4 py-3 rounded-lg bg-black/20 border ${
+                  className={`w-full px-4 py-3 rounded-lg bg-yapmate-slate-900 border ${
                     invoice.labour_hours === null
-                      ? 'border-yellow-500/70 ring-2 ring-yellow-500/30'
-                      : 'border-white/20'
-                  } text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500`}
-                  placeholder="Hours worked"
+                      ? 'border-yapmate-amber-500/70 ring-2 ring-yapmate-amber-500/30'
+                      : 'border-yapmate-slate-700'
+                  } text-white placeholder-yapmate-slate-500 focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500`}
+                  placeholder="Hours"
                 />
               </div>
               <div>
-                <label className="block text-white text-sm mb-2">
-                  Labour Rate (£/hr)
+                <label className="block text-yapmate-slate-400 text-label mb-2">
+                  Rate (£/hr)
                 </label>
                 <input
                   type="number"
@@ -268,246 +283,251 @@ export default function InvoiceEditPage() {
                       labour_rate: parseFloat(e.target.value) || 0,
                     })
                   }
-                  className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 rounded-lg bg-yapmate-slate-900 border border-yapmate-slate-700 text-white placeholder-yapmate-slate-500 focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500"
                 />
               </div>
             </div>
+          </Card>
 
-            {/* Materials */}
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <label className="block text-white text-sm">Materials</label>
+          {/* Materials */}
+          <Card>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-semibold">Materials</h3>
+              <button
+                onClick={addMaterial}
+                className="text-yapmate-amber-500 active:text-yapmate-amber-600 text-sm font-semibold"
+              >
+                + Add
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {materials.map((material, index) => (
+                <div key={index} className="flex gap-2 items-center bg-yapmate-slate-900 p-2 rounded-lg">
+                  <input
+                    type="text"
+                    value={material.description}
+                    onChange={(e) =>
+                      updateMaterial(index, 'description', e.target.value)
+                    }
+                    placeholder="Description"
+                    className="flex-1 px-3 py-2 rounded bg-yapmate-black border border-yapmate-slate-700 text-white placeholder-yapmate-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500"
+                  />
+                  <input
+                    type="number"
+                    value={material.quantity}
+                    onChange={(e) =>
+                      updateMaterial(
+                        index,
+                        'quantity',
+                        parseFloat(e.target.value) || 1
+                      )
+                    }
+                    placeholder="Qty"
+                    className="w-16 px-2 py-2 rounded bg-yapmate-black border border-yapmate-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={material.cost ?? ''}
+                    onChange={(e) =>
+                        updateMaterial(
+                        index,
+                        'cost',
+                        e.target.value === '' ? null : parseFloat(e.target.value)
+                        )
+                    }
+                    placeholder="£"
+                    className={`w-20 px-2 py-2 rounded border text-white text-sm focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500 ${
+                        material.cost === null
+                        ? 'bg-yapmate-amber-500/10 border-yapmate-amber-500'
+                        : 'bg-yapmate-black border-yapmate-slate-700'
+                    }`}
+                  />
+                  <button
+                    onClick={() => removeMaterial(index)}
+                    className="w-8 h-8 bg-red-500/20 active:bg-red-500/30 text-red-400 rounded transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Tax Settings */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* CIS Job */}
+            <Card className="p-3">
+              <label className="block text-yapmate-slate-400 text-xs mb-2 uppercase tracking-wide">
+                CIS Job ({invoice.cis_rate}%)
+                {invoice.cis_job === null && (
+                  <span className="ml-1 text-yapmate-amber-400">⚠️</span>
+                )}
+              </label>
+              <div className={`flex gap-2 p-1 rounded-lg ${
+                invoice.cis_job === null
+                  ? 'bg-yapmate-amber-500/10'
+                  : 'bg-yapmate-slate-900'
+              }`}>
                 <button
-                  onClick={addMaterial}
-                  className="text-purple-400 hover:text-purple-300 text-sm font-semibold"
+                  onClick={() => setInvoice({ ...invoice, cis_job: true })}
+                  className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                    invoice.cis_job === true
+                      ? 'bg-green-600 text-white'
+                      : 'bg-yapmate-slate-800 text-yapmate-slate-300 active:bg-yapmate-slate-700'
+                  }`}
                 >
-                  + Add Material
+                  Yes
+                </button>
+                <button
+                  onClick={() => setInvoice({ ...invoice, cis_job: false })}
+                  className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                    invoice.cis_job === false
+                      ? 'bg-yapmate-slate-600 text-white'
+                      : 'bg-yapmate-slate-800 text-yapmate-slate-300 active:bg-yapmate-slate-700'
+                  }`}
+                >
+                  No
                 </button>
               </div>
+            </Card>
 
-              <div className="space-y-3">
-                {materials.map((material, index) => (
-                  <div key={index} className="flex gap-3 items-center">
-                    <input
-                      type="text"
-                      value={material.description}
-                      onChange={(e) =>
-                        updateMaterial(index, 'description', e.target.value)
-                      }
-                      placeholder="Description"
-                      className="flex-1 px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                    <input
-                      type="number"
-                      value={material.quantity}
-                      onChange={(e) =>
-                        updateMaterial(
-                          index,
-                          'quantity',
-                          parseFloat(e.target.value) || 1
-                        )
-                      }
-                      placeholder="Qty"
-                      className="w-20 px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                    <div className="relative">
-                        <input
-                        type="number"
-                        step="0.01"
-                        value={material.cost ?? ''}
-                        onChange={(e) =>
-                            updateMaterial(
-                            index,
-                            'cost',
-                            e.target.value === '' ? null : parseFloat(e.target.value)
-                            )
-                        }
-                        placeholder="Cost"
-                        className={`w-28 px-4 py-3 rounded-lg bg-black/20 border ${
-                            material.cost === null
-                            ? 'border-yellow-500/70 ring-2 ring-yellow-500/30'
-                            : 'border-white/20'
-                        } text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500`}
-                        />
-                        {material.cost === null && (
-                        <div className="absolute -top-6 left-0 text-xs text-yellow-400 font-bold bg-black/80 px-1 rounded whitespace-nowrap">
-                            ⚠️ Check
-                        </div>
-                        )}
-                    </div>
-                    <button
-                      onClick={() => removeMaterial(index)}
-                      className="px-4 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-colors duration-200"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
+            {/* VAT Registered */}
+            <Card className="p-3">
+              <label className="block text-yapmate-slate-400 text-xs mb-2 uppercase tracking-wide">
+                VAT Registered ({invoice.vat_rate}%)
+                {invoice.vat_registered === null && (
+                  <span className="ml-1 text-yapmate-amber-400">⚠️</span>
+                )}
+              </label>
+              <div className={`flex gap-2 p-1 rounded-lg ${
+                invoice.vat_registered === null
+                  ? 'bg-yapmate-amber-500/10'
+                  : 'bg-yapmate-slate-900'
+              }`}>
+                <button
+                  onClick={() => setInvoice({ ...invoice, vat_registered: true })}
+                  className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                    invoice.vat_registered === true
+                      ? 'bg-green-600 text-white'
+                      : 'bg-yapmate-slate-800 text-yapmate-slate-300 active:bg-yapmate-slate-700'
+                  }`}
+                >
+                  Yes
+                </button>
+                <button
+                  onClick={() => setInvoice({ ...invoice, vat_registered: false })}
+                  className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                    invoice.vat_registered === false
+                      ? 'bg-yapmate-slate-600 text-white'
+                      : 'bg-yapmate-slate-800 text-yapmate-slate-300 active:bg-yapmate-slate-700'
+                  }`}
+                >
+                  No
+                </button>
               </div>
-            </div>
+            </Card>
+          </div>
 
-            {/* Tax Toggles - 3-State (Yes/No/Unknown) */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* CIS Job */}
-              <div>
-                <label className="block text-white text-sm mb-2">
-                  CIS Job ({invoice.cis_rate}%)
-                  {invoice.cis_job === null && (
-                    <span className="ml-2 text-xs text-yellow-400">⚠️ Unknown</span>
-                  )}
-                </label>
-                <div className={`flex gap-2 p-2 rounded-lg border ${
-                  invoice.cis_job === null
-                    ? 'border-yellow-500/70 bg-yellow-500/10'
-                    : 'border-white/20 bg-black/20'
-                }`}>
-                  <button
-                    onClick={() => setInvoice({ ...invoice, cis_job: true })}
-                    className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
-                      invoice.cis_job === true
-                        ? 'bg-green-600 text-white'
-                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                    }`}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    onClick={() => setInvoice({ ...invoice, cis_job: false })}
-                    className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
-                      invoice.cis_job === false
-                        ? 'bg-red-600 text-white'
-                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                    }`}
-                  >
-                    No
-                  </button>
-                </div>
-              </div>
+          {/* Notes */}
+          <Card>
+            <label className="block text-yapmate-slate-400 text-label mb-2">
+              Notes (Optional)
+            </label>
+            <textarea
+              value={invoice.notes || ''}
+              onChange={(e) =>
+                setInvoice({ ...invoice, notes: e.target.value })
+              }
+              rows={2}
+              className="w-full px-4 py-3 rounded-lg bg-yapmate-slate-900 border border-yapmate-slate-700 text-white placeholder-yapmate-slate-500 focus:outline-none focus:ring-2 focus:ring-yapmate-amber-500"
+              placeholder="Payment terms, additional info..."
+            />
+          </Card>
 
-              {/* VAT Registered */}
-              <div>
-                <label className="block text-white text-sm mb-2">
-                  VAT Registered ({invoice.vat_rate}%)
-                  {invoice.vat_registered === null && (
-                    <span className="ml-2 text-xs text-yellow-400">⚠️ Unknown</span>
-                  )}
-                </label>
-                <div className={`flex gap-2 p-2 rounded-lg border ${
-                  invoice.vat_registered === null
-                    ? 'border-yellow-500/70 bg-yellow-500/10'
-                    : 'border-white/20 bg-black/20'
-                }`}>
-                  <button
-                    onClick={() => setInvoice({ ...invoice, vat_registered: true })}
-                    className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
-                      invoice.vat_registered === true
-                        ? 'bg-green-600 text-white'
-                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                    }`}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    onClick={() => setInvoice({ ...invoice, vat_registered: false })}
-                    className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
-                      invoice.vat_registered === false
-                        ? 'bg-red-600 text-white'
-                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                    }`}
-                  >
-                    No
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="block text-white text-sm mb-2">Notes</label>
-              <textarea
-                value={invoice.notes || ''}
-                onChange={(e) =>
-                  setInvoice({ ...invoice, notes: e.target.value })
-                }
-                rows={2}
-                className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="Payment terms, additional info..."
-              />
-            </div>
-
-            {/* Calculations Summary */}
-            <div className="border-t border-white/20 pt-6 space-y-3">
-              <div className="flex justify-between text-white">
+          {/* Totals Summary */}
+          <Card elevated>
+            <h3 className="text-white font-semibold mb-4">Invoice Total</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-yapmate-slate-300">
                 <span>Labour</span>
-                <span>{formatCurrency(calculations.labourSubtotal)}</span>
+                <span className="currency">{formatCurrency(calculations.labourSubtotal)}</span>
               </div>
-              <div className="flex justify-between text-white">
+              <div className="flex justify-between text-yapmate-slate-300">
                 <span>Materials</span>
-                <span>{formatCurrency(calculations.materialsSubtotal)}</span>
+                <span className="currency">{formatCurrency(calculations.materialsSubtotal)}</span>
               </div>
-              <div className="flex justify-between text-white font-semibold">
+              <div className="flex justify-between text-white font-semibold pt-2 border-t border-yapmate-slate-700">
                 <span>Subtotal</span>
-                <span>{formatCurrency(calculations.subtotal)}</span>
+                <span className="currency">{formatCurrency(calculations.subtotal)}</span>
               </div>
               {invoice.cis_job && (
-                <div className="flex justify-between text-red-300">
+                <div className="flex justify-between text-red-400">
                   <span>CIS Deduction ({invoice.cis_rate}%)</span>
-                  <span>-{formatCurrency(calculations.cisDeduction)}</span>
+                  <span className="currency">-{formatCurrency(calculations.cisDeduction)}</span>
                 </div>
               )}
               {invoice.vat_registered && (
-                <div className="flex justify-between text-white">
+                <div className="flex justify-between text-yapmate-slate-300">
                   <span>VAT ({invoice.vat_rate}%)</span>
-                  <span>{formatCurrency(calculations.vatAmount)}</span>
+                  <span className="currency">{formatCurrency(calculations.vatAmount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-white text-xl font-bold pt-3 border-t border-white/20">
+              <div className="flex justify-between text-white text-2xl font-bold pt-3 border-t border-yapmate-slate-700">
                 <span>TOTAL</span>
-                <span>{formatCurrency(calculations.grandTotal)}</span>
+                <span className="currency">{formatCurrency(calculations.grandTotal)}</span>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-4 pt-6">
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-500 text-white font-semibold py-3 rounded-lg transition-colors duration-200"
-              >
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button
+            {/* Secondary Actions */}
+            <div className="flex gap-3 mt-4 pt-4 border-t border-yapmate-slate-700">
+              <Button
+                variant="secondary"
                 onClick={handleGeneratePDF}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
+                className="flex-1"
               >
                 PDF
-              </button>
+              </Button>
               {!invoice.stripe_payment_link && (
-                <button
+                <Button
+                  variant="secondary"
                   onClick={handleGeneratePaymentLink}
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
+                  className="flex-1"
                 >
                   Payment Link
-                </button>
+                </Button>
               )}
             </div>
 
             {invoice.stripe_payment_link && (
-              <div className="bg-green-500/20 border border-green-500 rounded-lg p-4">
-                <p className="text-green-200 text-sm mb-2">Payment Link:</p>
+              <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-3 mt-4">
+                <p className="text-green-400 text-xs font-semibold mb-1">Payment Link Generated:</p>
                 <a
                   href={invoice.stripe_payment_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-green-400 hover:text-green-300 text-sm break-all"
+                  className="text-green-300 text-xs break-all underline"
                 >
                   {invoice.stripe_payment_link}
                 </a>
               </div>
             )}
-          </div>
+          </Card>
         </div>
-      </main>
+
+        {/* Fixed Bottom Action */}
+        <BottomCTA>
+          <Button
+            onClick={handleSave}
+            disabled={isSaving}
+            size="large"
+            className="w-full"
+          >
+            {isSaving ? 'Saving...' : 'Save & Continue'}
+          </Button>
+        </BottomCTA>
+      </PageShell>
       <Navigation />
     </>
   )
