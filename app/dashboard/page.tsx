@@ -6,6 +6,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navigation from '@/components/Navigation'
 import { formatCurrency, calculateInvoiceTotals } from '@/lib/tax'
+import { PageShell } from '@/components/ui/PageShell'
+import { Card } from '@/components/ui/Card'
+import { StatusPill } from '@/components/ui/StatusPill'
+import { Button } from '@/components/ui/Button'
+import { SkeletonList } from '@/components/ui/Skeleton'
 
 export default function DashboardPage() {
   const [invoices, setInvoices] = useState<any[]>([])
@@ -43,137 +48,171 @@ export default function DashboardPage() {
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-green-500/20 text-green-300'
-      case 'sent':
-        return 'bg-blue-500/20 text-blue-300'
-      case 'draft':
-        return 'bg-gray-500/20 text-gray-300'
-      case 'cancelled':
-        return 'bg-red-500/20 text-red-300'
-      default:
-        return 'bg-gray-500/20 text-gray-300'
-    }
+  const getStatusType = (status: string): 'draft' | 'sent' | 'paid' | 'cancelled' | 'overdue' => {
+    if (status === 'paid') return 'paid'
+    if (status === 'sent') return 'sent'
+    if (status === 'cancelled') return 'cancelled'
+    return 'draft'
   }
+
+  // Calculate summary stats
+  const totalAmount = invoices.reduce((sum, inv) => {
+    const calc = calculateInvoiceTotals(
+      inv.labour_hours,
+      inv.labour_rate,
+      inv.materials?.map((m: any) => ({ cost: m.cost, quantity: m.quantity })) || [],
+      inv.cis_job,
+      inv.cis_rate,
+      inv.vat_registered,
+      inv.vat_rate
+    )
+    return sum + calc.grandTotal
+  }, 0)
+
+  const paidAmount = invoices
+    .filter((inv) => inv.status === 'paid')
+    .reduce((sum, inv) => {
+      const calc = calculateInvoiceTotals(
+        inv.labour_hours,
+        inv.labour_rate,
+        inv.materials?.map((m: any) => ({ cost: m.cost, quantity: m.quantity })) || [],
+        inv.cis_job,
+        inv.cis_rate,
+        inv.vat_registered,
+        inv.vat_rate
+      )
+      return sum + calc.grandTotal
+    }, 0)
+
+  const dueAmount = totalAmount - paidAmount
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
+      <>
+        <PageShell title="Dashboard">
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <SkeletonList count={2} />
+            </div>
+            <SkeletonList count={3} />
+          </div>
+        </PageShell>
+        <Navigation />
+      </>
     )
   }
 
   return (
     <>
-      <main className="min-h-screen p-8 pb-24">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">Dashboard</h1>
-              <p className="text-gray-300">
-                Welcome back, {user?.email}
-              </p>
-            </div>
+      <PageShell
+        title="Dashboard"
+        description={user?.email}
+      >
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <Card>
+            <p className="text-yapmate-slate-400 text-sm mb-1 uppercase tracking-wide">
+              Outstanding
+            </p>
+            <p className="text-2xl font-bold text-white currency">
+              {formatCurrency(dueAmount)}
+            </p>
+          </Card>
+          <Card>
+            <p className="text-yapmate-slate-400 text-sm mb-1 uppercase tracking-wide">
+              Paid This Month
+            </p>
+            <p className="text-2xl font-bold text-green-400 currency">
+              {formatCurrency(paidAmount)}
+            </p>
+          </Card>
+        </div>
+
+        {/* Recent Invoices */}
+        <Card elevated className="mb-24">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-white">Recent Invoices</h2>
             <Link
-              href="/record"
-              className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
+              href="/customers"
+              className="text-yapmate-amber-500 text-sm font-semibold"
             >
-              + New Invoice
+              View All
             </Link>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
-              <p className="text-gray-400 text-sm mb-2">Total Invoices</p>
-              <p className="text-3xl font-bold text-white">{invoices.length}</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
-              <p className="text-gray-400 text-sm mb-2">Paid</p>
-              <p className="text-3xl font-bold text-green-400">
-                {invoices.filter((i) => i.status === 'paid').length}
-              </p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
-              <p className="text-gray-400 text-sm mb-2">Pending</p>
-              <p className="text-3xl font-bold text-blue-400">
-                {invoices.filter((i) => i.status === 'sent').length}
-              </p>
-            </div>
-          </div>
-
-          {/* Invoices List */}
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-6">Recent Invoices</h2>
-
-            {invoices.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-400 mb-4">No invoices yet</p>
-                <Link
-                  href="/record"
-                  className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
-                >
-                  Create Your First Invoice
-                </Link>
+          {invoices.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 rounded-full bg-yapmate-slate-700 flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">🧾</span>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {invoices.map((invoice) => {
-                  const calculations = calculateInvoiceTotals(
-                    invoice.labour_hours,
-                    invoice.labour_rate,
-                    invoice.materials?.map((m: any) => ({
-                      cost: m.cost,
-                      quantity: m.quantity,
-                    })) || [],
-                    invoice.cis_job,
-                    invoice.cis_rate,
-                    invoice.vat_registered,
-                    invoice.vat_rate
-                  )
+              <h3 className="text-lg font-semibold text-white mb-2">
+                No invoices yet
+              </h3>
+              <p className="text-yapmate-slate-400 mb-6 text-sm">
+                Tap the button below to create your first invoice
+              </p>
+              <div className="animate-bounce text-yapmate-amber-500 text-2xl">
+                ↓
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {invoices.slice(0, 5).map((invoice) => {
+                const calculations = calculateInvoiceTotals(
+                  invoice.labour_hours,
+                  invoice.labour_rate,
+                  invoice.materials?.map((m: any) => ({
+                    cost: m.cost,
+                    quantity: m.quantity,
+                  })) || [],
+                  invoice.cis_job,
+                  invoice.cis_rate,
+                  invoice.vat_registered,
+                  invoice.vat_rate
+                )
 
-                  return (
-                    <Link
-                      key={invoice.id}
-                      href={`/invoice/${invoice.id}`}
-                      className="block bg-black/20 rounded-lg p-4 hover:bg-black/30 transition-colors duration-200"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <h3 className="text-white font-semibold mb-1">
+                return (
+                  <Link
+                    key={invoice.id}
+                    href={`/invoice/${invoice.id}`}
+                  >
+                    <Card interactive className="p-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-white font-semibold mb-1 truncate">
                             {invoice.customer_name || 'Unnamed Customer'}
                           </h3>
-                          <p className="text-gray-400 text-sm">
+                          <p className="text-yapmate-slate-400 text-sm truncate">
                             {invoice.job_summary}
                           </p>
+                          <p className="text-yapmate-slate-500 text-xs mt-1">
+                            {new Date(invoice.created_at).toLocaleDateString('en-GB')}
+                          </p>
                         </div>
-                        <div className="text-right ml-4">
-                          <p className="text-white font-bold text-lg">
+                        <div className="text-right ml-4 flex-shrink-0">
+                          <p className="text-white font-bold currency mb-2">
                             {formatCurrency(calculations.grandTotal)}
                           </p>
-                          <span
-                            className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mt-2 ${getStatusColor(
-                              invoice.status
-                            )}`}
-                          >
-                            {invoice.status}
-                          </span>
+                          <StatusPill status={getStatusType(invoice.status)} />
                         </div>
                       </div>
-                      <p className="text-gray-500 text-xs">
-                        {new Date(invoice.created_at).toLocaleDateString('en-GB')}
-                      </p>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
+                    </Card>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* Floating Action Button */}
+        <Link
+          href="/record"
+          className="fixed bottom-24 right-4 w-16 h-16 bg-yapmate-amber-500 rounded-full shadow-amber-glow flex items-center justify-center active:scale-95 transition-transform"
+          aria-label="Create new invoice"
+        >
+          <span className="text-3xl text-yapmate-black">🎤</span>
+        </Link>
+      </PageShell>
       <Navigation />
     </>
   )
