@@ -11,49 +11,40 @@ const config: Config = {
       colors: {
         background: 'var(--background)',
         foreground: 'var(--foreground)',
-        // YapMate Brand Colors - Tool-like Dark + Amber System
+        // Industrial Utility Palette - High Contrast Only
         yapmate: {
-          // Legacy (keep for landing page)
+          // Legacy (landing page only - will be removed)
           yellow: '#ffc422',
           gold: {
             DEFAULT: '#F2C94C',
             dark: '#E2B649',
             darker: '#B48828',
           },
-          // New Design System
-          black: '#000000',
+          // INDUSTRIAL SYSTEM - Sharp, High Contrast
+          black: '#000000',        // Pure black (dark mode background)
+          white: '#FFFFFF',        // Pure white (light mode background)
           slate: {
-            50: '#f8fafc',
-            100: '#f1f5f9',
-            200: '#e2e8f0',
-            300: '#cbd5e1',
-            400: '#94a3b8',
-            500: '#64748b',
-            600: '#475569',
-            700: '#334155',
-            800: '#1e293b',
-            900: '#0f172a',
-            950: '#020617',
+            // Only extreme values - no mid-tones
+            300: '#cbd5e1',        // Light mode borders
+            700: '#334155',        // Dark mode borders
+            900: '#0f172a',        // Dark mode surface (rare use)
           },
-          amber: {
-            400: '#fbbf24',
-            500: '#f59e0b',
-            600: '#d97706',
+          // Status Colors - Construction/Safety Palette
+          status: {
+            yellow: '#FACC15',     // Construction Yellow (warning)
+            orange: '#F97316',     // Alert Orange (attention)
+            green: '#22C55E',      // Success Green (paid)
+            red: '#EF4444',        // Critical Red (error)
           },
-          gray: {
-            lightest: '#F2F2F2',
-            light: '#9CA3AF',
-            DEFAULT: '#666666',
-            dark: '#1A1A1A',
-            darker: '#0D0D0D',
-          },
+          // Accent - Active state only
+          amber: '#f59e0b',        // Single amber value
         },
       },
       spacing: {
-        'safe-top': 'max(1rem, env(safe-area-inset-top))',
-        'safe-bottom': 'max(1rem, env(safe-area-inset-bottom))',
-        'safe-left': 'max(1rem, env(safe-area-inset-left))',
-        'safe-right': 'max(1rem, env(safe-area-inset-right))',
+        'safe-top': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+        'safe-left': 'env(safe-area-inset-left)',
+        'safe-right': 'env(safe-area-inset-right)',
       },
       fontFamily: {
         sans: [
@@ -64,21 +55,45 @@ const config: Config = {
           'Roboto',
           'sans-serif',
         ],
+        mono: [
+          'ui-monospace',
+          'SFMono-Regular',
+          'SF Mono',
+          'Menlo',
+          'Consolas',
+          'Liberation Mono',
+          'monospace',
+        ],
       },
       fontSize: {
-        'label': ['0.875rem', { letterSpacing: '0.05em', lineHeight: '1.25rem' }],
+        // Data-first sizing: numbers > labels
+        'data-value': ['1.5rem', { lineHeight: '1.2', fontWeight: '600' }],
+        'data-value-lg': ['2rem', { lineHeight: '1.1', fontWeight: '700' }],
+        'data-label': ['0.6875rem', { lineHeight: '1', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: '500' }],
+        'section-header': ['0.75rem', { lineHeight: '1', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: '600' }],
       },
       backgroundImage: {
+        // Keep for legacy landing page only
         'yapmate-gradient': 'linear-gradient(to bottom right, #F2C94C, #E2B649)',
         'yapmate-glow': 'radial-gradient(circle, rgba(255,196,34,0.3) 0%, transparent 70%)',
       },
       boxShadow: {
+        // Remove all soft shadows - use hard drop shadow only
+        'hard': '0 2px 0 0 rgba(0, 0, 0, 0.5)',
+        // Keep legacy for landing page
         'yapmate-glow': '0 0 30px rgba(255, 196, 34, 0.3)',
         'yapmate-button': '0 10px 25px rgba(242, 201, 76, 0.3)',
-        'amber-glow': '0 0 20px rgba(245, 158, 11, 0.4)',
+      },
+      transitionTimingFunction: {
+        // Only linear - no easing
+        'industrial': 'linear',
+      },
+      transitionDuration: {
+        // Fast, mechanical transitions only
+        'snap': '100ms',
       },
       animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        // Remove pulse-slow - no playful animations
       },
     },
   },
