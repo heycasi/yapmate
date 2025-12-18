@@ -39,18 +39,19 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-8">
+      <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
         <div className="w-full max-w-md">
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 text-center">
-            <div className="text-6xl mb-4">✓</div>
-            <h1 className="text-2xl font-bold text-white mb-4">Check Your Email</h1>
-            <p className="text-gray-300 mb-6">
-              We&apos;ve sent you a confirmation link. Please check your email to
-              verify your account.
+          <div className="border-2 border-yapmate-status-green bg-yapmate-status-green/10 p-8 text-center">
+            <div className="text-6xl mb-4 text-yapmate-status-green">✓</div>
+            <h1 className="font-mono text-xl font-bold text-yapmate-white mb-4 uppercase">
+              Check Your Email
+            </h1>
+            <p className="text-yapmate-slate-300 text-sm mb-6 leading-relaxed">
+              We&apos;ve sent you a confirmation link. Check your email to verify your account.
             </p>
             <Link
               href="/login"
-              className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
+              className="inline-block w-full h-12 flex items-center justify-center bg-yapmate-amber text-yapmate-black font-mono font-bold uppercase tracking-wide transition-colors duration-snap active:bg-yapmate-status-yellow"
             >
               Go to Login
             </Link>
@@ -61,68 +62,79 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-8">
+    <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
       <div className="w-full max-w-md">
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8">
-          <h1 className="text-3xl font-bold text-white mb-6 text-center">
-            Sign Up for YapMate
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <h1 className="font-mono text-2xl font-bold text-yapmate-white mb-2 uppercase tracking-wide">
+            YapMate Signup
           </h1>
+          <p className="text-yapmate-slate-300 text-sm">
+            Industrial invoicing for UK tradies
+          </p>
+        </div>
 
-          {error && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 mb-6">
-              <p className="text-red-200 text-sm">{error}</p>
-            </div>
-          )}
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 border-2 border-yapmate-status-red bg-yapmate-status-red/10 p-4">
+            <p className="text-yapmate-status-red text-sm font-mono">{error}</p>
+          </div>
+        )}
 
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div>
-              <label className="block text-white text-sm mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="your@email.com"
-              />
-            </div>
+        {/* Signup Form */}
+        <form onSubmit={handleSignup} className="space-y-6">
+          <div>
+            <label className="block text-yapmate-white text-xs font-mono uppercase tracking-wide mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-4 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+              placeholder="your@email.com"
+            />
+          </div>
 
-            <div>
-              <label className="block text-white text-sm mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="••••••••"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Minimum 6 characters
-              </p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors duration-200"
-            >
-              {isLoading ? 'Creating account...' : 'Sign Up'}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-gray-300 text-sm">
-              Already have an account?{' '}
-              <Link
-                href="/login"
-                className="text-purple-400 hover:text-purple-300 font-semibold"
-              >
-                Log In
-              </Link>
+          <div>
+            <label className="block text-yapmate-white text-xs font-mono uppercase tracking-wide mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full px-4 py-4 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+              placeholder="••••••••"
+            />
+            <p className="text-xs text-yapmate-slate-300 mt-2 font-mono">
+              Min. 6 characters
             </p>
           </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full h-14 bg-yapmate-amber text-yapmate-black font-mono font-bold uppercase tracking-wide border-none transition-colors duration-snap active:bg-yapmate-status-yellow disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'CREATING ACCOUNT...' : 'SIGN UP'}
+          </button>
+        </form>
+
+        {/* Footer Link */}
+        <div className="mt-6 text-center border-t border-yapmate-slate-700 pt-6">
+          <p className="text-yapmate-slate-300 text-sm font-mono">
+            Have an account?{' '}
+            <Link
+              href="/login"
+              className="text-yapmate-amber hover:text-yapmate-status-yellow font-bold transition-colors duration-snap"
+            >
+              Log In
+            </Link>
+          </p>
         </div>
       </div>
     </main>

@@ -35,64 +35,75 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-8">
+    <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
       <div className="w-full max-w-md">
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8">
-          <h1 className="text-3xl font-bold text-white mb-6 text-center">
-            Log In to YapMate
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <h1 className="font-mono text-2xl font-bold text-yapmate-white mb-2 uppercase tracking-wide">
+            YapMate Login
           </h1>
+          <p className="text-yapmate-slate-300 text-sm">
+            Industrial invoicing for UK tradies
+          </p>
+        </div>
 
-          {error && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 mb-6">
-              <p className="text-red-200 text-sm">{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-white text-sm mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="your@email.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-white text-sm mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-4 py-3 rounded-lg bg-black/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors duration-200"
-            >
-              {isLoading ? 'Logging in...' : 'Log In'}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-gray-300 text-sm">
-              Don&apos;t have an account?{' '}
-              <Link
-                href="/signup"
-                className="text-purple-400 hover:text-purple-300 font-semibold"
-              >
-                Sign Up
-              </Link>
-            </p>
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 border-2 border-yapmate-status-red bg-yapmate-status-red/10 p-4">
+            <p className="text-yapmate-status-red text-sm font-mono">{error}</p>
           </div>
+        )}
+
+        {/* Login Form */}
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label className="block text-yapmate-white text-xs font-mono uppercase tracking-wide mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-4 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+              placeholder="your@email.com"
+            />
+          </div>
+
+          <div>
+            <label className="block text-yapmate-white text-xs font-mono uppercase tracking-wide mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full px-4 py-4 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full h-14 bg-yapmate-amber text-yapmate-black font-mono font-bold uppercase tracking-wide border-none transition-colors duration-snap active:bg-yapmate-status-yellow disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'LOGGING IN...' : 'LOG IN'}
+          </button>
+        </form>
+
+        {/* Footer Link */}
+        <div className="mt-6 text-center border-t border-yapmate-slate-700 pt-6">
+          <p className="text-yapmate-slate-300 text-sm font-mono">
+            No account?{' '}
+            <Link
+              href="/signup"
+              className="text-yapmate-amber hover:text-yapmate-status-yellow font-bold transition-colors duration-snap"
+            >
+              Sign Up
+            </Link>
+          </p>
         </div>
       </div>
     </main>
