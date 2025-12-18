@@ -20,6 +20,12 @@ const config: Config = {
             dark: '#E2B649',
             darker: '#B48828',
           },
+          gray: {
+            light: '#9CA3AF',
+            DEFAULT: '#6B7280',
+            dark: '#1A1A1A',
+            lightest: '#F2F2F2',
+          },
           // INDUSTRIAL SYSTEM - Sharp, High Contrast
           black: '#000000',        // Pure black (dark mode background)
           white: '#FFFFFF',        // Pure white (light mode background)
