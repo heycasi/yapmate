@@ -9,6 +9,10 @@ interface UserPreferences {
   default_labour_rate: number
   default_vat_enabled: boolean
   default_cis_enabled: boolean
+  bank_account_name: string | null
+  bank_sort_code: string | null
+  bank_account_number: string | null
+  payment_reference: string | null
 }
 
 export default function SettingsPage() {
@@ -21,6 +25,11 @@ export default function SettingsPage() {
   const [labourRate, setLabourRate] = useState('45.00')
   const [vatEnabled, setVatEnabled] = useState(false)
   const [cisEnabled, setCisEnabled] = useState(false)
+
+  const [bankAccountName, setBankAccountName] = useState('')
+  const [bankSortCode, setBankSortCode] = useState('')
+  const [bankAccountNumber, setBankAccountNumber] = useState('')
+  const [paymentReference, setPaymentReference] = useState('')
 
   const router = useRouter()
   const supabase = createBrowserClient()
@@ -60,6 +69,10 @@ export default function SettingsPage() {
         setLabourRate(data.default_labour_rate.toString())
         setVatEnabled(data.default_vat_enabled)
         setCisEnabled(data.default_cis_enabled)
+        setBankAccountName(data.bank_account_name || '')
+        setBankSortCode(data.bank_sort_code || '')
+        setBankAccountNumber(data.bank_account_number || '')
+        setPaymentReference(data.payment_reference || '')
       }
     } catch (err) {
       console.error('Error:', err)
@@ -76,10 +89,19 @@ export default function SettingsPage() {
     setSuccess(false)
 
     try {
+      // Validate sort code format if provided
+      if (bankSortCode && !/^\d{2}-\d{2}-\d{2}$/.test(bankSortCode)) {
+        throw new Error('Sort code must be in format XX-XX-XX')
+      }
+
       const preferences: UserPreferences = {
         default_labour_rate: parseFloat(labourRate),
         default_vat_enabled: vatEnabled,
         default_cis_enabled: cisEnabled,
+        bank_account_name: bankAccountName || null,
+        bank_sort_code: bankSortCode || null,
+        bank_account_number: bankAccountNumber || null,
+        payment_reference: paymentReference || null,
       }
 
       // Upsert preferences
@@ -204,6 +226,78 @@ export default function SettingsPage() {
             <p className="text-xs text-yapmate-slate-300 mt-2 font-mono">
               New invoices start with CIS {cisEnabled ? 'ON' : 'OFF'}
             </p>
+          </div>
+
+          {/* Payment Details */}
+          <div className="border-b border-yapmate-slate-700 pb-6">
+            <h2 className="text-yapmate-white text-sm font-mono uppercase tracking-wide mb-4">
+              Payment Details
+            </h2>
+            <p className="text-xs text-yapmate-slate-400 font-mono mb-4">
+              Bank details will appear on all generated invoice PDFs
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
+                  Account Name
+                </label>
+                <input
+                  type="text"
+                  value={bankAccountName}
+                  onChange={(e) => setBankAccountName(e.target.value)}
+                  className="w-full px-4 py-3 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+                  placeholder="John Smith"
+                />
+              </div>
+
+              <div>
+                <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
+                  Sort Code
+                </label>
+                <input
+                  type="text"
+                  value={bankSortCode}
+                  onChange={(e) => setBankSortCode(e.target.value)}
+                  className="w-full px-4 py-3 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+                  placeholder="12-34-56"
+                  maxLength={8}
+                />
+                <p className="text-xs text-yapmate-slate-400 font-mono mt-1">
+                  Format: XX-XX-XX
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
+                  Account Number
+                </label>
+                <input
+                  type="text"
+                  value={bankAccountNumber}
+                  onChange={(e) => setBankAccountNumber(e.target.value)}
+                  className="w-full px-4 py-3 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+                  placeholder="12345678"
+                  maxLength={8}
+                />
+              </div>
+
+              <div>
+                <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
+                  Payment Reference (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  className="w-full px-4 py-3 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+                  placeholder="e.g. INV or your name"
+                />
+                <p className="text-xs text-yapmate-slate-400 font-mono mt-1">
+                  Defaults to invoice number if left blank
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Logout */}

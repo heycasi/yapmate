@@ -149,15 +149,23 @@ const styles = StyleSheet.create({
   },
 })
 
+interface BankDetails {
+  accountName: string
+  sortCode: string
+  accountNumber: string
+  paymentReference: string
+}
+
 interface InvoicePDFProps {
   invoice: any
   calculations: InvoiceCalculation
+  bankDetails: BankDetails | null
 }
 
 // Helper to check if a value is effectively false/null
 const isNA = (val: boolean | null) => val === false || val === null
 
-const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations }) => {
+const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations, bankDetails }) => {
   // Use public URL or absolute path if possible. 
   // For Vercel/Next.js, we might need the full URL for server-side generation if it's external,
   // or file system path if local. React-PDF Image src can be a url.
@@ -285,6 +293,31 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations }) => {
                 <Text style={styles.notesTitle}>Payment Terms & Notes</Text>
                 <Text style={styles.notesText}>{invoice.notes}</Text>
             </View>
+        )}
+
+        {/* Payment Details */}
+        {bankDetails && (
+          <View style={{ marginTop: 30, padding: 15, backgroundColor: '#f9f9f9', borderWidth: 1, borderColor: '#ddd' }}>
+            <Text style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Payment Details</Text>
+            <View style={{ fontSize: 9, lineHeight: 1.6 }}>
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                <Text style={{ width: '40%', fontWeight: 'bold' }}>Account Name:</Text>
+                <Text style={{ width: '60%' }}>{bankDetails.accountName}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                <Text style={{ width: '40%', fontWeight: 'bold' }}>Sort Code:</Text>
+                <Text style={{ width: '60%' }}>{bankDetails.sortCode}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                <Text style={{ width: '40%', fontWeight: 'bold' }}>Account Number:</Text>
+                <Text style={{ width: '60%' }}>{bankDetails.accountNumber}</Text>
+              </View>
+              <View style={{ flexDirection: 'row' }}>
+                <Text style={{ width: '40%', fontWeight: 'bold' }}>Payment Reference:</Text>
+                <Text style={{ width: '60%' }}>{bankDetails.paymentReference}</Text>
+              </View>
+            </View>
+          </View>
         )}
 
         {/* Footer */}

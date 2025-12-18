@@ -19,11 +19,13 @@ function InvoiceEditContent() {
   const [invoice, setInvoice] = useState<any>(null)
   const [materials, setMaterials] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [hasBankDetails, setHasBankDetails] = useState(true)
 
   useEffect(() => {
     if (id) {
       checkAuth()
       fetchInvoice(id)
+      checkBankDetails()
     } else {
       setIsLoading(false)
     }
@@ -57,6 +59,31 @@ function InvoiceEditContent() {
       setError('Failed to load invoice')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const checkBankDetails = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session) return
+
+      const { data, error } = await (supabase
+        .from('user_preferences') as any)
+        .select('bank_account_name, bank_sort_code, bank_account_number')
+        .eq('user_id', session.user.id)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking bank details:', error)
+      }
+
+      const hasDetails = data && data.bank_account_name && data.bank_sort_code && data.bank_account_number
+      setHasBankDetails(!!hasDetails)
+    } catch (error) {
+      console.error('Error checking bank details:', error)
     }
   }
 
@@ -132,6 +159,29 @@ function InvoiceEditContent() {
     setPdfError(null)
 
     try {
+      // Fetch bank details for PDF
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      let bankDetails = null
+      if (session) {
+        const { data } = await (supabase
+          .from('user_preferences') as any)
+          .select('bank_account_name, bank_sort_code, bank_account_number, payment_reference')
+          .eq('user_id', session.user.id)
+          .single()
+
+        if (data && data.bank_account_name && data.bank_sort_code && data.bank_account_number) {
+          bankDetails = {
+            accountName: data.bank_account_name,
+            sortCode: data.bank_sort_code,
+            accountNumber: data.bank_account_number,
+            paymentReference: data.payment_reference || invoice.id.slice(0, 8).toUpperCase(),
+          }
+        }
+      }
+
       const calculations = calculateInvoiceTotals(
         invoice.labour_hours,
         invoice.labour_rate,
@@ -148,7 +198,7 @@ function InvoiceEditContent() {
       }
 
       const blob = await pdf(
-        <InvoicePDF invoice={invoiceWithMaterials} calculations={calculations} />
+        <InvoicePDF invoice={invoiceWithMaterials} calculations={calculations} bankDetails={bankDetails} />
       ).toBlob()
 
       const fileName = `invoice-${invoice.customer_name || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`
@@ -478,6 +528,11 @@ function InvoiceEditContent() {
 
             {/* PDF Button */}
             <div className="mt-4 pt-4 border-t border-yapmate-slate-700">
+              {!hasBankDetails && (
+                <p className="mb-3 text-xs text-yapmate-status-yellow font-mono">
+                  Add bank details in Settings to include them on invoices
+                </p>
+              )}
               <button
                 onClick={handleDownloadPDF}
                 disabled={isGeneratingPDF}
