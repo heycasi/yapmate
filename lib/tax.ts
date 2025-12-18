@@ -2,8 +2,11 @@ export interface InvoiceCalculation {
   labourSubtotal: number
   materialsSubtotal: number
   subtotal: number
-  cisDeduction: number
   vatAmount: number
+  invoiceTotal: number
+  cisDeduction: number
+  netPayment: number
+  // Legacy field for backwards compatibility (same as invoiceTotal)
   grandTotal: number
 }
 
@@ -39,28 +42,38 @@ export function calculateInvoiceTotals(
   vatRegistered: boolean,
   vatRate: number
 ): InvoiceCalculation {
+  // Round to 2 decimal places to avoid float drift
+  const round = (n: number) => Math.round(n * 100) / 100
+
   // Calculate labour and materials
-  const labourSubtotal = calculateLabourCost(labourHours, labourRate)
-  const materialsSubtotal = calculateMaterialsTotal(materials)
-  const subtotal = labourSubtotal + materialsSubtotal
+  const labourSubtotal = round(calculateLabourCost(labourHours, labourRate))
+  const materialsSubtotal = round(calculateMaterialsTotal(materials))
+  const subtotal = round(labourSubtotal + materialsSubtotal)
 
-  // Calculate CIS (only on labour, before VAT)
-  const cisDeduction = cisJob ? calculateCIS(labourSubtotal, cisRate) : 0
+  // UK VAT rules: VAT is calculated on full subtotal (labour + materials)
+  // VAT is added on top and paid by the customer
+  const vatAmount = vatRegistered ? round(calculateVAT(subtotal, vatRate)) : 0
 
-  // Calculate VAT (on full subtotal after CIS deduction)
-  const amountAfterCIS = subtotal - cisDeduction
-  const vatAmount = vatRegistered ? calculateVAT(amountAfterCIS, vatRate) : 0
+  // Invoice total = what the customer pays
+  const invoiceTotal = round(subtotal + vatAmount)
 
-  // Grand total
-  const grandTotal = amountAfterCIS + vatAmount
+  // UK CIS rules: CIS is withheld by contractor from labour only
+  // CIS does NOT reduce VAT or materials, and does NOT reduce invoice total
+  const cisDeduction = cisJob ? round(calculateCIS(labourSubtotal, cisRate)) : 0
+
+  // Net payment = what you receive (invoice total minus CIS withheld)
+  const netPayment = round(invoiceTotal - cisDeduction)
 
   return {
     labourSubtotal,
     materialsSubtotal,
     subtotal,
-    cisDeduction,
     vatAmount,
-    grandTotal,
+    invoiceTotal,
+    cisDeduction,
+    netPayment,
+    // Legacy field for backwards compatibility
+    grandTotal: invoiceTotal,
   }
 }
 

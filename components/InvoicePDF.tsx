@@ -251,7 +251,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations }) => {
             <Text>{formatCurrency(calculations.subtotal)}</Text>
           </View>
 
-          {/* VAT Section */}
+          {/* VAT Section - only show if enabled */}
           {!isNA(invoice.vat_registered) && (
             <View style={styles.totalRow}>
               <Text>VAT ({invoice.vat_rate}%)</Text>
@@ -261,10 +261,10 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations }) => {
 
           <View style={styles.grandTotal}>
             <Text>INVOICE TOTAL</Text>
-            <Text>{formatCurrency(calculations.grandTotal)}</Text>
+            <Text>{formatCurrency(calculations.invoiceTotal)}</Text>
           </View>
 
-          {/* CIS Section - shown after invoice total */}
+          {/* CIS Section - only show if enabled, appears after invoice total */}
           {!isNA(invoice.cis_job) && (
             <>
               <View style={[styles.totalRow, { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ccc' }]}>
@@ -273,7 +273,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations }) => {
               </View>
               <View style={styles.totalRow}>
                 <Text style={{ fontWeight: 'bold' }}>Net Payment to Contractor</Text>
-                <Text style={{ fontWeight: 'bold' }}>{formatCurrency(calculations.grandTotal - calculations.cisDeduction)}</Text>
+                <Text style={{ fontWeight: 'bold' }}>{formatCurrency(calculations.netPayment)}</Text>
               </View>
             </>
           )}

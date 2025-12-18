@@ -457,7 +457,7 @@ function InvoiceEditContent() {
 
               <div className="flex justify-between pt-2 border-t-2 border-yapmate-white text-lg">
                 <span className="text-yapmate-white font-bold">INVOICE TOTAL</span>
-                <span className="text-yapmate-amber font-bold">{formatCurrency(calculations.grandTotal)}</span>
+                <span className="text-yapmate-amber font-bold">{formatCurrency(calculations.invoiceTotal)}</span>
               </div>
               <p className="text-yapmate-slate-400 text-xs">Customer pays this amount</p>
 
@@ -469,7 +469,7 @@ function InvoiceEditContent() {
                   </div>
                   <div className="flex justify-between text-base">
                     <span className="text-yapmate-white font-bold">NET PAYMENT</span>
-                    <span className="text-yapmate-status-green font-bold">{formatCurrency(calculations.grandTotal - calculations.cisDeduction)}</span>
+                    <span className="text-yapmate-status-green font-bold">{formatCurrency(calculations.netPayment)}</span>
                   </div>
                   <p className="text-yapmate-slate-400 text-xs">You receive this amount</p>
                 </>
