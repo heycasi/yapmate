@@ -14,25 +14,32 @@ export default function WaitlistPage() {
     setMessage('')
 
     try {
-      const response = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
+      const { createBrowserClient } = await import('@/lib/supabase')
+      const supabase = createBrowserClient()
 
-      const data = await response.json()
+      const { error } = await (supabase
+        .from('waitlist') as any)
+        .insert({ email: email.toLowerCase().trim() })
 
-      if (response.ok) {
-        setStatus('success')
-        setMessage(data.message || "You're on the list! We'll be in touch soon.")
-        setEmail('')
+      if (error) {
+        // Handle duplicate email error specifically
+        if (error.code === '23505') {
+          setStatus('success')
+          setMessage("You're already on the list! We'll be in touch soon.")
+        } else {
+          setStatus('error')
+          setMessage('Something went wrong. Please try again.')
+          console.error('Waitlist error:', error)
+        }
       } else {
-        setStatus('error')
-        setMessage(data.error || 'Something went wrong. Please try again.')
+        setStatus('success')
+        setMessage("You're on the list! We'll be in touch soon.")
+        setEmail('')
       }
     } catch (err) {
       setStatus('error')
       setMessage('Network error. Please check your connection and try again.')
+      console.error('Waitlist error:', err)
     }
   }
 
