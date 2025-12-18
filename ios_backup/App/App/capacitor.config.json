@@ -1,0 +1,12 @@
+{
+	"appId": "com.yapmate.app",
+	"appName": "YapMate",
+	"webDir": "out",
+	"server": {
+		"androidScheme": "https"
+	},
+	"ios": {
+		"contentInset": "always"
+	},
+	"packageClassList": []
+}

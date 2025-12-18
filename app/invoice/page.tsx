@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
-import { createBrowserClient } from '@/lib/supabase'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import Navigation from '@/components/Navigation'
 import { calculateInvoiceTotals, formatCurrency } from '@/lib/tax'
 import { PageShell } from '@/components/ui/PageShell'
@@ -10,10 +10,11 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { BottomCTA } from '@/components/ui/BottomCTA'
 
-export default function InvoiceEditPage() {
-  const params = useParams()
+function InvoiceEditContent() {
+  const searchParams = useSearchParams()
+  const id = searchParams.get('id')
   const router = useRouter()
-  const supabase = createBrowserClient()
+  // const supabase = createBrowserClient() - Removed
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [invoice, setInvoice] = useState<any>(null)
@@ -21,10 +22,14 @@ export default function InvoiceEditPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    checkAuth()
-    fetchInvoice()
+    if (id) {
+      checkAuth()
+      fetchInvoice(id)
+    } else {
+        setIsLoading(false)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id])
+  }, [id])
 
   const checkAuth = async () => {
     const {
@@ -35,19 +40,19 @@ export default function InvoiceEditPage() {
     }
   }
 
-  const fetchInvoice = async () => {
+  const fetchInvoice = async (invoiceId: string) => {
     try {
-      const response = await fetch(`/api/invoice/${params.id}`)
-      if (!response.ok) {
-        console.error('Fetch invoice failed:', response.status, response.statusText)
-        throw new Error(`Failed to fetch invoice: ${response.status}`)
-      }
-      const data = await response.json()
-      if (!data.invoice) {
-        throw new Error('Invoice data not found in response')
-      }
-      setInvoice(data.invoice)
-      setMaterials(data.invoice.materials || [])
+      const { data, error } = await (supabase
+        .from('invoices') as any)
+        .select('*, materials(*)')
+        .eq('id', invoiceId)
+        .single()
+
+      if (error) throw error
+      if (!data) throw new Error('Invoice not found')
+
+      setInvoice(data)
+      setMaterials((data as any).materials || [])
     } catch (error) {
       console.error('Error fetching invoice:', error)
       setError('Failed to load invoice')
@@ -57,36 +62,66 @@ export default function InvoiceEditPage() {
   }
 
   const handleSave = async () => {
+    if (!id || !invoice) return
     setIsSaving(true)
     setError(null)
 
     try {
-      const response = await fetch(`/api/invoice/${params.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoice: {
-            customer_name: invoice.customer_name,
-            job_summary: invoice.job_summary,
-            labour_hours: invoice.labour_hours,
-            labour_rate: invoice.labour_rate,
-            cis_job: invoice.cis_job,
-            cis_rate: invoice.cis_rate,
-            vat_registered: invoice.vat_registered,
-            vat_rate: invoice.vat_rate,
-            notes: invoice.notes,
-            status: invoice.status,
-          },
-          materials: materials,
-        }),
-      })
+        // 1. Update Invoice
+        const { error: invoiceError } = await (supabase
+            .from('invoices') as any)
+            .update({
+                customer_name: invoice.customer_name,
+                job_summary: invoice.job_summary,
+                labour_hours: invoice.labour_hours,
+                labour_rate: invoice.labour_rate,
+                cis_job: invoice.cis_job,
+                cis_rate: invoice.cis_rate,
+                vat_registered: invoice.vat_registered,
+                vat_rate: invoice.vat_rate,
+                notes: invoice.notes,
+                status: invoice.status,
+            })
+            .eq('id', id)
+        
+        if (invoiceError) throw invoiceError
 
-      if (!response.ok) {
-        throw new Error('Failed to save invoice')
-      }
+        // 2. Handle Materials (Delete existing and re-insert simplistic approach for now, or Upsert)
+        // For simplicity in this prototype, we'll upsert if they have IDs, or insert if new. 
+        // Actually simpler: Delete all for this invoice and re-insert is risky but easiest for prototype.
+        // Better: Upsert.
+        
+        const materialsToUpsert = materials.map(m => ({
+            ...m,
+            invoice_id: id,
+            id: m.id || undefined // Let Postgres generate ID if missing
+        }))
+        
+        // Handling deletions is tricky without tracking deleted IDs. 
+        // For now, we will just upsert modified/new ones. Deleted ones won't be removed in this logic 
+        // without more complex state tracking.
+        // FIX: First delete all materials for this invoice, then insert all current ones.
+        // This is "Nuclear" but ensures sync.
+        
+        await (supabase.from('materials') as any).delete().eq('invoice_id', id)
+        
+        // Remove IDs from materials so they get new ones (safest for "Delete & Re-insert" strategy)
+        const materialsToInsert = materials.map(m => {
+            const { id: _id, ...rest } = m
+            return { ...rest, invoice_id: id }
+        })
+
+        if (materialsToInsert.length > 0) {
+            const { error: materialsError } = await (supabase
+                .from('materials') as any)
+                .insert(materialsToInsert)
+            
+            if (materialsError) throw materialsError
+        }
 
       router.push('/dashboard')
     } catch (err: any) {
+      console.error(err)
       setError(err.message || 'Failed to save invoice')
     } finally {
       setIsSaving(false)
@@ -111,27 +146,13 @@ export default function InvoiceEditPage() {
   }
 
   const handleGeneratePDF = () => {
-    window.open(`/api/pdf/${params.id}`, '_blank')
+    // window.open(`/api/pdf/${id}`, '_blank')
+    alert('PDF Generation requires server-side functions. Disabled for Static Export.')
   }
 
   const handleGeneratePaymentLink = async () => {
-    try {
-      const response = await fetch('/api/payment-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId: params.id }),
-      })
-
-      const data = await response.json()
-
-      if (data.paymentLink) {
-        setInvoice({ ...invoice, stripe_payment_link: data.paymentLink })
-        alert('Payment link generated!')
-      }
-    } catch (error) {
-      console.error('Error generating payment link:', error)
-      alert('Failed to generate payment link')
-    }
+    // API routes not available in static export
+    alert('Payment Links require server-side functions. Disabled for Static Export.')
   }
 
   if (isLoading) {
@@ -152,7 +173,7 @@ export default function InvoiceEditPage() {
       <>
         <PageShell title="Not Found">
           <div className="text-yapmate-slate-400 text-center py-12">
-            Invoice not found
+            Invoice not found or invalid ID.
           </div>
         </PageShell>
         <Navigation />
@@ -164,9 +185,9 @@ export default function InvoiceEditPage() {
     invoice.labour_hours,
     invoice.labour_rate,
     materials.map((m) => ({ cost: m.cost, quantity: m.quantity })),
-    invoice.cis_job ?? false, // Treat null as false for calculations only
+    invoice.cis_job ?? false,
     invoice.cis_rate,
-    invoice.vat_registered ?? false, // Treat null as false for calculations only
+    invoice.vat_registered ?? false,
     invoice.vat_rate
   )
 
@@ -485,7 +506,8 @@ export default function InvoiceEditPage() {
               <Button
                 variant="secondary"
                 onClick={handleGeneratePDF}
-                className="flex-1"
+                className="flex-1 opacity-50 cursor-not-allowed"
+                title="Not available in offline/static mode"
               >
                 PDF
               </Button>
@@ -493,7 +515,8 @@ export default function InvoiceEditPage() {
                 <Button
                   variant="secondary"
                   onClick={handleGeneratePaymentLink}
-                  className="flex-1"
+                  className="flex-1 opacity-50 cursor-not-allowed"
+                  title="Not available in offline/static mode"
                 >
                   Payment Link
                 </Button>
@@ -528,7 +551,14 @@ export default function InvoiceEditPage() {
           </Button>
         </BottomCTA>
       </PageShell>
-      <Navigation />
     </>
+  )
+}
+
+export default function InvoiceEditPage() {
+  return (
+    <Suspense fallback={<div className="text-center p-12 text-gray-500">Loading editor...</div>}>
+      <InvoiceEditContent />
+    </Suspense>
   )
 }

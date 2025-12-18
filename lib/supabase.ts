@@ -9,16 +9,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 // Singleton browser client to avoid multiple instances
-let browserClient: ReturnType<typeof createClient> | null = null
+let browserClient: ReturnType<typeof createClient<Database>> | null = null
 
 export function createBrowserClient() {
   if (browserClient) {
     return browserClient
   }
-  browserClient = createClient(supabaseUrl, supabaseAnonKey)
+  browserClient = createClient<Database>(supabaseUrl, supabaseAnonKey)
   return browserClient
 }
 
@@ -68,9 +68,9 @@ export type Database = {
           job_summary: string
           labour_hours: number | null
           labour_rate: number
-          cis_job: boolean
+          cis_job: boolean | null
           cis_rate: number
-          vat_registered: boolean
+          vat_registered: boolean | null
           vat_rate: number
           stripe_payment_link: string | null
           status: 'draft' | 'sent' | 'paid' | 'cancelled'
@@ -86,9 +86,9 @@ export type Database = {
           job_summary: string
           labour_hours?: number | null
           labour_rate?: number
-          cis_job?: boolean
+          cis_job?: boolean | null
           cis_rate?: number
-          vat_registered?: boolean
+          vat_registered?: boolean | null
           vat_rate?: number
           stripe_payment_link?: string | null
           status?: 'draft' | 'sent' | 'paid' | 'cancelled'
@@ -104,9 +104,9 @@ export type Database = {
           job_summary?: string
           labour_hours?: number | null
           labour_rate?: number
-          cis_job?: boolean
+          cis_job?: boolean | null
           cis_rate?: number
-          vat_registered?: boolean
+          vat_registered?: boolean | null
           vat_rate?: number
           stripe_payment_link?: string | null
           status?: 'draft' | 'sent' | 'paid' | 'cancelled'

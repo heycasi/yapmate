@@ -33,9 +33,13 @@ export default function DashboardPage() {
 
   const fetchInvoices = async () => {
     try {
-      const response = await fetch('/api/invoices')
-      const data = await response.json()
-      setInvoices(data.invoices || [])
+      const { data, error } = await (supabase
+        .from('invoices') as any)
+        .select('*, materials(*)')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setInvoices(data || [])
     } catch (error) {
       console.error('Error fetching invoices:', error)
     } finally {
@@ -136,7 +140,7 @@ export default function DashboardPage() {
               return (
                 <Link
                   key={invoice.id}
-                  href={`/invoice/${invoice.id}`}
+                  href={`/invoice?id=${invoice.id}`}
                   className="block"
                 >
                   <div className="h-20 flex items-center px-4 border-b border-yapmate-slate-700 dark:border-yapmate-slate-700 transition-colors duration-0 active:bg-yapmate-amber active:text-yapmate-black">
