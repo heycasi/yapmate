@@ -151,16 +151,53 @@ function InvoiceEditContent() {
         <InvoicePDF invoice={invoiceWithMaterials} calculations={calculations} />
       ).toBlob()
 
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `invoice-${invoice.customer_name || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`
+      const fileName = `invoice-${invoice.customer_name || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`
 
-      document.body.appendChild(link)
-      link.click()
+      // Check if running in Capacitor (iOS/Android)
+      const isCapacitor = typeof (window as any).Capacitor !== 'undefined'
 
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      if (isCapacitor) {
+        // iOS/Android: Use Capacitor Filesystem + Share
+        const { Filesystem, Directory } = await import('@capacitor/filesystem')
+        const { Share } = await import('@capacitor/share')
+
+        // Convert blob to base64
+        const reader = new FileReader()
+        const base64Data = await new Promise<string>((resolve) => {
+          reader.onloadend = () => {
+            const base64 = (reader.result as string).split(',')[1]
+            resolve(base64)
+          }
+          reader.readAsDataURL(blob)
+        })
+
+        // Write to cache directory
+        const writeResult = await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache,
+        })
+
+        // Share using native share sheet
+        await Share.share({
+          title: 'Invoice PDF',
+          text: `Invoice for ${invoice.customer_name || 'customer'}`,
+          url: writeResult.uri,
+          dialogTitle: 'Share Invoice',
+        })
+      } else {
+        // Web: Use download link
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = fileName
+
+        document.body.appendChild(link)
+        link.click()
+
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+      }
     } catch (err: any) {
       console.error('PDF generation error:', err)
       setPdfError(err.message || 'Failed to generate PDF')
