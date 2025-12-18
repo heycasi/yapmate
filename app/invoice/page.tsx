@@ -9,6 +9,8 @@ import { PageShell } from '@/components/ui/PageShell'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { BottomCTA } from '@/components/ui/BottomCTA'
+import { pdf } from '@react-pdf/renderer'
+import InvoicePDF from '@/components/InvoicePDF'
 
 function InvoiceEditContent() {
   const searchParams = useSearchParams()
@@ -17,6 +19,8 @@ function InvoiceEditContent() {
   // const supabase = createBrowserClient() - Removed
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
   const [invoice, setInvoice] = useState<any>(null)
   const [materials, setMaterials] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -143,6 +147,56 @@ function InvoiceEditContent() {
     const updated = [...materials]
     updated[index] = { ...updated[index], [field]: value }
     setMaterials(updated)
+  }
+
+  const handleDownloadPDF = async () => {
+    if (!invoice) return
+
+    setIsGeneratingPDF(true)
+    setPdfError(null)
+
+    try {
+      // Calculate invoice totals
+      const calculations = calculateInvoiceTotals(
+        invoice.labour_hours,
+        invoice.labour_rate,
+        materials.map((m: any) => ({ cost: m.cost, quantity: m.quantity })),
+        invoice.cis_job,
+        invoice.cis_rate,
+        invoice.vat_registered,
+        invoice.vat_rate
+      )
+
+      // Create invoice data with materials for PDF
+      const invoiceWithMaterials = {
+        ...invoice,
+        materials: materials,
+      }
+
+      // Generate PDF blob
+      const blob = await pdf(
+        <InvoicePDF invoice={invoiceWithMaterials} calculations={calculations} />
+      ).toBlob()
+
+      // Create download link
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `invoice-${invoice.customer_name || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`
+
+      // Trigger download
+      document.body.appendChild(link)
+      link.click()
+
+      // Cleanup
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      console.error('PDF generation error:', err)
+      setPdfError(err.message || 'Failed to generate PDF')
+    } finally {
+      setIsGeneratingPDF(false)
+    }
   }
 
 
@@ -492,6 +546,20 @@ function InvoiceEditContent() {
               </div>
             </div>
 
+            {/* PDF Download Section */}
+            <div className="mt-4 pt-4 border-t border-yapmate-slate-700">
+              <Button
+                onClick={handleDownloadPDF}
+                disabled={isGeneratingPDF}
+                variant="secondary"
+                className="w-full"
+              >
+                {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
+              </Button>
+              {pdfError && (
+                <p className="mt-2 text-xs text-red-400">{pdfError}</p>
+              )}
+            </div>
           </Card>
         </div>
 
