@@ -18,7 +18,7 @@ export default function WaitlistPage() {
       const supabase = createBrowserClient()
 
       const { error } = await (supabase
-        .from('waitlist') as any)
+        .from('waitlist_signups') as any)
         .insert({ email: email.toLowerCase().trim() })
 
       if (error) {
