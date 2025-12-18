@@ -247,30 +247,36 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations }) => {
         {/* Totals */}
         <View style={styles.totalsSection}>
           <View style={styles.totalRow}>
-            <Text>Subtotal</Text>
+            <Text>Subtotal (Labour + Materials)</Text>
             <Text>{formatCurrency(calculations.subtotal)}</Text>
           </View>
 
-          {/* CIS Section */}
-          <View style={styles.totalRow}>
-            <Text>CIS Deduction {isNA(invoice.cis_job) ? '(N/A)' : `(${invoice.cis_rate}%)`}</Text>
-            <Text>
-              {isNA(invoice.cis_job) ? 'N/A' : `-${formatCurrency(calculations.cisDeduction)}`}
-            </Text>
-          </View>
-
           {/* VAT Section */}
-          <View style={styles.totalRow}>
-            <Text>VAT {isNA(invoice.vat_registered) ? '(N/A)' : `(${invoice.vat_rate}%)`}</Text>
-            <Text>
-              {isNA(invoice.vat_registered) ? 'N/A' : formatCurrency(calculations.vatAmount)}
-            </Text>
-          </View>
+          {!isNA(invoice.vat_registered) && (
+            <View style={styles.totalRow}>
+              <Text>VAT ({invoice.vat_rate}%)</Text>
+              <Text>{formatCurrency(calculations.vatAmount)}</Text>
+            </View>
+          )}
 
           <View style={styles.grandTotal}>
-            <Text>TOTAL DUE</Text>
+            <Text>INVOICE TOTAL</Text>
             <Text>{formatCurrency(calculations.grandTotal)}</Text>
           </View>
+
+          {/* CIS Section - shown after invoice total */}
+          {!isNA(invoice.cis_job) && (
+            <>
+              <View style={[styles.totalRow, { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ccc' }]}>
+                <Text style={{ fontSize: 9, color: '#666' }}>CIS withheld by contractor ({invoice.cis_rate}% of labour)</Text>
+                <Text style={{ fontSize: 9, color: '#666' }}>{formatCurrency(calculations.cisDeduction)}</Text>
+              </View>
+              <View style={styles.totalRow}>
+                <Text style={{ fontWeight: 'bold' }}>Net Payment to Contractor</Text>
+                <Text style={{ fontWeight: 'bold' }}>{formatCurrency(calculations.grandTotal - calculations.cisDeduction)}</Text>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Notes / Payment Terms */}

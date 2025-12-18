@@ -387,33 +387,43 @@ function InvoiceEditContent() {
 
           {/* CIS & VAT Toggles */}
           <div className="border-b border-yapmate-slate-700 pb-4 space-y-4">
-            <label className="flex items-center justify-between">
-              <span className="text-yapmate-white text-xs font-mono uppercase">CIS Job</span>
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={invoice.cis_job ?? false}
-                  onChange={(e) => setInvoice({ ...invoice, cis_job: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-12 h-6 border-2 border-yapmate-slate-700 peer-checked:bg-yapmate-amber peer-checked:border-yapmate-amber"></div>
-                <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-yapmate-white peer-checked:translate-x-6 transition-transform duration-snap"></div>
-              </div>
-            </label>
+            <div>
+              <label className="flex items-center justify-between">
+                <span className="text-yapmate-white text-xs font-mono uppercase">CIS Job</span>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={invoice.cis_job ?? false}
+                    onChange={(e) => setInvoice({ ...invoice, cis_job: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-12 h-6 border-2 border-yapmate-slate-700 peer-checked:bg-yapmate-amber peer-checked:border-yapmate-amber"></div>
+                  <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-yapmate-white peer-checked:translate-x-6 transition-transform duration-snap"></div>
+                </div>
+              </label>
+              <p className="text-yapmate-slate-400 text-xs font-mono mt-1">
+                Contractor withholds {invoice.cis_rate}% from labour only
+              </p>
+            </div>
 
-            <label className="flex items-center justify-between">
-              <span className="text-yapmate-white text-xs font-mono uppercase">VAT Registered</span>
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={invoice.vat_registered ?? false}
-                  onChange={(e) => setInvoice({ ...invoice, vat_registered: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-12 h-6 border-2 border-yapmate-slate-700 peer-checked:bg-yapmate-amber peer-checked:border-yapmate-amber"></div>
-                <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-yapmate-white peer-checked:translate-x-6 transition-transform duration-snap"></div>
-              </div>
-            </label>
+            <div>
+              <label className="flex items-center justify-between">
+                <span className="text-yapmate-white text-xs font-mono uppercase">Add VAT</span>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={invoice.vat_registered ?? false}
+                    onChange={(e) => setInvoice({ ...invoice, vat_registered: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-12 h-6 border-2 border-yapmate-slate-700 peer-checked:bg-yapmate-amber peer-checked:border-yapmate-amber"></div>
+                  <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-yapmate-white peer-checked:translate-x-6 transition-transform duration-snap"></div>
+                </div>
+              </label>
+              <p className="text-yapmate-slate-400 text-xs font-mono mt-1">
+                Adds {invoice.vat_rate}% VAT to invoice total (customer pays)
+              </p>
+            </div>
           </div>
 
           {/* Notes */}
@@ -434,28 +444,36 @@ function InvoiceEditContent() {
           <div className="border-2 border-yapmate-amber p-4">
             <div className="space-y-2 text-sm font-mono">
               <div className="flex justify-between">
-                <span className="text-yapmate-slate-300">Subtotal</span>
+                <span className="text-yapmate-slate-300">Subtotal (Labour + Materials)</span>
                 <span className="text-yapmate-white font-bold">{formatCurrency(calculations.subtotal)}</span>
               </div>
 
-              {invoice.cis_job && (
-                <div className="flex justify-between text-yapmate-status-orange">
-                  <span>CIS ({invoice.cis_rate}%)</span>
-                  <span className="font-bold">-{formatCurrency(calculations.cisDeduction)}</span>
-                </div>
-              )}
-
               {invoice.vat_registered && (
-                <div className="flex justify-between text-yapmate-status-yellow">
-                  <span>VAT ({invoice.vat_rate}%)</span>
-                  <span className="font-bold">+{formatCurrency(calculations.vatAmount)}</span>
+                <div className="flex justify-between">
+                  <span className="text-yapmate-slate-300">VAT ({invoice.vat_rate}%)</span>
+                  <span className="text-yapmate-white font-bold">{formatCurrency(calculations.vatAmount)}</span>
                 </div>
               )}
 
               <div className="flex justify-between pt-2 border-t-2 border-yapmate-white text-lg">
-                <span className="text-yapmate-white font-bold">TOTAL</span>
+                <span className="text-yapmate-white font-bold">INVOICE TOTAL</span>
                 <span className="text-yapmate-amber font-bold">{formatCurrency(calculations.grandTotal)}</span>
               </div>
+              <p className="text-yapmate-slate-400 text-xs">Customer pays this amount</p>
+
+              {invoice.cis_job && (
+                <>
+                  <div className="flex justify-between pt-2 border-t border-yapmate-slate-700 text-yapmate-status-orange">
+                    <span>CIS withheld ({invoice.cis_rate}% of labour)</span>
+                    <span className="font-bold">{formatCurrency(calculations.cisDeduction)}</span>
+                  </div>
+                  <div className="flex justify-between text-base">
+                    <span className="text-yapmate-white font-bold">NET PAYMENT</span>
+                    <span className="text-yapmate-status-green font-bold">{formatCurrency(calculations.grandTotal - calculations.cisDeduction)}</span>
+                  </div>
+                  <p className="text-yapmate-slate-400 text-xs">You receive this amount</p>
+                </>
+              )}
             </div>
 
             {/* PDF Button */}
