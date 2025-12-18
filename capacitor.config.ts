@@ -21,13 +21,13 @@ const config: CapacitorConfig = {
   webDir: 'out',
 
   // Server config: DEV uses live reload, PROD uses bundled files
-  ...(DEV_MODE && {
+  ...(DEV_MODE ? {
     server: {
       url: DEV_URL,
       cleartext: true,
       androidScheme: 'https',
     },
-  }),
+  } : {}),
 
   ios: {
     contentInset: 'always',
