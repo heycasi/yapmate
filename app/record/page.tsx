@@ -602,21 +602,22 @@ export default function RecordPage() {
           </>
         )}
 
-        {/* BOTTOM ACTION BAR - Fixed */}
-        {invoice && invoiceId && (
-          <div className="fixed bottom-0 left-0 right-0 pb-safe">
-            <button
-              onClick={() => router.push(`/invoice?id=${invoiceId}`)}
-              className="bar-button h-14"
-            >
-              REVIEW INVOICE
-            </button>
-          </div>
-        )}
-
-        {/* Spacer for Navigation */}
-        <div className="h-20" />
+        {/* Spacer for bottom elements */}
+        <div className="h-32" />
       </main>
+
+      {/* BOTTOM ACTION BAR - Above Navigation */}
+      {invoice && invoiceId && (
+        <div className="fixed left-0 right-0 z-50" style={{ bottom: '68px' }}>
+          <button
+            onClick={() => router.push(`/invoice?id=${invoiceId}`)}
+            className="bar-button h-14"
+          >
+            REVIEW INVOICE
+          </button>
+        </div>
+      )}
+
       <Navigation />
     </>
   )
