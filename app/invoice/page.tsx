@@ -145,15 +145,6 @@ function InvoiceEditContent() {
     setMaterials(updated)
   }
 
-  const handleGeneratePDF = () => {
-    // window.open(`/api/pdf/${id}`, '_blank')
-    alert('PDF Generation requires server-side functions. Disabled for Static Export.')
-  }
-
-  const handleGeneratePaymentLink = async () => {
-    // API routes not available in static export
-    alert('Payment Links require server-side functions. Disabled for Static Export.')
-  }
 
   if (isLoading) {
     return (
@@ -501,41 +492,6 @@ function InvoiceEditContent() {
               </div>
             </div>
 
-            {/* Secondary Actions */}
-            <div className="flex gap-3 mt-4 pt-4 border-t border-yapmate-slate-700">
-              <Button
-                variant="secondary"
-                onClick={handleGeneratePDF}
-                className="flex-1 opacity-50 cursor-not-allowed"
-                title="Not available in offline/static mode"
-              >
-                PDF
-              </Button>
-              {!invoice.stripe_payment_link && (
-                <Button
-                  variant="secondary"
-                  onClick={handleGeneratePaymentLink}
-                  className="flex-1 opacity-50 cursor-not-allowed"
-                  title="Not available in offline/static mode"
-                >
-                  Payment Link
-                </Button>
-              )}
-            </div>
-
-            {invoice.stripe_payment_link && (
-              <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-3 mt-4">
-                <p className="text-green-400 text-xs font-semibold mb-1">Payment Link Generated:</p>
-                <a
-                  href={invoice.stripe_payment_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-green-300 text-xs break-all underline"
-                >
-                  {invoice.stripe_payment_link}
-                </a>
-              </div>
-            )}
           </Card>
         </div>
 

@@ -9,8 +9,6 @@ export default function Navigation() {
   const navItems = [
     { href: '/dashboard', label: 'Home', icon: '🏠' },
     { href: '/record', label: 'Record', icon: '🎤' },
-    { href: '/customers', label: 'Customers', icon: '👥' },
-    { href: '/settings', label: 'Settings', icon: '⚙️' },
   ]
 
   return (
