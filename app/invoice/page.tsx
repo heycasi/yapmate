@@ -7,6 +7,7 @@ import Navigation from '@/components/Navigation'
 import { calculateInvoiceTotals, formatCurrency } from '@/lib/tax'
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/InvoicePDF'
+import { ensureCustomer } from '@/lib/customer-helpers'
 
 function InvoiceEditContent() {
   const searchParams = useSearchParams()
@@ -93,9 +94,17 @@ function InvoiceEditContent() {
     setError(null)
 
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Ensure customer record exists and get customer_id
+      const customerId = await ensureCustomer(user.id, invoice.customer_name)
+
       const { error: invoiceError } = await (supabase
         .from('invoices') as any)
         .update({
+          customer_id: customerId,
           customer_name: invoice.customer_name,
           job_summary: invoice.job_summary,
           labour_hours: invoice.labour_hours,

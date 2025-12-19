@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import type { Invoice } from '@/lib/invoice'
 import Navigation from '@/components/Navigation'
 import { openaiClient } from '@/lib/openai_client'
+import { ensureCustomer } from '@/lib/customer-helpers'
 
 // PROMPTS MOVED FROM API ROUTES
 const WHISPER_PROMPT = `You are transcribing voice notes from UK tradespeople. Speech may include Glaswegian, Edinburgh, Geordie, Scouse, Mancunian and general Scottish/English dialects. Preserve names accurately. Pay special attention to common Scottish surnames such as: Dahl, McDonald, McDowell, Campbell, Robertson, O'Neill, Brown, Smith, Fraser. If the audio sounds like any of these names, prefer the exact spelled version rather than sounding alike alternatives such as Dow or Doll.
@@ -404,11 +405,15 @@ export default function RecordPage() {
 
       const extractedInvoice: Invoice = JSON.parse(responseContent)
 
+      // Ensure customer record exists and get customer_id
+      const customerId = await ensureCustomer(user.id, extractedInvoice.customerName)
+
       // Insert into Supabase
       const { data: invoiceData, error: invoiceError } = await (supabase
         .from('invoices') as any)
         .insert({
             user_id: user.id,
+            customer_id: customerId,
             customer_name: extractedInvoice.customerName,
             job_summary: extractedInvoice.jobSummary,
             labour_hours: extractedInvoice.labourHours,
