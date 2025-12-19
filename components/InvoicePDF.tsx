@@ -206,7 +206,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations, bankDeta
         {/* Customer Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Bill To</Text>
-          <Text style={{ fontSize: 12, marginBottom: 2 }}>{invoice.customer_name || 'Valued Customer'}</Text>
+          <Text style={{ fontSize: 12, marginBottom: 2 }}>{invoice.customer?.name || invoice.customer_name || 'Valued Customer'}</Text>
           {/* We don't have address field separately, so just name */}
         </View>
 

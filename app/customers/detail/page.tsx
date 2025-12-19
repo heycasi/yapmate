@@ -297,9 +297,10 @@ function CustomerDetailContent() {
                     type="text"
                     value={editForm.name}
                     onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    disabled={isSaving}
                     className={`w-full text-2xl font-bold bg-yapmate-black border-2 ${
                       validationErrors.name ? 'border-yapmate-status-red' : 'border-yapmate-slate-700'
-                    } text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors`}
+                    } text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
                     placeholder="Customer name"
                   />
                   {validationErrors.name && (
@@ -361,9 +362,10 @@ function CustomerDetailContent() {
                       type="email"
                       value={editForm.email}
                       onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      disabled={isSaving}
                       className={`w-full text-sm bg-yapmate-black border-2 ${
                         validationErrors.email ? 'border-yapmate-status-red' : 'border-yapmate-slate-700'
-                      } text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors`}
+                      } text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
                       placeholder="email@example.com"
                     />
                     {validationErrors.email && (
@@ -394,7 +396,8 @@ function CustomerDetailContent() {
                     type="tel"
                     value={editForm.phone}
                     onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                    className="w-full text-sm bg-yapmate-black border-2 border-yapmate-slate-700 text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors"
+                    disabled={isSaving}
+                    className="w-full text-sm bg-yapmate-black border-2 border-yapmate-slate-700 text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="07700 900000"
                   />
                 ) : (
@@ -418,8 +421,9 @@ function CustomerDetailContent() {
                   <textarea
                     value={editForm.address}
                     onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                    disabled={isSaving}
                     rows={3}
-                    className="w-full text-sm bg-yapmate-black border-2 border-yapmate-slate-700 text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors resize-none"
+                    className="w-full text-sm bg-yapmate-black border-2 border-yapmate-slate-700 text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="Full address"
                   />
                 ) : (

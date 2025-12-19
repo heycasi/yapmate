@@ -1,10 +1,23 @@
 import { createBrowserClient } from './supabase'
 
 /**
- * Normalizes phone number to digits only for matching
+ * Normalizes phone number for UK matching and storage
+ * - Strips all non-digits
+ * - If starts with 44 and length is 12 (UK mobile: 44 + 10 digits), converts to leading 0
+ * - Returns normalized value for consistent matching
  */
 function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, '')
+  // Strip all non-digits
+  const digitsOnly = phone.replace(/\D/g, '')
+
+  // Convert UK international format (44...) to local format (0...)
+  // UK mobiles: 44 7XXX XXXXXX (12 digits) → 0 7XXX XXXXXX (11 digits)
+  // UK landlines: 44 1XXX XXXXXX or 44 20XX XXXXXX (11-12 digits) → 0 1XXX XXXXXX (11 digits)
+  if (digitsOnly.startsWith('44') && digitsOnly.length >= 11 && digitsOnly.length <= 13) {
+    return '0' + digitsOnly.substring(2)
+  }
+
+  return digitsOnly
 }
 
 /**
@@ -99,7 +112,7 @@ export async function ensureCustomer(
         user_id: userId,
         name: normalizedName,
         email: normalizedEmail,
-        phone: phone?.trim() || null, // Keep original formatting for display
+        phone: normalizedPhone || null, // Save normalized phone for consistent matching
       })
       .select('id')
       .single()

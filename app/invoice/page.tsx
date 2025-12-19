@@ -46,7 +46,7 @@ function InvoiceEditContent() {
     try {
       const { data, error } = await (supabase
         .from('invoices') as any)
-        .select('*, materials(*)')
+        .select('*, materials(*), customer:customers(name, email, phone)')
         .eq('id', invoiceId)
         .single()
 
@@ -98,8 +98,16 @@ function InvoiceEditContent() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
+      // Lock customer matching: if customer_id exists, use linked customer's email/phone for stable matching
+      let customerEmail = null
+      let customerPhone = null
+      if (invoice.customer_id && invoice.customer) {
+        customerEmail = invoice.customer.email
+        customerPhone = invoice.customer.phone
+      }
+
       // Ensure customer record exists and get customer_id
-      const customerId = await ensureCustomer(user.id, invoice.customer_name)
+      const customerId = await ensureCustomer(user.id, invoice.customer_name, customerEmail, customerPhone)
 
       const { error: invoiceError } = await (supabase
         .from('invoices') as any)
@@ -210,7 +218,8 @@ function InvoiceEditContent() {
         <InvoicePDF invoice={invoiceWithMaterials} calculations={calculations} bankDetails={bankDetails} />
       ).toBlob()
 
-      const fileName = `invoice-${invoice.customer_name || 'draft'}-${new Date().toISOString().split('T')[0]}.pdf`
+      const customerName = invoice.customer?.name || invoice.customer_name || 'draft'
+      const fileName = `invoice-${customerName}-${new Date().toISOString().split('T')[0]}.pdf`
 
       // Check if running in Capacitor (iOS/Android)
       const isCapacitor = typeof (window as any).Capacitor !== 'undefined'
@@ -337,7 +346,7 @@ function InvoiceEditContent() {
             </label>
             <input
               type="text"
-              value={invoice.customer_name || ''}
+              value={invoice.customer?.name || invoice.customer_name || ''}
               onChange={(e) => setInvoice({ ...invoice, customer_name: e.target.value })}
               className="w-full px-4 py-3 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white text-lg font-bold focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
               placeholder="Customer name"
