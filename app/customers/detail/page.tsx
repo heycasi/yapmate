@@ -7,6 +7,9 @@ import { createBrowserClient } from '@/lib/supabase'
 import Navigation from '@/components/Navigation'
 import { calculateInvoiceTotals, formatCurrency } from '@/lib/tax'
 
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 function CustomerDetailContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -17,6 +20,18 @@ function CustomerDetailContent() {
   const [invoices, setInvoices] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+  })
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (customerId) {
@@ -46,8 +61,8 @@ function CustomerDetailContent() {
 
     try {
       // Fetch customer
-      const { data: customerData, error: customerError } = await supabase
-        .from('customers')
+      const { data: customerData, error: customerError } = await (supabase
+        .from('customers') as any)
         .select('*')
         .eq('id', customerId)
         .single()
@@ -56,6 +71,14 @@ function CustomerDetailContent() {
       if (!customerData) throw new Error('Customer not found')
 
       setCustomer(customerData)
+
+      // Initialize edit form with current values
+      setEditForm({
+        name: customerData.name || '',
+        email: customerData.email || '',
+        phone: customerData.phone || '',
+        address: customerData.address || '',
+      })
 
       // Fetch invoices for this customer with materials
       const { data: invoicesData, error: invoicesError } = await (supabase
@@ -72,6 +95,92 @@ function CustomerDetailContent() {
       setError(err.message || 'Failed to load customer')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleEditClick = () => {
+    setIsEditMode(true)
+    setValidationErrors({})
+    setSuccessMessage(null)
+    setError(null)
+  }
+
+  const handleCancelEdit = () => {
+    // Revert to last saved state
+    setEditForm({
+      name: customer.name || '',
+      email: customer.email || '',
+      phone: customer.phone || '',
+      address: customer.address || '',
+    })
+    setIsEditMode(false)
+    setValidationErrors({})
+    setError(null)
+  }
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {}
+
+    // Name is required
+    if (!editForm.name.trim()) {
+      errors.name = 'Name is required'
+    }
+
+    // Email format validation if provided
+    if (editForm.email.trim() && !EMAIL_REGEX.test(editForm.email.trim())) {
+      errors.email = 'Invalid email format'
+    }
+
+    setValidationErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const normalizePhone = (phone: string): string => {
+    // Remove all non-digit characters
+    return phone.replace(/\D/g, '')
+  }
+
+  const handleSave = async () => {
+    if (!validateForm()) {
+      return
+    }
+
+    setIsSaving(true)
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      // Prepare update data
+      const updateData: any = {
+        name: editForm.name.trim(),
+        email: editForm.email.trim() || null,
+        phone: editForm.phone.trim() || null,
+        address: editForm.address.trim() || null,
+      }
+
+      // Update customer by ID
+      const { error: updateError } = await (supabase
+        .from('customers') as any)
+        .update(updateData)
+        .eq('id', customerId)
+
+      if (updateError) throw updateError
+
+      // Update local state
+      setCustomer({ ...customer, ...updateData })
+      setIsEditMode(false)
+      setSuccessMessage('Customer updated')
+
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setSuccessMessage(null)
+      }, 3000)
+    } catch (err: any) {
+      console.error('Error updating customer:', err)
+      setError(err.message || 'Failed to update customer')
+      // Stay in edit mode on error
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -118,7 +227,7 @@ function CustomerDetailContent() {
     )
   }
 
-  if (error || !customer) {
+  if (error && !customer) {
     return (
       <>
         <div className="min-h-screen flex items-center justify-center">
@@ -156,66 +265,172 @@ function CustomerDetailContent() {
           <div className="w-16" />
         </div>
 
+        {/* Success Toast */}
+        {successMessage && (
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-yapmate-status-green text-yapmate-black px-6 py-3 rounded-lg font-mono text-sm font-bold shadow-lg">
+            ✓ {successMessage}
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && customer && (
+          <div className="mx-4 mt-4 border-2 border-yapmate-status-red bg-yapmate-status-red/10 p-4">
+            <p className="text-yapmate-status-red text-sm font-mono">{error}</p>
+          </div>
+        )}
+
         {/* Customer Profile Header */}
         <div className="p-6 border-b border-yapmate-slate-700">
           <div className="flex items-center gap-4 mb-6">
             {/* Large Avatar */}
             <div className="w-20 h-20 rounded-full bg-yapmate-amber-500 flex items-center justify-center flex-shrink-0">
               <span className="text-yapmate-black font-bold text-3xl">
-                {getInitials(customer.name)}
+                {getInitials(isEditMode ? editForm.name : customer.name)}
               </span>
             </div>
 
-            {/* Name */}
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-1">{customer.name}</h2>
-              <p className="text-yapmate-slate-400 text-sm font-mono">
-                {invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}
-              </p>
+            {/* Name and Invoice Count */}
+            <div className="flex-1">
+              {isEditMode ? (
+                <div>
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className={`w-full text-2xl font-bold bg-yapmate-black border-2 ${
+                      validationErrors.name ? 'border-yapmate-status-red' : 'border-yapmate-slate-700'
+                    } text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors`}
+                    placeholder="Customer name"
+                  />
+                  {validationErrors.name && (
+                    <p className="text-yapmate-status-red text-xs mt-1 font-mono">
+                      {validationErrors.name}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-bold text-white mb-1">{customer.name}</h2>
+                  <p className="text-yapmate-slate-400 text-sm font-mono">
+                    {invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}
+                  </p>
+                </>
+              )}
             </div>
+
+            {/* Edit/Save/Cancel Buttons */}
+            {!isEditMode ? (
+              <button
+                onClick={handleEditClick}
+                className="text-yapmate-amber font-mono text-xs uppercase active:text-yapmate-status-yellow px-4 py-2 border border-yapmate-amber hover:bg-yapmate-amber hover:text-yapmate-black transition-colors"
+              >
+                Edit
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="text-yapmate-black bg-yapmate-amber font-mono text-xs uppercase px-4 py-2 active:bg-yapmate-status-yellow disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={isSaving}
+                  className="text-yapmate-slate-300 border border-yapmate-slate-700 font-mono text-xs uppercase px-4 py-2 active:bg-yapmate-slate-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Contact Info */}
           <div className="space-y-3">
+            {/* Email */}
             <div className="flex items-center gap-3 text-yapmate-slate-300">
               <span className="text-xl">📧</span>
-              <div>
+              <div className="flex-1">
                 <p className="text-xs text-yapmate-slate-400 font-mono uppercase mb-1">
                   Email
                 </p>
-                <p className="text-sm">
-                  {customer.email || (
-                    <span className="text-yapmate-slate-500 italic">Not set</span>
-                  )}
-                </p>
+                {isEditMode ? (
+                  <div>
+                    <input
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      className={`w-full text-sm bg-yapmate-black border-2 ${
+                        validationErrors.email ? 'border-yapmate-status-red' : 'border-yapmate-slate-700'
+                      } text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors`}
+                      placeholder="email@example.com"
+                    />
+                    {validationErrors.email && (
+                      <p className="text-yapmate-status-red text-xs mt-1 font-mono">
+                        {validationErrors.email}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm">
+                    {customer.email || (
+                      <span className="text-yapmate-slate-500 italic">Not set</span>
+                    )}
+                  </p>
+                )}
               </div>
             </div>
 
+            {/* Phone */}
             <div className="flex items-center gap-3 text-yapmate-slate-300">
               <span className="text-xl">📞</span>
-              <div>
+              <div className="flex-1">
                 <p className="text-xs text-yapmate-slate-400 font-mono uppercase mb-1">
                   Phone
                 </p>
-                <p className="text-sm">
-                  {customer.phone || (
-                    <span className="text-yapmate-slate-500 italic">Not set</span>
-                  )}
-                </p>
+                {isEditMode ? (
+                  <input
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full text-sm bg-yapmate-black border-2 border-yapmate-slate-700 text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors"
+                    placeholder="07700 900000"
+                  />
+                ) : (
+                  <p className="text-sm">
+                    {customer.phone || (
+                      <span className="text-yapmate-slate-500 italic">Not set</span>
+                    )}
+                  </p>
+                )}
               </div>
             </div>
 
-            {customer.address && (
-              <div className="flex items-center gap-3 text-yapmate-slate-300">
-                <span className="text-xl">📍</span>
-                <div>
-                  <p className="text-xs text-yapmate-slate-400 font-mono uppercase mb-1">
-                    Address
+            {/* Address */}
+            <div className="flex items-center gap-3 text-yapmate-slate-300">
+              <span className="text-xl">📍</span>
+              <div className="flex-1">
+                <p className="text-xs text-yapmate-slate-400 font-mono uppercase mb-1">
+                  Address
+                </p>
+                {isEditMode ? (
+                  <textarea
+                    value={editForm.address}
+                    onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                    rows={3}
+                    className="w-full text-sm bg-yapmate-black border-2 border-yapmate-slate-700 text-white px-3 py-2 focus:outline-none focus:border-yapmate-amber transition-colors resize-none"
+                    placeholder="Full address"
+                  />
+                ) : (
+                  <p className="text-sm">
+                    {customer.address || (
+                      <span className="text-yapmate-slate-500 italic">Not set</span>
+                    )}
                   </p>
-                  <p className="text-sm">{customer.address}</p>
-                </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 

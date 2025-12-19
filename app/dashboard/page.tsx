@@ -35,7 +35,7 @@ export default function DashboardPage() {
     try {
       const { data, error } = await (supabase
         .from('invoices') as any)
-        .select('*, materials(*)')
+        .select('*, materials(*), customer:customers(name)')
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -157,7 +157,7 @@ export default function DashboardPage() {
                     {/* CENTER: Client Name + Status */}
                     <div className="flex-1 min-w-0 px-4">
                       <div className="font-sans font-bold text-base truncate">
-                        {invoice.customer_name || 'UNNAMED'}
+                        {invoice.customer?.name || invoice.customer_name || 'UNNAMED'}
                       </div>
                       <div className={getStatusBadgeClass(invoice.status)}>
                         {getStatusLabel(invoice.status)}

@@ -1,57 +1,114 @@
 import { createBrowserClient } from './supabase'
 
 /**
- * Ensures a customer record exists for the given customer name.
- * If a customer with this name already exists, returns their ID.
- * If not, creates a new customer record and returns the new ID.
+ * Normalizes phone number to digits only for matching
+ */
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '')
+}
+
+/**
+ * Ensures a customer record exists with improved matching priority.
+ * Matching priority:
+ *   1. Email (exact match, case-insensitive, trimmed)
+ *   2. Phone (normalized digits only)
+ *   3. Name (case-insensitive, trimmed) - only if email and phone not provided
  *
  * @param userId - The authenticated user's ID
- * @param customerName - The customer name from the invoice
+ * @param customerName - The customer name (required for creation if no match found)
+ * @param email - Optional email for matching
+ * @param phone - Optional phone for matching
  * @returns The customer ID (existing or newly created), or null if customerName is empty
  */
 export async function ensureCustomer(
   userId: string,
-  customerName: string | null
+  customerName: string | null,
+  email?: string | null,
+  phone?: string | null
 ): Promise<string | null> {
+  // Return null if no customer name provided
   if (!customerName || customerName.trim() === '') {
     return null
   }
 
   const supabase = createBrowserClient()
   const normalizedName = customerName.trim()
+  const normalizedEmail = email?.trim().toLowerCase() || null
+  const normalizedPhone = phone ? normalizePhone(phone.trim()) : null
 
-  // Check if customer already exists (case-insensitive match on name)
-  const { data: existingCustomers, error: searchError } = await (supabase
-    .from('customers') as any)
-    .select('id, name')
-    .eq('user_id', userId)
-    .ilike('name', normalizedName)
-    .limit(1)
+  try {
+    // Priority 1: Try to match by email (if provided)
+    if (normalizedEmail) {
+      const { data: emailMatches, error: emailError } = await (supabase
+        .from('customers') as any)
+        .select('id')
+        .eq('user_id', userId)
+        .ilike('email', normalizedEmail)
+        .limit(1)
 
-  if (searchError) {
-    console.error('Error searching for customer:', searchError)
-    throw searchError
+      if (emailError) throw emailError
+
+      if (emailMatches && emailMatches.length > 0) {
+        return emailMatches[0].id
+      }
+    }
+
+    // Priority 2: Try to match by phone (if provided and email match failed)
+    if (normalizedPhone && normalizedPhone.length > 0) {
+      // Fetch all customers with phones and match normalized digits
+      const { data: customers, error: customersError } = await (supabase
+        .from('customers') as any)
+        .select('id, phone')
+        .eq('user_id', userId)
+        .not('phone', 'is', null)
+
+      if (customersError) throw customersError
+
+      if (customers && customers.length > 0) {
+        // Find matching phone by normalized digits
+        const phoneMatch = customers.find((c: any) =>
+          normalizePhone(c.phone || '') === normalizedPhone
+        )
+
+        if (phoneMatch) {
+          return phoneMatch.id
+        }
+      }
+    }
+
+    // Priority 3: Try to match by name (only if email and phone not provided or didn't match)
+    if (!normalizedEmail && !normalizedPhone) {
+      const { data: nameMatches, error: nameError } = await (supabase
+        .from('customers') as any)
+        .select('id')
+        .eq('user_id', userId)
+        .ilike('name', normalizedName)
+        .limit(1)
+
+      if (nameError) throw nameError
+
+      if (nameMatches && nameMatches.length > 0) {
+        return nameMatches[0].id
+      }
+    }
+
+    // No match found - create new customer record
+    const { data: newCustomer, error: createError } = await (supabase
+      .from('customers') as any)
+      .insert({
+        user_id: userId,
+        name: normalizedName,
+        email: normalizedEmail,
+        phone: phone?.trim() || null, // Keep original formatting for display
+      })
+      .select('id')
+      .single()
+
+    if (createError) throw createError
+
+    return newCustomer.id
+  } catch (error) {
+    console.error('Error in ensureCustomer:', error)
+    throw error
   }
-
-  // If customer exists, return their ID
-  if (existingCustomers && existingCustomers.length > 0) {
-    return existingCustomers[0].id
-  }
-
-  // Customer doesn't exist, create new record
-  const { data: newCustomer, error: createError } = await (supabase
-    .from('customers') as any)
-    .insert({
-      user_id: userId,
-      name: normalizedName,
-    })
-    .select('id')
-    .single()
-
-  if (createError) {
-    console.error('Error creating customer:', createError)
-    throw createError
-  }
-
-  return newCustomer.id
 }
