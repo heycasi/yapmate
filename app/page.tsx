@@ -4,6 +4,18 @@ import Image from 'next/image'
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-yapmate-black text-white">
+      {/* Navigation Header */}
+      <nav className="border-b border-gray-800">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-end">
+          <Link
+            href="/pricing"
+            className="px-6 py-2 border border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-semibold rounded transition-all"
+          >
+            PRICING
+          </Link>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <section className="px-6 py-16 md:py-24 max-w-4xl mx-auto">
         <div className="flex flex-col items-center text-center">

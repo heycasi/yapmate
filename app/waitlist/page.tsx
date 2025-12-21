@@ -2,6 +2,8 @@
 
 import { useState, FormEvent } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
+import { validateEmail } from '@/lib/validation'
 
 export default function WaitlistPage() {
   const [email, setEmail] = useState('')
@@ -13,13 +15,21 @@ export default function WaitlistPage() {
     setStatus('loading')
     setMessage('')
 
+    // Validate email
+    const validation = validateEmail(email)
+    if (!validation.isValid) {
+      setStatus('error')
+      setMessage(validation.error || 'Invalid email')
+      return
+    }
+
     try {
       const { createBrowserClient } = await import('@/lib/supabase')
       const supabase = createBrowserClient()
 
       const { error } = await (supabase
         .from('waitlist_signups') as any)
-        .insert({ email: email.toLowerCase().trim() })
+        .insert({ email: validation.sanitized })
 
       if (error) {
         // Handle duplicate email error specifically
@@ -45,6 +55,24 @@ export default function WaitlistPage() {
 
   return (
     <main className="min-h-screen bg-[#000000] text-white">
+      {/* Navigation Header */}
+      <nav className="border-b border-gray-800">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between">
+          <Link
+            href="/"
+            className="px-6 py-2 border border-[#ffc422] text-[#ffc422] hover:bg-[#ffc422] hover:text-[#000000] font-semibold rounded transition-all"
+          >
+            ← HOME
+          </Link>
+          <Link
+            href="/pricing"
+            className="px-6 py-2 border border-[#ffc422] text-[#ffc422] hover:bg-[#ffc422] hover:text-[#000000] font-semibold rounded transition-all"
+          >
+            PRICING
+          </Link>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <section className="px-6 py-12 max-w-4xl mx-auto">
         <div className="flex flex-col items-center text-center">
