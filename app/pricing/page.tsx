@@ -4,12 +4,16 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createBrowserClient } from '@/lib/supabase'
 import { getUserPlan, getPlanDisplayName, type PricingPlan } from '@/lib/plan-access'
+import { isIAPAvailable, purchaseProduct, IAP_PRODUCTS } from '@/lib/iap'
 
 export default function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [currentPlan, setCurrentPlan] = useState<PricingPlan | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false)
+  const [isPurchasing, setIsPurchasing] = useState(false)
+  const [purchaseError, setPurchaseError] = useState<string | null>(null)
+  const [purchaseSuccess, setPurchaseSuccess] = useState(false)
 
   useEffect(() => {
     checkUserPlan()
@@ -30,9 +34,63 @@ export default function PricingPage() {
     setOpenFaq(openFaq === index ? null : index)
   }
 
-  const handleUpgrade = () => {
-    setShowUpgradeMessage(true)
-    setTimeout(() => setShowUpgradeMessage(false), 5000)
+  const handleUpgrade = async (plan: 'pro' | 'trade') => {
+    // Clear previous states
+    setPurchaseError(null)
+    setPurchaseSuccess(false)
+
+    // Check if IAP is available (iOS only)
+    if (!isIAPAvailable()) {
+      // On web: show waitlist message
+      setShowUpgradeMessage(true)
+      setTimeout(() => setShowUpgradeMessage(false), 5000)
+      return
+    }
+
+    // iOS: trigger native purchase flow
+    if (!isLoggedIn) {
+      setPurchaseError('Please log in to purchase a subscription')
+      setTimeout(() => setPurchaseError(null), 5000)
+      return
+    }
+
+    setIsPurchasing(true)
+
+    try {
+      const supabase = createBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session) {
+        throw new Error('Not authenticated')
+      }
+
+      const productId = plan === 'pro' ? IAP_PRODUCTS.PRO_MONTHLY : IAP_PRODUCTS.TRADE_MONTHLY
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const accessToken = session.access_token
+
+      const result = await purchaseProduct(productId, supabaseUrl, accessToken)
+
+      if (result.success) {
+        setPurchaseSuccess(true)
+        setTimeout(() => {
+          setPurchaseSuccess(false)
+          // Reload user plan
+          checkUserPlan()
+        }, 3000)
+      } else {
+        // Only show error if it's not a user cancellation
+        if (result.error !== 'Purchase cancelled') {
+          setPurchaseError(result.error || 'Purchase failed')
+          setTimeout(() => setPurchaseError(null), 5000)
+        }
+      }
+    } catch (error: any) {
+      console.error('Purchase error:', error)
+      setPurchaseError(error.message || 'Purchase failed')
+      setTimeout(() => setPurchaseError(null), 5000)
+    } finally {
+      setIsPurchasing(false)
+    }
   }
 
   return (
@@ -67,7 +125,35 @@ export default function PricingPage() {
         </p>
       </section>
 
-      {/* Upgrade Message */}
+      {/* Purchase Success */}
+      {purchaseSuccess && (
+        <div className="max-w-5xl mx-auto px-6 mb-8">
+          <div className="bg-yapmate-gray-dark border-2 border-yapmate-status-green rounded-xl p-6 text-center">
+            <p className="text-yapmate-status-green font-semibold mb-2 uppercase tracking-wide">
+              Subscription Active
+            </p>
+            <p className="text-yapmate-gray-lightest text-sm">
+              Your plan has been updated. Enjoy your new features!
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Purchase Error */}
+      {purchaseError && (
+        <div className="max-w-5xl mx-auto px-6 mb-8">
+          <div className="bg-yapmate-gray-dark border-2 border-yapmate-status-red rounded-xl p-6 text-center">
+            <p className="text-yapmate-status-red font-semibold mb-2 uppercase tracking-wide">
+              Purchase Failed
+            </p>
+            <p className="text-yapmate-gray-lightest text-sm">
+              {purchaseError}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade Message (Web Only) */}
       {showUpgradeMessage && (
         <div className="max-w-5xl mx-auto px-6 mb-8">
           <div className="bg-yapmate-gray-dark border border-yapmate-yellow rounded-xl p-6 text-center">
@@ -199,10 +285,11 @@ export default function PricingPage() {
               </div>
             ) : (
               <button
-                onClick={handleUpgrade}
-                className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm"
+                onClick={() => handleUpgrade('pro')}
+                disabled={isPurchasing}
+                className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Upgrade
+                {isPurchasing ? 'Processing...' : 'Upgrade'}
               </button>
             )}
           </div>
@@ -250,10 +337,11 @@ export default function PricingPage() {
               </div>
             ) : (
               <button
-                onClick={handleUpgrade}
-                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm"
+                onClick={() => handleUpgrade('trade')}
+                disabled={isPurchasing}
+                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Upgrade
+                {isPurchasing ? 'Processing...' : 'Upgrade'}
               </button>
             )}
           </div>

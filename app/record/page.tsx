@@ -8,6 +8,9 @@ import Navigation from '@/components/Navigation'
 import { ensureCustomer } from '@/lib/customer-helpers'
 import { canCreateInvoice } from '@/lib/plan-access'
 
+// Recording limits
+const MAX_RECORDING_SECONDS = 180 // 3 minutes max
+
 export default function RecordPage() {
   const [selectedTrade, setSelectedTrade] = useState<string>('Plumber') // Default to Plumber
   const [isRecording, setIsRecording] = useState(false)
@@ -160,10 +163,10 @@ export default function RecordPage() {
       timerIntervalRef.current = setInterval(() => {
         setRecordingTime((prev) => {
           const newTime = prev + 1
-          if (newTime >= 180) {
+          if (newTime >= MAX_RECORDING_SECONDS) {
             stopRecording()
-            setError('Max 3 minutes reached')
-            return 180
+            setError('Max recording length is 3 minutes')
+            return MAX_RECORDING_SECONDS
           }
           return newTime
         })

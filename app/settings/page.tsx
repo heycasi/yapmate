@@ -5,6 +5,7 @@ import { createBrowserClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
 import { getUserPlan, canUseVAT, canUseCIS, type PricingPlan } from '@/lib/plan-access'
+import { isIAPAvailable, restorePurchases } from '@/lib/iap'
 
 interface UserPreferences {
   default_labour_rate: number
@@ -23,6 +24,7 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(false)
 
   const [labourRate, setLabourRate] = useState('45.00')
   const [vatEnabled, setVatEnabled] = useState(false)
@@ -166,6 +168,41 @@ export default function SettingsPage() {
       setError(err.message || 'Failed to save preferences')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleRestorePurchases = async () => {
+    if (!user) return
+
+    setIsRestoring(true)
+    setError(null)
+    setSuccess(false)
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const accessToken = session.access_token
+
+      const result = await restorePurchases(supabaseUrl, accessToken)
+
+      if (result.success) {
+        setSuccess(true)
+        setTimeout(() => {
+          setSuccess(false)
+          // Reload preferences
+          loadUserAndPreferences()
+        }, 3000)
+      } else {
+        throw new Error(result.error || 'No purchases found')
+      }
+    } catch (err: any) {
+      console.error('Restore error:', err)
+      setError(err.message || 'Failed to restore purchases')
+      setTimeout(() => setError(null), 5000)
+    } finally {
+      setIsRestoring(false)
     }
   }
 
@@ -348,6 +385,25 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+
+          {/* Restore Purchases (iOS Only) */}
+          {isIAPAvailable() && (
+            <div className="border-b border-yapmate-slate-700 pb-6">
+              <h2 className="text-yapmate-white text-sm font-mono uppercase tracking-wide mb-4">
+                Subscription Management
+              </h2>
+              <button
+                onClick={handleRestorePurchases}
+                disabled={isRestoring}
+                className="w-full h-12 border-2 border-yapmate-amber text-yapmate-amber font-mono font-bold uppercase tracking-wide bg-transparent transition-colors duration-snap active:bg-yapmate-amber active:text-yapmate-black disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRestoring ? 'Restoring...' : 'Restore Purchases'}
+              </button>
+              <p className="text-xs text-yapmate-slate-400 font-mono mt-2">
+                Restore your subscription from a previous purchase
+              </p>
+            </div>
+          )}
 
           {/* Logout */}
           <div className="pt-4">
