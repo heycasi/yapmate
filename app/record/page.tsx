@@ -5,184 +5,8 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Invoice } from '@/lib/invoice'
 import Navigation from '@/components/Navigation'
-import { openaiClient } from '@/lib/openai_client'
 import { ensureCustomer } from '@/lib/customer-helpers'
-
-// PROMPTS MOVED FROM API ROUTES
-const WHISPER_PROMPT = `You are transcribing voice notes from UK tradespeople. Speech may include Glaswegian, Edinburgh, Geordie, Scouse, Mancunian and general Scottish/English dialects. Preserve names accurately. Pay special attention to common Scottish surnames such as: Dahl, McDonald, McDowell, Campbell, Robertson, O'Neill, Brown, Smith, Fraser. If the audio sounds like any of these names, prefer the exact spelled version rather than sounding alike alternatives such as Dow or Doll.
-
-Examples:
-- 'Conor Dahl' → Conor Dahl
-- 'Job for Mrs Dahl' → Mrs Dahl
-
-Dialect glossary:
-- aye → yes
-- naw / nae → no
-- mibby → maybe
-- an hoor / an hour → one hour
-- a couple of hoors → two hours
-- hunner → one hundred
-- quid → GBP
-
-Focus on accurately capturing:
-- customer names
-- addresses
-- hours / labour time
-- material descriptions and costs
-- CIS / VAT statements
-
-Return only the exact transcript text with no interpretation.`
-
-const CLEANING_SYSTEM_PROMPT = `You convert UK tradesperson speech with Scottish and Northern English dialects into clean written English.
-
-CRITICAL RULES - YOU MUST NOT CHANGE:
-- Person names (e.g., "Mrs Smith", "John Dahl", "Campbell")
-- Company names (e.g., "Oak Tree Builders", "Acme Plumbing")
-- Street/road names and house numbers (e.g., "24 Oak Street", "15 High Road")
-- Postcodes (e.g., "G12 8QQ", "NE1 4ST")
-- Money amounts (e.g., "£180", "45 quid", "a hundred and twenty pounds")
-- Hour counts (e.g., "3 hours", "an hour and a half")
-
-YOU MAY NORMALISE:
-- Slang: "aye" → "yes", "naw/nae" → "no", "mibby" → "maybe", "an hoor" → "an hour", "hunner" → "hundred", "quid" → "pounds"
-- Filler words: "like", "ken", "ye know", "innit", "um", "uh", "er"
-- Casual grammar: "I done" → "I did", "we was" → "we were"
-
-YOU MUST REMOVE:
-- Garbage tokens that are NOT valid English words AND NOT numbers, currency, postcodes, names, or addresses
-- Examples of garbage to remove: random consonant clusters, transcription artifacts, nonsense syllables
-- ONLY remove if you are certain it is garbage - when in doubt, keep it
-
-CRITICAL: CIS AND VAT PHRASE NORMALISATION
-
-CIS phrases - normalise to clear statements:
-- "aye it's CIS", "it's a CIS job", "CIS is on", "aye CIS", "CIS applies" → "This is a CIS job."
-- "naw/no CIS", "no CIS on it", "not a CIS job" → "This is not a CIS job."
-
-VAT phrases - normalise to clear statements:
-- "I'm VAT registered", "plus VAT", "VAT to be added", "VAT is charged" → "VAT is charged."
-- "naw/no VAT", "nae VAT", "no VAT on it", "others nae VAT", "no VAT to add", "VAT not applicable" → "No VAT is charged."
-
-If both CIS and VAT are mentioned in one messy sentence, split them into two clear sentences.
-
-PRESERVE ALL FACTUAL CONTENT. Output only the cleaned transcript with no preamble.`
-
-const EXTRACTION_SYSTEM_PROMPT = `You extract clean, structured invoice data from voice transcripts from UK tradespeople.
-
-The user's trade will be provided to help you understand vocabulary and context. Use it ONLY for interpretation guidance - do NOT invent job details based on trade stereotypes.
-
-TRADE VOCABULARY HINTS:
-- Plumber: radiator, valve, boiler, pipe, trap, leak, washer, ballcock, cistern, copper, flux, solder
-- Electrician: socket, switch, fuse, consumer unit, spur, rewire, cable, patress, backbox, breaker, rcd
-- Joiner: skirting, architrave, stud, ply, mdf, hinge, lock, door, frame, joist, batten
-- Painter & Decorator: emulsion, gloss, undercoat, primer, filler, caulk, masking, roller, cutting in
-- Other: Use general trade context
-
-You must output JSON that matches this EXACT TypeScript type:
-
-Invoice {
-  customerName: string | null;
-  jobSummary: string; // REQUIRED: Never null
-  labourHours: number | null;
-  materials: { description: string; cost: number | null }[];
-  cisJob: boolean | null; // true/false if mentioned, null if unknown
-  vatRegistered: boolean | null; // true/false if mentioned, null if unknown
-  notes: string | null;
-}
-
-CORE RULE (NON-NEGOTIABLE):
-If you are unsure about a value, return null. NEVER guess.
-
-FIELD RULES
-
-1) customerName
-- Extract EXACTLY as spoken in the transcript. Do NOT correct spelling.
-- Look for phrases like: "job for Mrs Smith", "for John Campbell", "invoice for Acme Ltd"
-- Strip leading filler ("job for", "work for", "invoice for").
-- CRITICAL: Preserve names exactly - if transcript says "Dahl", use "Dahl" (not "Dow" or "Doll")
-- If no customer name mentioned → null
-- If confidence is low (e.g., unclear audio, multiple names) → null
-
-2) jobSummary
-- One short sentence (max 35 words) that sums up the work done.
-- Use trade-friendly wording.
-- Do NOT include prices, hours, addresses or payment terms here.
-- Examples:
-  - "Replaced leaking radiator valve and fitted new radiator in living room."
-  - "Serviced boiler and replaced faulty pump."
-
-3) labourHours
-- Extract ONLY if explicitly stated with a clear number.
-- Supported UK phrasing:
-  - "an hour" / "an hoor" → 1
-  - "hour and a half" / "hoor and a half" → 1.5
-  - "couple of hours" / "couple of hoors" → 2
-  - "half an hour" / "half an hoor" → 0.5
-  - "two and a half hours" → 2.5
-  - "three hours" → 3
-- VAGUE phrases return null:
-  - "wee while" → null
-  - "most of the afternoon" → null
-  - "quick job" → null
-  - "bit of time" → null
-- If no time mentioned → null
-
-4) materials
-- Each clearly separate part or material becomes one item.
-- description:
-  - Short, specific phrase:
-    - "600mm double radiator"
-    - "boiler valve kit"
-    - "copper pipe and fittings"
-  - Keep the description as stated (preserve terminology).
-- cost:
-  - ONLY extract if explicitly stated. NO guessing.
-  - Supported UK money slang:
-    - "quid" → pounds (e.g., "180 quid" → 180)
-    - "hunner" → 100 (e.g., "a hunner and eighty quid" → 180)
-    - "one fifty" → 150
-    - "a hundred and twenty" → 120
-  - Return numeric value only (no £ symbol).
-  - If material mentioned with no price → cost: null
-  - If no materials mentioned → []
-
-5) cisJob (CRITICAL: Never guess)
-- Return true ONLY if transcript contains explicit CIS confirmation:
-  - "This is a CIS job"
-  - "aye it's CIS"
-  - "CIS applies"
-  - "CIS job"
-  - "CIS is on"
-- Return false ONLY if transcript explicitly says NO to CIS:
-  - "This is not a CIS job"
-  - "no CIS"
-  - "naw CIS"
-  - "not a CIS job"
-- Return null if CIS is NOT mentioned at all
-
-6) vatRegistered (CRITICAL: Never guess)
-- Return true ONLY if transcript contains explicit VAT confirmation:
-  - "VAT is charged"
-  - "I'm VAT registered"
-  - "plus VAT"
-  - "VAT to be added"
-- Return false ONLY if transcript explicitly says NO to VAT:
-  - "No VAT is charged"
-  - "no VAT"
-  - "naw VAT"
-  - "nae VAT"
-  - "not VAT registered"
-- Return null if VAT is NOT mentioned at all
-
-7) notes
-- Short free-text field for any extra useful info that does not fit above:
-  - payment terms: "payment due in 14 days"
-  - address: "24 Oak Street, Glasgow"
-  - extra context: "tenant will pay materials separately"
-- Do NOT repeat the full job summary.
-- If there is nothing useful to add → null.
-
-Always respond with ONLY the JSON object and nothing else.`
+import { canCreateInvoice } from '@/lib/plan-access'
 
 export default function RecordPage() {
   const [selectedTrade, setSelectedTrade] = useState<string>('Plumber') // Default to Plumber
@@ -196,6 +20,9 @@ export default function RecordPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [audioLevel, setAudioLevel] = useState(0)
+  const [canCreate, setCanCreate] = useState(true)
+  const [planLimitMessage, setPlanLimitMessage] = useState<string | null>(null)
+  const [isCheckingAccess, setIsCheckingAccess] = useState(true)
 
   const router = useRouter()
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -204,6 +31,7 @@ export default function RecordPage() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const startTimeRef = useRef<number>(0)
 
   useEffect(() => {
     checkAuth()
@@ -221,10 +49,34 @@ export default function RecordPage() {
     } = await supabase.auth.getSession()
     if (!session) {
       router.push('/login')
+      return
+    }
+
+    // Check if user can create invoices
+    setIsCheckingAccess(true)
+    try {
+      const accessCheck = await canCreateInvoice(session.user.id)
+      setCanCreate(accessCheck.canCreate)
+
+      if (!accessCheck.canCreate) {
+        setPlanLimitMessage(accessCheck.reason || 'Cannot create more invoices')
+      }
+    } catch (err) {
+      console.error('Error checking plan access:', err)
+      // On error, allow creation (fail open)
+      setCanCreate(true)
+    } finally {
+      setIsCheckingAccess(false)
     }
   }
 
   const startRecording = async () => {
+    // Block if user cannot create invoices
+    if (!canCreate) {
+      setError(planLimitMessage || 'Cannot create more invoices')
+      return
+    }
+
     try {
       setError(null)
       setTranscript(null)
@@ -232,6 +84,7 @@ export default function RecordPage() {
       setInvoice(null)
       setInvoiceId(null)
       setRecordingTime(0)
+      startTimeRef.current = Date.now()
       audioChunksRef.current = []
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -283,7 +136,13 @@ export default function RecordPage() {
       }
 
       mediaRecorder.onstop = async () => {
+        const duration = Date.now() - startTimeRef.current
         stream.getTracks().forEach((track) => track.stop())
+
+        if (duration < 1000) {
+          setError('Recording too short (minimum 1 second)')
+          return
+        }
 
         // Log the chunks for debugging
         console.log('Audio chunks:', audioChunksRef.current.length,
@@ -301,9 +160,10 @@ export default function RecordPage() {
       timerIntervalRef.current = setInterval(() => {
         setRecordingTime((prev) => {
           const newTime = prev + 1
-          if (newTime >= 60) {
+          if (newTime >= 180) {
             stopRecording()
-            return 60
+            setError('Max 3 minutes reached')
+            return 180
           }
           return newTime
         })
@@ -342,31 +202,60 @@ export default function RecordPage() {
     setError(null)
 
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
       const file = new File([audioBlob], 'recording.webm', { type: audioBlob.type })
 
-      // Step 1: Client-side Whisper
-      const transcriptResponse = await openaiClient.audio.transcriptions.create({
-        model: 'whisper-1',
-        file,
-        language: 'en',
-        temperature: 0,
-        prompt: WHISPER_PROMPT,
-      })
+      // Validate file size (max 25MB for Whisper)
+      if (file.size > 25 * 1024 * 1024) {
+        throw new Error('Recording too large. Please record a shorter message.')
+      }
 
-      const rawTranscriptText = transcriptResponse.text
+      // Step 1: Call Supabase Edge Function for transcription
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const transcribeResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/transcribe`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        }
+      )
+
+      if (!transcribeResponse.ok) {
+        const error = await transcribeResponse.json()
+        if (transcribeResponse.status === 429) {
+          throw new Error('Rate limit exceeded. Max 10 recordings per hour.')
+        }
+        throw new Error(error.error || 'Transcription failed')
+      }
+
+      const { text: rawTranscriptText } = await transcribeResponse.json()
       setRawTranscript(rawTranscriptText)
 
-      // Step 2: Client-side Cleanup
-      const cleaningResponse = await openaiClient.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-            { role: 'system', content: CLEANING_SYSTEM_PROMPT },
-            { role: 'user', content: rawTranscriptText },
-        ],
-        temperature: 0,
-      })
+      // Step 2: Call Edge Function for cleaning
+      const cleaningResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/clean-transcript`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ rawTranscript: rawTranscriptText }),
+        }
+      )
 
-      const cleanedTranscript = cleaningResponse.choices[0]?.message?.content?.trim() || rawTranscriptText
+      if (!cleaningResponse.ok) {
+        throw new Error('Transcript cleaning failed')
+      }
+
+      const { cleanedTranscript } = await cleaningResponse.json()
       setTranscript(cleanedTranscript)
 
       // Use the cleaned transcript for extraction
@@ -384,35 +273,43 @@ export default function RecordPage() {
     setError(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
 
-      const tradeContext = selectedTrade ? `\n\nUser's trade: ${selectedTrade}` : ''
+      // Step 3: Call Edge Function for extraction
+      const extractionResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/extract-invoice`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            transcript: transcriptText,
+            trade: selectedTrade,
+          }),
+        }
+      )
 
-      // Client-side Extraction
-      const completion = await openaiClient.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
-          { role: 'user', content: `Extract invoice data from this transcript:${tradeContext}\n\nTranscript:\n${transcriptText}` },
-        ],
-        temperature: 0,
-        response_format: { type: 'json_object' },
-      })
+      if (!extractionResponse.ok) {
+        const error = await extractionResponse.json()
+        if (error.error.includes('Suspicious input')) {
+          throw new Error('Suspicious input detected. Please record a normal invoice description.')
+        }
+        throw new Error(error.error || 'Extraction failed')
+      }
 
-      const responseContent = completion.choices[0]?.message?.content
-      if (!responseContent) throw new Error('No AI response')
-
-      const extractedInvoice: Invoice = JSON.parse(responseContent)
+      const { invoice: extractedInvoice } = await extractionResponse.json()
 
       // Ensure customer record exists and get customer_id
-      const customerId = await ensureCustomer(user.id, extractedInvoice.customerName)
+      const customerId = await ensureCustomer(session.user.id, extractedInvoice.customerName)
 
       // Insert into Supabase
       const { data: invoiceData, error: invoiceError } = await (supabase
         .from('invoices') as any)
         .insert({
-            user_id: user.id,
+            user_id: session.user.id,
             customer_id: customerId,
             customer_name: extractedInvoice.customerName,
             job_summary: extractedInvoice.jobSummary,
@@ -431,11 +328,22 @@ export default function RecordPage() {
       if (invoiceError) throw invoiceError
       if (!invoiceData) throw new Error('Failed to create invoice record')
 
+      // Usage Logging
+      try {
+        await (supabase.from('usage_events') as any).insert({
+          user_id: session.user.id,
+          event_type: 'invoice_created',
+          invoice_id: invoiceData.id,
+        })
+      } catch (logErr) {
+        console.warn('Failed to log usage event:', logErr)
+      }
+
       // Insert Materials
       if (extractedInvoice.materials.length > 0) {
         const materialsToInsert = extractedInvoice.materials
-            .filter((m) => m.cost !== null)
-            .map((material) => ({
+            .filter((m: { description: string; cost: number | null }) => m.cost !== null)
+            .map((material: { description: string; cost: number | null }) => ({
                 invoice_id: invoiceData.id,
                 description: material.description,
                 cost: material.cost!,
@@ -547,7 +455,7 @@ export default function RecordPage() {
           {!isRecording ? (
             <button
               onClick={startRecording}
-              disabled={isTranscribing || isExtracting}
+              disabled={isTranscribing || isExtracting || !canCreate || isCheckingAccess}
               className="w-32 h-32 bg-yapmate-status-red disabled:bg-yapmate-slate-700 disabled:cursor-not-allowed flex items-center justify-center transition-transform duration-0 active:scale-98 border-2 border-yapmate-black dark:border-yapmate-black"
               style={{ transform: 'scale(1)' }}
             >
@@ -563,6 +471,27 @@ export default function RecordPage() {
             </button>
           )}
         </div>
+
+        {/* PLAN LIMIT MESSAGE - Full Width Bar */}
+        {!canCreate && planLimitMessage && !error && (
+          <div className="w-full bg-[#2A2A2A] border-y border-[#3A3A3A] py-4 px-4">
+            <div className="max-w-md mx-auto text-center">
+              <span className="data-label text-[#F97316]">FREE PLAN LIMIT REACHED</span>
+              <p className="text-[#F2F2F2] font-mono text-sm mt-2 mb-3">
+                {planLimitMessage}
+              </p>
+              <p className="text-[#8A8A8A] text-sm mb-3">
+                Upgrade to Pro to create unlimited invoices
+              </p>
+              <button
+                onClick={() => router.push('/pricing')}
+                className="bg-[#F97316] text-[#0B0B0B] font-semibold px-6 py-3 rounded-[4px] text-sm uppercase tracking-wide"
+              >
+                View Plans
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ERROR DISPLAY - Full Width Bar */}
         {error && (

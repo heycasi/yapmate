@@ -13,6 +13,7 @@ interface UserPreferences {
   bank_sort_code: string | null
   bank_account_number: string | null
   payment_reference: string | null
+  plan?: 'free' | 'pro' | 'trade'
 }
 
 export default function SettingsPage() {
