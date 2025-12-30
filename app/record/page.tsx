@@ -305,6 +305,15 @@ export default function RecordPage() {
       // Ensure customer record exists and get customer_id
       const customerId = await ensureCustomer(session.user.id, extractedInvoice.customerName)
 
+      // Enforce plan-based access control
+      const { canUseVAT, canUseCIS } = await import('@/lib/plan-access')
+      const vatAccess = await canUseVAT(session.user.id)
+      const cisAccess = await canUseCIS(session.user.id)
+
+      // Force VAT/CIS to false if user doesn't have access
+      const finalVatRegistered = vatAccess && extractedInvoice.vatRegistered
+      const finalCisJob = cisAccess && extractedInvoice.cisJob
+
       // Insert into Supabase
       const { data: invoiceData, error: invoiceError } = await (supabase
         .from('invoices') as any)
@@ -315,10 +324,10 @@ export default function RecordPage() {
             job_summary: extractedInvoice.jobSummary,
             labour_hours: extractedInvoice.labourHours,
             labour_rate: 45.0, // Default
-            cis_job: extractedInvoice.cisJob,
-            cis_rate: 20.0,
-            vat_registered: extractedInvoice.vatRegistered,
-            vat_rate: 20.0,
+            cis_job: finalCisJob,
+            cis_rate: finalCisJob ? 20.0 : 0,
+            vat_registered: finalVatRegistered,
+            vat_rate: finalVatRegistered ? 20.0 : 0,
             status: 'draft',
             notes: extractedInvoice.notes,
         })

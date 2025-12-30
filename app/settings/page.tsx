@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
+import { getUserPlan, canUseVAT, canUseCIS, type PricingPlan } from '@/lib/plan-access'
 
 interface UserPreferences {
   default_labour_rate: number
@@ -32,6 +33,11 @@ export default function SettingsPage() {
   const [bankAccountNumber, setBankAccountNumber] = useState('')
   const [paymentReference, setPaymentReference] = useState('')
 
+  // Plan-based access control
+  const [userPlan, setUserPlan] = useState<PricingPlan>('free')
+  const [canAccessVAT, setCanAccessVAT] = useState(false)
+  const [canAccessCIS, setCanAccessCIS] = useState(false)
+
   const router = useRouter()
   const supabase = createBrowserClient()
 
@@ -54,6 +60,15 @@ export default function SettingsPage() {
 
       setUser(session.user)
 
+      // Check plan access
+      const plan = await getUserPlan(session.user.id)
+      const vatAccess = await canUseVAT(session.user.id)
+      const cisAccess = await canUseCIS(session.user.id)
+
+      setUserPlan(plan)
+      setCanAccessVAT(vatAccess)
+      setCanAccessCIS(cisAccess)
+
       // Load preferences
       const { data, error } = await (supabase
         .from('user_preferences') as any)
@@ -68,8 +83,9 @@ export default function SettingsPage() {
 
       if (data) {
         setLabourRate(data.default_labour_rate.toString())
-        setVatEnabled(data.default_vat_enabled)
-        setCisEnabled(data.default_cis_enabled)
+        // Only set VAT/CIS if user has access
+        setVatEnabled(vatAccess && data.default_vat_enabled)
+        setCisEnabled(cisAccess && data.default_cis_enabled)
         setBankAccountName(data.bank_account_name || '')
         setBankSortCode(data.bank_sort_code || '')
         setBankAccountNumber(data.bank_account_number || '')
@@ -95,10 +111,27 @@ export default function SettingsPage() {
         throw new Error('Sort code must be in format XX-XX-XX')
       }
 
+      // Enforce plan-based access control
+      let finalVatEnabled = vatEnabled
+      let finalCisEnabled = cisEnabled
+      let warningMessage = ''
+
+      if (vatEnabled && !canAccessVAT) {
+        finalVatEnabled = false
+        warningMessage = 'VAT features require Pro plan'
+      }
+
+      if (cisEnabled && !canAccessCIS) {
+        finalCisEnabled = false
+        warningMessage = warningMessage
+          ? warningMessage + '. CIS features require Trade plan'
+          : 'CIS features require Trade plan'
+      }
+
       const preferences: UserPreferences = {
         default_labour_rate: parseFloat(labourRate),
-        default_vat_enabled: vatEnabled,
-        default_cis_enabled: cisEnabled,
+        default_vat_enabled: finalVatEnabled,
+        default_cis_enabled: finalCisEnabled,
         bank_account_name: bankAccountName || null,
         bank_sort_code: bankSortCode || null,
         bank_account_number: bankAccountNumber || null,
@@ -117,8 +150,17 @@ export default function SettingsPage() {
 
       if (error) throw error
 
-      setSuccess(true)
-      setTimeout(() => setSuccess(false), 3000)
+      // Update local state to match enforced values
+      setVatEnabled(finalVatEnabled)
+      setCisEnabled(finalCisEnabled)
+
+      if (warningMessage) {
+        setError(warningMessage)
+        setTimeout(() => setError(null), 4000)
+      } else {
+        setSuccess(true)
+        setTimeout(() => setSuccess(false), 3000)
+      }
     } catch (err: any) {
       console.error('Save error:', err)
       setError(err.message || 'Failed to save preferences')
@@ -187,7 +229,7 @@ export default function SettingsPage() {
 
           {/* Default VAT */}
           <div className="border-b border-yapmate-slate-700 pb-6">
-            <label className="flex items-center justify-between cursor-pointer">
+            <label className={`flex items-center justify-between ${canAccessVAT ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
               <span className="text-yapmate-white text-xs font-mono uppercase tracking-wide">
                 Default VAT Enabled
               </span>
@@ -196,20 +238,23 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={vatEnabled}
                   onChange={(e) => setVatEnabled(e.target.checked)}
+                  disabled={!canAccessVAT}
                   className="sr-only peer"
                 />
-                <div className="w-14 h-8 border-2 border-yapmate-slate-700 peer-focus:border-yapmate-amber peer-checked:bg-yapmate-amber peer-checked:border-yapmate-amber transition-colors duration-snap"></div>
+                <div className="w-14 h-8 border-2 border-yapmate-slate-700 peer-focus:border-yapmate-amber peer-checked:bg-yapmate-amber peer-checked:border-yapmate-amber peer-disabled:opacity-50 transition-colors duration-snap"></div>
                 <div className="absolute left-1 top-1 w-6 h-6 bg-yapmate-white peer-checked:translate-x-6 transition-transform duration-snap"></div>
               </div>
             </label>
             <p className="text-xs text-yapmate-slate-300 mt-2 font-mono">
-              New invoices start with VAT {vatEnabled ? 'ON' : 'OFF'}
+              {canAccessVAT
+                ? `New invoices start with VAT ${vatEnabled ? 'ON' : 'OFF'}`
+                : 'Pro plan required'}
             </p>
           </div>
 
           {/* Default CIS */}
           <div className="border-b border-yapmate-slate-700 pb-6">
-            <label className="flex items-center justify-between cursor-pointer">
+            <label className={`flex items-center justify-between ${canAccessCIS ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
               <span className="text-yapmate-white text-xs font-mono uppercase tracking-wide">
                 Default CIS Enabled
               </span>
@@ -218,14 +263,17 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={cisEnabled}
                   onChange={(e) => setCisEnabled(e.target.checked)}
+                  disabled={!canAccessCIS}
                   className="sr-only peer"
                 />
-                <div className="w-14 h-8 border-2 border-yapmate-slate-700 peer-focus:border-yapmate-amber peer-checked:bg-yapmate-amber peer-checked:border-yapmate-amber transition-colors duration-snap"></div>
+                <div className="w-14 h-8 border-2 border-yapmate-slate-700 peer-focus:border-yapmate-amber peer-checked:bg-yapmate-amber peer-checked:border-yapmate-amber peer-disabled:opacity-50 transition-colors duration-snap"></div>
                 <div className="absolute left-1 top-1 w-6 h-6 bg-yapmate-white peer-checked:translate-x-6 transition-transform duration-snap"></div>
               </div>
             </label>
             <p className="text-xs text-yapmate-slate-300 mt-2 font-mono">
-              New invoices start with CIS {cisEnabled ? 'ON' : 'OFF'}
+              {canAccessCIS
+                ? `New invoices start with CIS ${cisEnabled ? 'ON' : 'OFF'}`
+                : 'Trade plan required'}
             </p>
           </div>
 

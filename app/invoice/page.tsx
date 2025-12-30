@@ -8,6 +8,7 @@ import { calculateInvoiceTotals, formatCurrency } from '@/lib/tax'
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/InvoicePDF'
 import { ensureCustomer } from '@/lib/customer-helpers'
+import { canUseVAT, canUseCIS } from '@/lib/plan-access'
 
 function InvoiceEditContent() {
   const searchParams = useSearchParams()
@@ -98,6 +99,14 @@ function InvoiceEditContent() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
+      // Enforce plan-based access control
+      const vatAccess = await canUseVAT(user.id)
+      const cisAccess = await canUseCIS(user.id)
+
+      // Force VAT/CIS to false if user doesn't have access
+      const finalVatRegistered = vatAccess ? invoice.vat_registered : false
+      const finalCisJob = cisAccess ? invoice.cis_job : false
+
       // Lock customer matching: if customer_id exists, use linked customer's email/phone for stable matching
       let customerEmail = null
       let customerPhone = null
@@ -117,10 +126,10 @@ function InvoiceEditContent() {
           job_summary: invoice.job_summary,
           labour_hours: invoice.labour_hours,
           labour_rate: invoice.labour_rate,
-          cis_job: invoice.cis_job,
-          cis_rate: invoice.cis_rate,
-          vat_registered: invoice.vat_registered,
-          vat_rate: invoice.vat_rate,
+          cis_job: finalCisJob,
+          cis_rate: finalCisJob ? invoice.cis_rate : 0,
+          vat_registered: finalVatRegistered,
+          vat_rate: finalVatRegistered ? invoice.vat_rate : 0,
           notes: invoice.notes,
           status: invoice.status,
         })
