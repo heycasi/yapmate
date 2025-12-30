@@ -225,6 +225,13 @@ export default function PricingPage() {
               <div className="w-full px-8 py-4 border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
                 Current Plan
               </div>
+            ) : isLoggedIn ? (
+              <Link
+                href="/dashboard"
+                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm"
+              >
+                Go to Dashboard
+              </Link>
             ) : (
               <Link
                 href="/signup"
@@ -283,7 +290,7 @@ export default function PricingPage() {
               <div className="w-full px-8 py-4 bg-yapmate-gray-dark border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
                 Current Plan
               </div>
-            ) : (
+            ) : isLoggedIn ? (
               <button
                 onClick={() => handleUpgrade('pro')}
                 disabled={isPurchasing}
@@ -291,6 +298,13 @@ export default function PricingPage() {
               >
                 {isPurchasing ? 'Processing...' : 'Upgrade'}
               </button>
+            ) : (
+              <Link
+                href="/signup"
+                className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm inline-block"
+              >
+                Sign Up to Upgrade
+              </Link>
             )}
           </div>
 
@@ -335,7 +349,7 @@ export default function PricingPage() {
               <div className="w-full px-8 py-4 bg-yapmate-gray-dark border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
                 Current Plan
               </div>
-            ) : (
+            ) : isLoggedIn ? (
               <button
                 onClick={() => handleUpgrade('trade')}
                 disabled={isPurchasing}
@@ -343,6 +357,13 @@ export default function PricingPage() {
               >
                 {isPurchasing ? 'Processing...' : 'Upgrade'}
               </button>
+            ) : (
+              <Link
+                href="/signup"
+                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm inline-block"
+              >
+                Sign Up to Upgrade
+              </Link>
             )}
           </div>
         </div>

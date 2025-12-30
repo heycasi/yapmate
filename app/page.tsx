@@ -6,7 +6,19 @@ export default function HomePage() {
     <main className="min-h-screen bg-yapmate-black text-white">
       {/* Navigation Header */}
       <nav className="border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-end">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-end gap-3">
+          <Link
+            href="/login"
+            className="px-6 py-2 text-yapmate-yellow hover:text-yapmate-white font-semibold transition-all"
+          >
+            LOG IN
+          </Link>
+          <Link
+            href="/signup"
+            className="px-6 py-2 bg-yapmate-yellow text-yapmate-black hover:bg-yellow-400 font-semibold rounded transition-all"
+          >
+            SIGN UP
+          </Link>
           <Link
             href="/pricing"
             className="px-6 py-2 border border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-semibold rounded transition-all"

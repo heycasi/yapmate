@@ -37,6 +37,16 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
       <div className="w-full max-w-md">
+        {/* Back to Home Link */}
+        <div className="mb-6">
+          <Link
+            href="/"
+            className="inline-flex items-center text-yapmate-amber hover:text-yapmate-status-yellow font-mono text-sm transition-colors duration-snap"
+          >
+            ← HOME
+          </Link>
+        </div>
+
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="font-mono text-2xl font-bold text-yapmate-white mb-2 uppercase tracking-wide">
