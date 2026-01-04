@@ -1,0 +1,25 @@
+# Security Headers for YapMate
+# This file is used by Vercel and other hosting platforms that support _headers
+
+/*
+  # Content Security Policy
+  # Prevents XSS attacks by restricting resource loading
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://nidijdprgoauwkmuioer.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://nidijdprgoauwkmuioer.supabase.co https://api.openai.com wss://nidijdprgoauwkmuioer.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+  # Prevent clickjacking
+  X-Frame-Options: DENY
+
+  # Prevent MIME type sniffing
+  X-Content-Type-Options: nosniff
+
+  # Enable browser XSS protection
+  X-XSS-Protection: 1; mode=block
+
+  # Referrer Policy - don't send full URL to external sites
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Permissions Policy - restrict browser features
+  Permissions-Policy: geolocation=(), microphone=(self), camera=(), payment=(), usb=()
+
+  # HSTS - Force HTTPS (31536000 seconds = 1 year)
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
