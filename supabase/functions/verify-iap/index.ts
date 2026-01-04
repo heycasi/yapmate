@@ -1,3 +1,24 @@
+/**
+ * ⚠️ LEGACY / UNUSED ⚠️
+ *
+ * This edge function is DEPRECATED and should NOT be used.
+ *
+ * It has been replaced by:
+ * - RevenueCat SDK (@revenuecat/purchases-capacitor)
+ * - sync-revenuecat edge function
+ *
+ * This function used direct Apple receipt verification which is:
+ * 1. Deprecated by Apple (verifyReceipt API is being sunset)
+ * 2. Less secure than server-to-server notifications
+ * 3. Doesn't support cross-platform subscription management
+ *
+ * DO NOT call this function from the app.
+ * DO NOT remove this file without migrating all historical subscriptions.
+ *
+ * To enable for emergency/migration use only, set:
+ * ENABLE_LEGACY_IAP=true in Supabase Edge Function secrets
+ */
+
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -31,6 +52,22 @@ interface AppleReceiptResponse {
 
 serve(async (req) => {
   try {
+    // HARD GUARD: Block all requests unless explicitly enabled
+    const legacyEnabled = Deno.env.get('ENABLE_LEGACY_IAP') === 'true'
+    if (!legacyEnabled) {
+      return new Response(
+        JSON.stringify({
+          error: 'This endpoint is deprecated and no longer in use',
+          message: 'Please use RevenueCat SDK for in-app purchases',
+          migrationGuide: 'See supabase/functions/sync-revenuecat/index.ts',
+        }),
+        {
+          status: 410, // 410 Gone - resource no longer available
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
     // CORS headers
     if (req.method === 'OPTIONS') {
       return new Response('ok', {

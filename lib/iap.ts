@@ -1,61 +1,92 @@
 /**
- * Apple In-App Purchase (IAP) Wrapper
- * Uses Capacitor Purchases plugin for StoreKit 2 integration
+ * RevenueCat In-App Purchase (IAP) Wrapper
+ *
+ * Handles iOS subscriptions with 7-day free trial via RevenueCat.
+ * - iOS: Full RevenueCat integration
+ * - Web: Graceful no-op (returns helpful errors)
  *
  * Installation:
- *   You'll need to install a Capacitor IAP plugin. Options:
- *   - capacitor-plugin-purchases (RevenueCat - recommended)
- *   - @capawesome/capacitor-purchases
- *   - Custom native module
- *
- *   Then run: npx cap sync ios
- *
- * Note: This module is designed to work even when the plugin isn't installed
- * (for web/development builds). The actual IAP functionality is only available on iOS.
+ *   npm install @revenuecat/purchases-capacitor --legacy-peer-deps
+ *   npx cap sync ios
  */
 
 import { Capacitor } from '@capacitor/core'
 
-// Type definitions for the IAP plugin
-// These match the expected interface from most Capacitor IAP plugins
-interface IAPPluginProduct {
-  productId: string
-  title: string
+// RevenueCat types
+export interface IAPOffering {
+  identifier: string
+  serverDescription: string
+  availablePackages: IAPPackage[]
+}
+
+export interface IAPPackage {
+  identifier: string
+  packageType: string
+  product: IAPProduct
+  offeringIdentifier: string
+}
+
+export interface IAPProduct {
+  identifier: string
   description: string
-  price: string
-  priceValue: number
-  currency: string
+  title: string
+  price: number
+  priceString: string
+  currencyCode: string
+  introPrice: {
+    price: number
+    priceString: string
+    period: string
+    cycles: number
+    periodUnit: string
+    periodNumberOfUnits: number
+  } | null
 }
 
-interface IAPPlugin {
-  getProducts(options: { productIds: string[] }): Promise<{ products: IAPPluginProduct[] }>
-  purchaseProduct(options: { productId: string }): Promise<{ receipt: string }>
-  restorePurchases(): Promise<{ receipts: string[] }>
+export interface IAPCustomerInfo {
+  originalAppUserId: string
+  activeSubscriptions: string[]
+  allPurchasedProductIdentifiers: string[]
+  latestExpirationDate: string | null
+  entitlements: {
+    active: Record<string, IAPEntitlement>
+    all: Record<string, IAPEntitlement>
+  }
 }
 
-// Product IDs (must match App Store Connect configuration)
+export interface IAPEntitlement {
+  identifier: string
+  isActive: boolean
+  productIdentifier: string
+  expirationDate: string | null
+  periodType: string
+  isSandbox: boolean
+  willRenew: boolean
+}
+
+// Product IDs (must match App Store Connect + RevenueCat configuration)
 export const IAP_PRODUCTS = {
   PRO_MONTHLY: 'com.yapmate.pro.monthly',
   TRADE_MONTHLY: 'com.yapmate.trade.monthly',
 } as const
 
-export type ProductId = typeof IAP_PRODUCTS[keyof typeof IAP_PRODUCTS]
+// Entitlement IDs (configured in RevenueCat dashboard)
+export const IAP_ENTITLEMENTS = {
+  PRO: 'pro',
+  TRADE: 'trade',
+} as const
 
-export interface IAPProduct {
-  productId: string
-  title: string
-  description: string
-  price: string
-  priceValue: number
-  currency: string
-}
+export type ProductId = typeof IAP_PRODUCTS[keyof typeof IAP_PRODUCTS]
+export type EntitlementId = typeof IAP_ENTITLEMENTS[keyof typeof IAP_ENTITLEMENTS]
 
 export interface PurchaseResult {
   success: boolean
-  plan?: 'pro' | 'trade'
-  expiresAt?: string
+  customerInfo?: IAPCustomerInfo
   error?: string
+  userCancelled?: boolean
 }
+
+let isConfigured = false
 
 /**
  * Check if IAP is available (iOS only)
@@ -65,96 +96,232 @@ export function isIAPAvailable(): boolean {
 }
 
 /**
- * Get available IAP products from App Store
+ * Configure RevenueCat SDK
+ * Must be called once on app startup (iOS only)
+ *
+ * @param apiKey - RevenueCat iOS API key from env
+ * @param appUserID - Optional Supabase user ID for linking
  */
-export async function getProducts(): Promise<IAPProduct[]> {
+export async function configureIAP(apiKey: string, appUserID?: string): Promise<void> {
   if (!isIAPAvailable()) {
-    console.warn('IAP not available on this platform')
+    console.log('[IAP] Not available on web, skipping configuration')
+    return
+  }
+
+  if (isConfigured) {
+    console.log('[IAP] Already configured, skipping')
+    return
+  }
+
+  try {
+    // Dynamic import only on iOS
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
+
+    await Purchases.configure({
+      apiKey,
+      appUserID: appUserID || undefined,
+    })
+
+    isConfigured = true
+    console.log('[IAP] RevenueCat configured successfully', { appUserID })
+  } catch (error: any) {
+    console.error('[IAP] Configuration failed:', error)
+    throw new Error(`IAP configuration failed: ${error.message}`)
+  }
+}
+
+/**
+ * Get available offerings (subscription packages)
+ */
+export async function getOfferings(): Promise<IAPOffering[]> {
+  if (!isIAPAvailable()) {
+    console.warn('[IAP] getOfferings called on web - returning empty array')
+    return []
+  }
+
+  if (!isConfigured) {
+    console.error('[IAP] SDK not configured - call configureIAP first')
     return []
   }
 
   try {
-    // Dynamic import - will need to be updated with actual plugin name
-    // For now, this will gracefully fail during development
-    const IAPModule = (globalThis as any).InAppPurchases as IAPPlugin | undefined
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
+    const offerings = await Purchases.getOfferings()
 
-    if (!IAPModule) {
-      console.warn('IAP plugin not installed - install capacitor-plugin-purchases or similar')
+    if (!offerings.current) {
+      console.warn('[IAP] No current offering found')
       return []
     }
 
-    const result = await IAPModule.getProducts({
-      productIds: [IAP_PRODUCTS.PRO_MONTHLY, IAP_PRODUCTS.TRADE_MONTHLY],
-    })
+    // Return all offerings as array
+    const allOfferings = [offerings.current, ...Object.values(offerings.all)]
 
-    return result.products.map((product) => ({
-      productId: product.productId,
-      title: product.title,
-      description: product.description,
-      price: product.price,
-      priceValue: product.priceValue,
-      currency: product.currency,
-    }))
-  } catch (error) {
-    console.error('Failed to fetch products:', error)
+    console.log('[IAP] Loaded offerings:', allOfferings.length)
+    return allOfferings as IAPOffering[]
+  } catch (error: any) {
+    console.error('[IAP] Failed to get offerings:', error)
     return []
   }
 }
 
 /**
- * Purchase a subscription product
- * @param productId - Product ID to purchase
- * @param supabaseUrl - Supabase URL for verification
- * @param accessToken - User access token
+ * Purchase a package (initiates iOS payment flow)
+ *
+ * @param packageId - Package identifier from offerings
+ * @returns Purchase result with customer info
  */
-export async function purchaseProduct(
-  productId: ProductId,
-  supabaseUrl: string,
-  accessToken: string
-): Promise<PurchaseResult> {
+export async function purchase(packageId: string): Promise<PurchaseResult> {
   if (!isIAPAvailable()) {
-    return { success: false, error: 'IAP not available on this platform' }
+    return {
+      success: false,
+      error: 'In-app purchases are only available on iOS. Please use the mobile app.',
+    }
+  }
+
+  if (!isConfigured) {
+    return {
+      success: false,
+      error: 'IAP not configured',
+    }
   }
 
   try {
-    // Get IAP plugin instance
-    const IAPModule = (globalThis as any).InAppPurchases as IAPPlugin | undefined
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
 
-    if (!IAPModule) {
-      return { success: false, error: 'IAP plugin not installed' }
+    // Get offerings to find the package
+    const offerings = await Purchases.getOfferings()
+    let targetPackage: any = null
+
+    // Search for package in current offering
+    if (offerings.current) {
+      targetPackage = offerings.current.availablePackages.find(
+        (pkg: any) => pkg.identifier === packageId
+      )
     }
 
-    // Initiate purchase flow
-    const purchaseResult = await IAPModule.purchaseProduct({
-      productId,
+    // Search in all offerings if not found
+    if (!targetPackage) {
+      for (const offering of Object.values(offerings.all)) {
+        const pkg = (offering as any).availablePackages.find(
+          (p: any) => p.identifier === packageId
+        )
+        if (pkg) {
+          targetPackage = pkg
+          break
+        }
+      }
+    }
+
+    if (!targetPackage) {
+      return {
+        success: false,
+        error: `Package not found: ${packageId}`,
+      }
+    }
+
+    // Initiate purchase
+    console.log('[IAP] Starting purchase:', packageId)
+    const result = await Purchases.purchasePackage({
+      aPackage: targetPackage,
     })
 
-    if (!purchaseResult.receipt) {
-      return { success: false, error: 'No receipt returned from purchase' }
+    console.log('[IAP] Purchase successful')
+    return {
+      success: true,
+      customerInfo: result.customerInfo as IAPCustomerInfo,
     }
+  } catch (error: any) {
+    console.error('[IAP] Purchase failed:', error)
 
-    // Verify receipt with backend
-    const verifyResult = await verifyReceipt(
-      purchaseResult.receipt,
-      supabaseUrl,
-      accessToken
-    )
-
-    if (!verifyResult.success) {
-      return { success: false, error: verifyResult.error || 'Receipt verification failed' }
+    // Check if user cancelled
+    if (error.code === 'USER_CANCELLED' || error.userCancelled) {
+      return {
+        success: false,
+        error: 'Purchase cancelled',
+        userCancelled: true,
+      }
     }
 
     return {
+      success: false,
+      error: error.message || 'Purchase failed',
+    }
+  }
+}
+
+/**
+ * Purchase by product ID directly (alternative to package-based)
+ *
+ * @param productId - Product identifier (com.yapmate.pro.monthly)
+ */
+export async function purchaseProduct(productId: ProductId): Promise<PurchaseResult> {
+  if (!isIAPAvailable()) {
+    return {
+      success: false,
+      error: 'In-app purchases are only available on iOS. Please use the mobile app.',
+    }
+  }
+
+  if (!isConfigured) {
+    return {
+      success: false,
+      error: 'IAP not configured',
+    }
+  }
+
+  try {
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
+
+    console.log('[IAP] Starting purchase by product ID:', productId)
+
+    // Get offerings to find the full product object
+    const offeringsResult = await Purchases.getOfferings()
+
+    // Check current offering and all offerings
+    const allOfferings = [offeringsResult.current, ...Object.values(offeringsResult.all || {})]
+      .filter(Boolean)
+
+    // Find the product in available offerings
+    let productToPurchase = null
+
+    for (const offering of allOfferings) {
+      if (offering?.availablePackages) {
+        for (const pkg of offering.availablePackages) {
+          if (pkg.product?.identifier === productId) {
+            productToPurchase = pkg.product
+            break
+          }
+        }
+      }
+      if (productToPurchase) break
+    }
+
+    if (!productToPurchase) {
+      return {
+        success: false,
+        error: 'Product not found in available offerings',
+      }
+    }
+
+    // Purchase using the full product object
+    const result = await Purchases.purchaseStoreProduct({
+      product: productToPurchase,
+    })
+
+    console.log('[IAP] Purchase successful')
+    return {
       success: true,
-      plan: verifyResult.plan,
-      expiresAt: verifyResult.expiresAt,
+      customerInfo: result.customerInfo as IAPCustomerInfo,
     }
   } catch (error: any) {
-    console.error('Purchase failed:', error)
+    console.error('[IAP] Purchase failed:', error)
 
-    // Handle user cancellation gracefully
-    if (error.code === 'E_USER_CANCELLED') {
-      return { success: false, error: 'Purchase cancelled' }
+    if (error.code === 'USER_CANCELLED' || error.userCancelled) {
+      return {
+        success: false,
+        error: 'Purchase cancelled',
+        userCancelled: true,
+      }
     }
 
     return {
@@ -166,53 +333,35 @@ export async function purchaseProduct(
 
 /**
  * Restore previous purchases
- * @param supabaseUrl - Supabase URL for verification
- * @param accessToken - User access token
  */
-export async function restorePurchases(
-  supabaseUrl: string,
-  accessToken: string
-): Promise<PurchaseResult> {
+export async function restorePurchases(): Promise<PurchaseResult> {
   if (!isIAPAvailable()) {
-    return { success: false, error: 'IAP not available on this platform' }
+    return {
+      success: false,
+      error: 'In-app purchases are only available on iOS. Please use the mobile app.',
+    }
+  }
+
+  if (!isConfigured) {
+    return {
+      success: false,
+      error: 'IAP not configured',
+    }
   }
 
   try {
-    // Get IAP plugin instance
-    const IAPModule = (globalThis as any).InAppPurchases as IAPPlugin | undefined
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
 
-    if (!IAPModule) {
-      return { success: false, error: 'IAP plugin not installed' }
-    }
+    console.log('[IAP] Restoring purchases...')
+    const result = await Purchases.restorePurchases()
 
-    // Restore purchases
-    const restoreResult = await IAPModule.restorePurchases()
-
-    if (!restoreResult.receipts || restoreResult.receipts.length === 0) {
-      return { success: false, error: 'No previous purchases found' }
-    }
-
-    // Get the latest receipt
-    const latestReceipt = restoreResult.receipts[0]
-
-    // Verify with backend
-    const verifyResult = await verifyReceipt(
-      latestReceipt,
-      supabaseUrl,
-      accessToken
-    )
-
-    if (!verifyResult.success) {
-      return { success: false, error: verifyResult.error || 'Receipt verification failed' }
-    }
-
+    console.log('[IAP] Restore successful')
     return {
       success: true,
-      plan: verifyResult.plan,
-      expiresAt: verifyResult.expiresAt,
+      customerInfo: result.customerInfo as IAPCustomerInfo,
     }
   } catch (error: any) {
-    console.error('Restore purchases failed:', error)
+    console.error('[IAP] Restore failed:', error)
     return {
       success: false,
       error: error.message || 'Failed to restore purchases',
@@ -221,38 +370,107 @@ export async function restorePurchases(
 }
 
 /**
- * Verify receipt with backend
+ * Get current customer info (entitlements, subscriptions)
  */
-async function verifyReceipt(
-  receiptData: string,
-  supabaseUrl: string,
-  accessToken: string
-): Promise<{
-  success: boolean
-  plan?: 'pro' | 'trade'
-  expiresAt?: string
-  error?: string
-}> {
+export async function getCustomerInfo(): Promise<IAPCustomerInfo | null> {
+  if (!isIAPAvailable()) {
+    console.warn('[IAP] getCustomerInfo called on web')
+    return null
+  }
+
+  if (!isConfigured) {
+    console.error('[IAP] SDK not configured')
+    return null
+  }
+
   try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/verify-iap`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ receiptData }),
-    })
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
+    const result = await Purchases.getCustomerInfo()
 
-    if (!response.ok) {
-      const error = await response.json()
-      return { success: false, error: error.error || 'Verification failed' }
-    }
-
-    const result = await response.json()
-    return result
+    return result.customerInfo as IAPCustomerInfo
   } catch (error: any) {
-    console.error('Receipt verification error:', error)
-    return { success: false, error: 'Network error during verification' }
+    console.error('[IAP] Failed to get customer info:', error)
+    return null
+  }
+}
+
+/**
+ * Get active plan from customer info
+ * Maps RevenueCat entitlements to YapMate plans
+ */
+export function getActivePlan(customerInfo: IAPCustomerInfo | null): 'free' | 'pro' | 'trade' {
+  if (!customerInfo) {
+    return 'free'
+  }
+
+  // Check active entitlements
+  const { active } = customerInfo.entitlements
+
+  // Trade takes precedence (higher tier)
+  if (active[IAP_ENTITLEMENTS.TRADE]?.isActive) {
+    return 'trade'
+  }
+
+  if (active[IAP_ENTITLEMENTS.PRO]?.isActive) {
+    return 'pro'
+  }
+
+  return 'free'
+}
+
+/**
+ * Get subscription status for display
+ */
+export function getSubscriptionStatus(customerInfo: IAPCustomerInfo | null): {
+  plan: 'free' | 'pro' | 'trade'
+  status: 'active' | 'trialing' | 'expired' | 'none'
+  willRenew: boolean
+  expirationDate: string | null
+} {
+  if (!customerInfo) {
+    return {
+      plan: 'free',
+      status: 'none',
+      willRenew: false,
+      expirationDate: null,
+    }
+  }
+
+  const plan = getActivePlan(customerInfo)
+
+  if (plan === 'free') {
+    return {
+      plan: 'free',
+      status: 'none',
+      willRenew: false,
+      expirationDate: null,
+    }
+  }
+
+  // Get the active entitlement
+  const entitlementKey = plan === 'trade' ? IAP_ENTITLEMENTS.TRADE : IAP_ENTITLEMENTS.PRO
+  const entitlement = customerInfo.entitlements.active[entitlementKey]
+
+  if (!entitlement) {
+    return {
+      plan: 'free',
+      status: 'expired',
+      willRenew: false,
+      expirationDate: null,
+    }
+  }
+
+  // Determine status based on period type
+  let status: 'active' | 'trialing' | 'expired' = 'active'
+  if (entitlement.periodType === 'TRIAL' || entitlement.periodType === 'INTRO') {
+    status = 'trialing'
+  }
+
+  return {
+    plan,
+    status,
+    willRenew: entitlement.willRenew,
+    expirationDate: entitlement.expirationDate,
   }
 }
 

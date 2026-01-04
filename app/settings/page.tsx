@@ -5,7 +5,8 @@ import { createBrowserClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
 import { getUserPlan, canUseVAT, canUseCIS, type PricingPlan } from '@/lib/plan-access'
-import { isIAPAvailable, restorePurchases } from '@/lib/iap'
+import { isIAPAvailable, restorePurchases, getCustomerInfo } from '@/lib/iap'
+import { syncSubscription } from '@/lib/iap-sync'
 
 interface UserPreferences {
   default_labour_rate: number
@@ -40,6 +41,11 @@ export default function SettingsPage() {
   const [canAccessVAT, setCanAccessVAT] = useState(false)
   const [canAccessCIS, setCanAccessCIS] = useState(false)
 
+  // Subscription status (iOS only)
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null)
+  const [subscriptionExpiry, setSubscriptionExpiry] = useState<string | null>(null)
+  const [willRenew, setWillRenew] = useState(false)
+
   const router = useRouter()
   const supabase = createBrowserClient()
 
@@ -47,6 +53,41 @@ export default function SettingsPage() {
     loadUserAndPreferences()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const loadSubscriptionStatus = async () => {
+    if (!isIAPAvailable()) return
+
+    try {
+      const customerInfo = await getCustomerInfo()
+      if (!customerInfo) return
+
+      const { entitlements } = customerInfo
+      const activeEntitlements = entitlements?.active || {}
+
+      // Check for active entitlements
+      let status = 'expired'
+      let expiryDate: string | null = null
+      let renew = false
+
+      if (activeEntitlements.trade?.isActive) {
+        const ent = activeEntitlements.trade
+        status = ent.periodType === 'TRIAL' || ent.periodType === 'INTRO' ? 'trialing' : 'active'
+        expiryDate = ent.expirationDate
+        renew = ent.willRenew
+      } else if (activeEntitlements.pro?.isActive) {
+        const ent = activeEntitlements.pro
+        status = ent.periodType === 'TRIAL' || ent.periodType === 'INTRO' ? 'trialing' : 'active'
+        expiryDate = ent.expirationDate
+        renew = ent.willRenew
+      }
+
+      setSubscriptionStatus(status)
+      setSubscriptionExpiry(expiryDate)
+      setWillRenew(renew)
+    } catch (err) {
+      console.error('Error loading subscription status:', err)
+    }
+  }
 
   const loadUserAndPreferences = async () => {
     try {
@@ -70,6 +111,9 @@ export default function SettingsPage() {
       setUserPlan(plan)
       setCanAccessVAT(vatAccess)
       setCanAccessCIS(cisAccess)
+
+      // Load subscription status (iOS only)
+      await loadSubscriptionStatus()
 
       // Load preferences
       const { data, error } = await (supabase
@@ -179,24 +223,32 @@ export default function SettingsPage() {
     setSuccess(false)
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
+      // 1. Restore via RevenueCat
+      const result = await restorePurchases()
 
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-      const accessToken = session.access_token
-
-      const result = await restorePurchases(supabaseUrl, accessToken)
-
-      if (result.success) {
-        setSuccess(true)
-        setTimeout(() => {
-          setSuccess(false)
-          // Reload preferences
-          loadUserAndPreferences()
-        }, 3000)
-      } else {
+      if (!result.success) {
+        if (result.userCancelled) {
+          // User cancelled - don't show error
+          return
+        }
         throw new Error(result.error || 'No purchases found')
       }
+
+      // 2. Sync to Supabase
+      if (result.customerInfo) {
+        const syncResult = await syncSubscription(result.customerInfo)
+
+        if (!syncResult.success) {
+          throw new Error('Restore succeeded but sync failed. Please contact support.')
+        }
+      }
+
+      // 3. Refresh plan and subscription state
+      setSuccess(true)
+      setTimeout(async () => {
+        setSuccess(false)
+        await loadUserAndPreferences()
+      }, 2000)
     } catch (err: any) {
       console.error('Restore error:', err)
       setError(err.message || 'Failed to restore purchases')
@@ -386,12 +438,64 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Restore Purchases (iOS Only) */}
+          {/* Subscription Management (iOS Only) */}
           {isIAPAvailable() && (
             <div className="border-b border-yapmate-slate-700 pb-6">
               <h2 className="text-yapmate-white text-sm font-mono uppercase tracking-wide mb-4">
                 Subscription Management
               </h2>
+
+              {/* Current Subscription Status */}
+              <div className="mb-4 p-4 bg-yapmate-slate-900 border border-yapmate-slate-700">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-xs font-mono uppercase text-yapmate-slate-300">
+                    Current Plan
+                  </span>
+                  <span className="text-sm font-mono font-bold text-yapmate-white uppercase">
+                    {userPlan}
+                  </span>
+                </div>
+
+                {subscriptionStatus && subscriptionStatus !== 'expired' && (
+                  <>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-xs font-mono uppercase text-yapmate-slate-300">
+                        Status
+                      </span>
+                      <span className={`text-sm font-mono font-bold uppercase ${
+                        subscriptionStatus === 'active' ? 'text-yapmate-status-green' :
+                        subscriptionStatus === 'trialing' ? 'text-yapmate-amber' :
+                        'text-yapmate-slate-400'
+                      }`}>
+                        {subscriptionStatus === 'trialing' ? 'Free Trial' : subscriptionStatus}
+                      </span>
+                    </div>
+
+                    {subscriptionExpiry && (
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-mono uppercase text-yapmate-slate-300">
+                          {willRenew ? 'Renews' : 'Expires'}
+                        </span>
+                        <span className="text-sm font-mono text-yapmate-white">
+                          {new Date(subscriptionExpiry).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {(!subscriptionStatus || subscriptionStatus === 'expired') && userPlan === 'free' && (
+                  <p className="text-xs font-mono text-yapmate-slate-400 mt-1">
+                    No active subscription
+                  </p>
+                )}
+              </div>
+
+              {/* Restore Purchases Button */}
               <button
                 onClick={handleRestorePurchases}
                 disabled={isRestoring}

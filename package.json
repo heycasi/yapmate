@@ -14,6 +14,7 @@
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/share": "^6.0.4",
     "@react-pdf/renderer": "^4.0.0",
+    "@revenuecat/purchases-capacitor": "^12.0.1",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.45.4",
     "dotenv": "^17.2.3",

@@ -4,7 +4,14 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createBrowserClient } from '@/lib/supabase'
 import { getUserPlan, getPlanDisplayName, type PricingPlan } from '@/lib/plan-access'
-import { isIAPAvailable, purchaseProduct, IAP_PRODUCTS } from '@/lib/iap'
+import {
+  isIAPAvailable,
+  purchaseProduct,
+  getOfferings,
+  IAP_PRODUCTS,
+  type IAPOffering
+} from '@/lib/iap'
+import { syncSubscription } from '@/lib/iap-sync'
 
 export default function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
@@ -12,11 +19,16 @@ export default function PricingPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false)
   const [isPurchasing, setIsPurchasing] = useState(false)
+  const [isLoadingOfferings, setIsLoadingOfferings] = useState(false)
+  const [offerings, setOfferings] = useState<IAPOffering[]>([])
   const [purchaseError, setPurchaseError] = useState<string | null>(null)
   const [purchaseSuccess, setPurchaseSuccess] = useState(false)
 
   useEffect(() => {
     checkUserPlan()
+    if (isIAPAvailable()) {
+      loadOfferings()
+    }
   }, [])
 
   const checkUserPlan = async () => {
@@ -27,6 +39,19 @@ export default function PricingPage() {
       setIsLoggedIn(true)
       const plan = await getUserPlan(session.user.id)
       setCurrentPlan(plan)
+    }
+  }
+
+  const loadOfferings = async () => {
+    setIsLoadingOfferings(true)
+    try {
+      const loadedOfferings = await getOfferings()
+      setOfferings(loadedOfferings)
+      console.log('[Pricing] Loaded offerings:', loadedOfferings.length)
+    } catch (error) {
+      console.error('[Pricing] Failed to load offerings:', error)
+    } finally {
+      setIsLoadingOfferings(false)
     }
   }
 
@@ -47,7 +72,7 @@ export default function PricingPage() {
       return
     }
 
-    // iOS: trigger native purchase flow
+    // iOS: check if logged in first
     if (!isLoggedIn) {
       setPurchaseError('Please log in to purchase a subscription')
       setTimeout(() => setPurchaseError(null), 5000)
@@ -57,35 +82,43 @@ export default function PricingPage() {
     setIsPurchasing(true)
 
     try {
-      const supabase = createBrowserClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Purchase via RevenueCat
+      const productId = plan === 'pro' ? IAP_PRODUCTS.PRO_MONTHLY : IAP_PRODUCTS.TRADE_MONTHLY
 
-      if (!session) {
-        throw new Error('Not authenticated')
+      console.log('[Pricing] Starting purchase:', productId)
+      const result = await purchaseProduct(productId)
+
+      if (!result.success) {
+        // Don't show error if user cancelled
+        if (!result.userCancelled) {
+          setPurchaseError(result.error || 'Purchase failed')
+          setTimeout(() => setPurchaseError(null), 5000)
+        }
+        return
       }
 
-      const productId = plan === 'pro' ? IAP_PRODUCTS.PRO_MONTHLY : IAP_PRODUCTS.TRADE_MONTHLY
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-      const accessToken = session.access_token
+      console.log('[Pricing] Purchase successful, syncing to Supabase...')
 
-      const result = await purchaseProduct(productId, supabaseUrl, accessToken)
+      // Sync to Supabase
+      if (result.customerInfo) {
+        const syncResult = await syncSubscription(result.customerInfo)
 
-      if (result.success) {
-        setPurchaseSuccess(true)
-        setTimeout(() => {
-          setPurchaseSuccess(false)
-          // Reload user plan
-          checkUserPlan()
-        }, 3000)
-      } else {
-        // Only show error if it's not a user cancellation
-        if (result.error !== 'Purchase cancelled') {
-          setPurchaseError(result.error || 'Purchase failed')
+        if (syncResult.success) {
+          setPurchaseSuccess(true)
+
+          // Reload user plan after successful sync
+          await checkUserPlan()
+
+          setTimeout(() => {
+            setPurchaseSuccess(false)
+          }, 3000)
+        } else {
+          setPurchaseError('Purchase succeeded but sync failed. Please contact support.')
           setTimeout(() => setPurchaseError(null), 5000)
         }
       }
     } catch (error: any) {
-      console.error('Purchase error:', error)
+      console.error('[Pricing] Purchase error:', error)
       setPurchaseError(error.message || 'Purchase failed')
       setTimeout(() => setPurchaseError(null), 5000)
     } finally {
@@ -123,6 +156,11 @@ export default function PricingPage() {
         <p className="text-xl md:text-2xl text-yapmate-gray-lightest max-w-2xl mx-auto">
           Simple plans for UK trades. Start free. Upgrade when it saves you time.
         </p>
+        {isIAPAvailable() && (
+          <p className="text-sm text-yapmate-gray-light mt-4">
+            7-day free trial included with Pro & Trade plans
+          </p>
+        )}
       </section>
 
       {/* Purchase Success */}
@@ -293,15 +331,15 @@ export default function PricingPage() {
             ) : isLoggedIn ? (
               <button
                 onClick={() => handleUpgrade('pro')}
-                disabled={isPurchasing}
+                disabled={isPurchasing || isLoadingOfferings}
                 className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPurchasing ? 'Processing...' : 'Upgrade'}
+                {isPurchasing ? 'Processing...' : isIAPAvailable() ? 'Start Free Trial' : 'Upgrade'}
               </button>
             ) : (
               <Link
                 href="/signup"
-                className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm inline-block"
+                className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm"
               >
                 Sign Up to Upgrade
               </Link>
@@ -314,53 +352,49 @@ export default function PricingPage() {
               Trade
             </h2>
             <div className="mb-6">
-              <span className="text-5xl font-bold font-mono">£30</span>
+              <span className="text-5xl font-bold font-mono">£25</span>
               <span className="text-yapmate-gray-lightest text-lg"> / month</span>
             </div>
 
             <ul className="space-y-3 mb-8 flex-grow text-sm">
               <li className="flex items-start">
                 <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
-                <span className="text-yapmate-gray-lightest">Everything in Pro</span>
+                <span className="text-yapmate-gray-lightest"><strong>Everything in Pro</strong></span>
               </li>
               <li className="flex items-start">
                 <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
-                <span className="text-yapmate-gray-lightest">CIS deductions + statements</span>
+                <span className="text-yapmate-gray-lightest">CIS deduction</span>
               </li>
               <li className="flex items-start">
                 <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
-                <span className="text-yapmate-gray-lightest">Saved job templates</span>
+                <span className="text-yapmate-gray-lightest">Bank details on invoice</span>
               </li>
               <li className="flex items-start">
                 <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
-                <span className="text-yapmate-gray-lightest">Repeat invoice autofill</span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
-                <span className="text-yapmate-gray-lightest">Auto reminders</span>
+                <span className="text-yapmate-gray-lightest">Priority support</span>
               </li>
               <li className="flex items-start">
                 <span className="text-yapmate-gray-light mr-3 text-lg">•</span>
-                <span className="text-yapmate-gray-light text-xs">For busy tradespeople</span>
+                <span className="text-yapmate-gray-light text-xs">For CIS contractors</span>
               </li>
             </ul>
 
             {currentPlan === 'trade' ? (
-              <div className="w-full px-8 py-4 bg-yapmate-gray-dark border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
+              <div className="w-full px-8 py-4 border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
                 Current Plan
               </div>
             ) : isLoggedIn ? (
               <button
                 onClick={() => handleUpgrade('trade')}
-                disabled={isPurchasing}
+                disabled={isPurchasing || isLoadingOfferings}
                 className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPurchasing ? 'Processing...' : 'Upgrade'}
+                {isPurchasing ? 'Processing...' : isIAPAvailable() ? 'Start Free Trial' : 'Upgrade'}
               </button>
             ) : (
               <Link
                 href="/signup"
-                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm inline-block"
+                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm"
               >
                 Sign Up to Upgrade
               </Link>
@@ -369,117 +403,78 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* Value Proposition */}
-      <section className="px-6 pb-16 max-w-4xl mx-auto">
-        <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-8 text-center">
-          <h3 className="text-xl font-bold mb-4 text-yapmate-yellow uppercase tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-            Built for Speed
-          </h3>
-          <p className="text-yapmate-gray-lightest max-w-2xl mx-auto">
-            Stop wasting 15 minutes per invoice. Voice-to-invoice means you&apos;re done in 30 seconds.
-            Save hours every week on admin. Spend more time on jobs that pay.
-          </p>
-        </div>
-      </section>
-
       {/* FAQ Section */}
-      <section className="px-6 py-16 max-w-4xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 uppercase tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-          FAQ
+      <section className="px-6 pb-20 max-w-4xl mx-auto">
+        <h2 className="text-3xl font-bold mb-8 text-center uppercase tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+          Frequently Asked Questions
         </h2>
 
         <div className="space-y-4">
-          {/* FAQ 1 */}
-          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl overflow-hidden hover:border-yapmate-yellow/50 transition-colors">
+          {/* FAQ Item 1 */}
+          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl overflow-hidden">
             <button
               onClick={() => toggleFaq(0)}
-              className="w-full px-6 py-4 flex justify-between items-center text-left"
+              className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
-              <span className="font-semibold text-yapmate-yellow">
-                What happens when I hit the free plan limit?
-              </span>
-              <span className="text-yapmate-yellow text-xl">
-                {openFaq === 0 ? '−' : '+'}
-              </span>
+              <span className="font-semibold">Can I try before I buy?</span>
+              <span className="text-yapmate-yellow text-xl">{openFaq === 0 ? '−' : '+'}</span>
             </button>
             {openFaq === 0 && (
-              <div className="px-6 pb-4 text-yapmate-gray-lightest border-t border-gray-800 pt-4">
-                After 3 invoices total, you&apos;ll see an upgrade prompt. Your existing invoices stay accessible.
-                Upgrade to Pro for unlimited invoices.
+              <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
+                Yes. All paid plans include a 7-day free trial on iOS. Cancel anytime during the trial period at no cost.
               </div>
             )}
           </div>
 
-          {/* FAQ 2 */}
-          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl overflow-hidden hover:border-yapmate-yellow/50 transition-colors">
+          {/* FAQ Item 2 */}
+          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl overflow-hidden">
             <button
               onClick={() => toggleFaq(1)}
-              className="w-full px-6 py-4 flex justify-between items-center text-left"
+              className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
-              <span className="font-semibold text-yapmate-yellow">
-                Is VAT added to what the customer pays?
-              </span>
-              <span className="text-yapmate-yellow text-xl">
-                {openFaq === 1 ? '−' : '+'}
-              </span>
+              <span className="font-semibold">What happens after my free trial?</span>
+              <span className="text-yapmate-yellow text-xl">{openFaq === 1 ? '−' : '+'}</span>
             </button>
             {openFaq === 1 && (
-              <div className="px-6 pb-4 text-yapmate-gray-lightest border-t border-gray-800 pt-4">
-                Yes, VAT adds to the invoice total if enabled. The invoice shows the subtotal, VAT amount,
-                and total clearly separated.
+              <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
+                After 7 days, you&apos;ll be charged the monthly rate unless you cancel. You can cancel anytime via your iOS subscription settings.
               </div>
             )}
           </div>
 
-          {/* FAQ 3 */}
-          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl overflow-hidden hover:border-yapmate-yellow/50 transition-colors">
+          {/* FAQ Item 3 */}
+          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl overflow-hidden">
             <button
               onClick={() => toggleFaq(2)}
-              className="w-full px-6 py-4 flex justify-between items-center text-left"
+              className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
-              <span className="font-semibold text-yapmate-yellow">
-                How does CIS work?
-              </span>
-              <span className="text-yapmate-yellow text-xl">
-                {openFaq === 2 ? '−' : '+'}
-              </span>
+              <span className="font-semibold">Can I upgrade or downgrade later?</span>
+              <span className="text-yapmate-yellow text-xl">{openFaq === 2 ? '−' : '+'}</span>
             </button>
             {openFaq === 2 && (
-              <div className="px-6 pb-4 text-yapmate-gray-lightest border-t border-gray-800 pt-4">
-                CIS is withheld from labour only and shown separately. The customer pays the invoice total,
-                and the net payment (after CIS deduction) is what you receive.
+              <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
+                Yes. You can change plans anytime via your subscription settings. Changes take effect immediately.
               </div>
             )}
           </div>
 
-          {/* FAQ 4 */}
-          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl overflow-hidden hover:border-yapmate-yellow/50 transition-colors">
+          {/* FAQ Item 4 */}
+          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl overflow-hidden">
             <button
               onClick={() => toggleFaq(3)}
-              className="w-full px-6 py-4 flex justify-between items-center text-left"
+              className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
-              <span className="font-semibold text-yapmate-yellow">
-                Does it work with accents?
-              </span>
-              <span className="text-yapmate-yellow text-xl">
-                {openFaq === 3 ? '−' : '+'}
-              </span>
+              <span className="font-semibold">How do I cancel my subscription?</span>
+              <span className="text-yapmate-yellow text-xl">{openFaq === 3 ? '−' : '+'}</span>
             </button>
             {openFaq === 3 && (
-              <div className="px-6 pb-4 text-yapmate-gray-lightest border-t border-gray-800 pt-4">
-                Built to handle UK accents including Glasgow, Scouse, Geordie, and Manc.
-                If it struggles, you can re-record or edit the invoice manually.
+              <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
+                On iOS: Settings → Apple ID → Subscriptions → YapMate → Cancel. You&apos;ll retain access until the end of your billing period.
               </div>
             )}
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="px-6 py-8 text-center text-yapmate-gray-light text-sm border-t border-gray-800 mt-16">
-        <p className="font-mono uppercase tracking-wide">Built for speed. Built for trades.</p>
-        <p className="mt-2">© {new Date().getFullYear()} YapMate</p>
-      </footer>
     </main>
   )
 }
