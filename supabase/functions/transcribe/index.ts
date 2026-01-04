@@ -67,7 +67,25 @@ serve(async (req) => {
       })
     }
 
-    // Rate limiting: Max 10 transcriptions per hour
+    // Rate limiting: Plan-aware limits per hour
+    // free: 50/hour, pro: 50/hour, trade: 50/hour (temporarily increased for testing)
+    const rateLimits = {
+      free: 50,
+      pro: 50,
+      trade: 50,
+    }
+
+    // Get user's plan from user_preferences
+    const { data: prefData, error: prefError } = await supabase
+      .from('user_preferences')
+      .select('plan')
+      .eq('user_id', user.id)
+      .single()
+
+    const userPlan = prefData?.plan || 'free'
+    const hourlyLimit = rateLimits[userPlan as keyof typeof rateLimits] || rateLimits.free
+
+    // Count recordings in the last hour
     const oneHourAgo = new Date(Date.now() - 3600000).toISOString()
     const { count, error: countError } = await supabase
       .from('api_usage')
@@ -78,14 +96,44 @@ serve(async (req) => {
 
     if (countError) {
       console.error('Rate limit check error:', countError)
-    } else if (count !== null && count >= 10) {
+    } else if (count !== null && count >= hourlyLimit) {
+      // Get oldest usage timestamp to compute reset time
+      const { data: oldestUsage } = await supabase
+        .from('api_usage')
+        .select('created_at')
+        .eq('user_id', user.id)
+        .eq('endpoint', 'transcribe')
+        .gte('created_at', oneHourAgo)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single()
+
+      const resetTime = oldestUsage
+        ? new Date(new Date(oldestUsage.created_at).getTime() + 3600000)
+        : new Date(Date.now() + 3600000)
+      const secondsUntilReset = Math.max(0, Math.floor((resetTime.getTime() - Date.now()) / 1000))
+      const minutesUntilReset = Math.ceil(secondsUntilReset / 60)
+
+      console.log('[Rate Limit] Transcribe limit hit:', {
+        user_id: user.id,
+        plan: userPlan,
+        count: count,
+        limit: hourlyLimit,
+      })
+
       return new Response(
-        JSON.stringify({ error: 'Rate limit exceeded. Max 10 recordings per hour.' }),
+        JSON.stringify({
+          error: `Rate limit exceeded. Try again in ${minutesUntilReset} minute${minutesUntilReset !== 1 ? 's' : ''}.`,
+          limit: hourlyLimit,
+          current: count,
+          resetInSeconds: secondsUntilReset,
+        }),
         {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
+            'Retry-After': secondsUntilReset.toString(),
           },
         }
       )

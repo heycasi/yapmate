@@ -295,7 +295,7 @@ export default function RecordPage() {
         })
 
         if (transcribeResponse.status === 429) {
-          throw new Error('Rate limit exceeded. Max 10 recordings per hour.')
+          throw new Error(errorMessage)
         }
         if (transcribeResponse.status === 401 || transcribeResponse.status === 403) {
           throw new Error('Authentication error. Please log in again.')
