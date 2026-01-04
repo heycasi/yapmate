@@ -12,6 +12,11 @@ import { canCreateInvoice } from '@/lib/plan-access'
 const MAX_RECORDING_SECONDS = 180 // 3 minutes max
 
 export default function RecordPage() {
+  // Runtime guard: Check env vars before allowing recording
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const [configError, setConfigError] = useState<string | null>(null)
+
   const [selectedTrade, setSelectedTrade] = useState<string>('Plumber') // Default to Plumber
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -37,6 +42,17 @@ export default function RecordPage() {
   const startTimeRef = useRef<number>(0)
 
   useEffect(() => {
+    // Runtime guard: Check for missing config
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('[Config] Missing environment variables:', {
+        hasUrl: !!supabaseUrl,
+        hasKey: !!supabaseAnonKey,
+      })
+      setConfigError('App configuration missing. Please contact support.')
+      setIsCheckingAccess(false)
+      return
+    }
+
     checkAuth()
     return () => {
       if (timerIntervalRef.current) {
@@ -74,6 +90,12 @@ export default function RecordPage() {
   }
 
   const startRecording = async () => {
+    // Block if config is missing
+    if (configError) {
+      setError(configError)
+      return
+    }
+
     // Block if user cannot create invoices
     if (!canCreate) {
       setError(planLimitMessage || 'Cannot create more invoices')
@@ -205,8 +227,19 @@ export default function RecordPage() {
     setError(null)
 
     try {
+      console.log('[Pipeline] Step 1/3: Starting transcription')
+
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
+      if (!session) {
+        console.error('[Pipeline] No session found')
+        throw new Error('Not authenticated')
+      }
+
+      console.log('[Pipeline] Auth check:', {
+        isLoggedIn: !!session.user,
+        userId: session.user?.id,
+        hasAccessToken: !!session.access_token,
+      })
 
       const file = new File([audioBlob], 'recording.webm', { type: audioBlob.type })
 
@@ -215,9 +248,13 @@ export default function RecordPage() {
         throw new Error('Recording too large. Please record a shorter message.')
       }
 
+      console.log('[Pipeline] File prepared:', { size: file.size, type: file.type })
+
       // Step 1: Call Supabase Edge Function for transcription
       const formData = new FormData()
       formData.append('file', file)
+
+      console.log('[Pipeline] Calling transcribe function...')
 
       const transcribeResponse = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/transcribe`,
@@ -230,18 +267,43 @@ export default function RecordPage() {
         }
       )
 
+      console.log('[Pipeline] Transcribe response:', {
+        status: transcribeResponse.status,
+        ok: transcribeResponse.ok
+      })
+
       if (!transcribeResponse.ok) {
-        const error = await transcribeResponse.json()
+        let errorMessage = 'Transcription failed'
+        let errorDetails = null
+
+        try {
+          errorDetails = await transcribeResponse.json()
+          errorMessage = errorDetails.error || errorMessage
+        } catch (parseErr) {
+          console.error('[Pipeline] Failed to parse error response:', parseErr)
+        }
+
+        console.error('[Pipeline] Transcription failed:', {
+          status: transcribeResponse.status,
+          error: errorDetails
+        })
+
         if (transcribeResponse.status === 429) {
           throw new Error('Rate limit exceeded. Max 10 recordings per hour.')
         }
-        throw new Error(error.error || 'Transcription failed')
+        if (transcribeResponse.status === 401 || transcribeResponse.status === 403) {
+          throw new Error('Authentication error. Please log in again.')
+        }
+        throw new Error(`Transcription failed (${transcribeResponse.status}): ${errorMessage}`)
       }
 
       const { text: rawTranscriptText } = await transcribeResponse.json()
       setRawTranscript(rawTranscriptText)
+      console.log('[Pipeline] Transcription complete, length:', rawTranscriptText.length)
 
       // Step 2: Call Edge Function for cleaning
+      console.log('[Pipeline] Step 2/3: Cleaning transcript')
+
       const cleaningResponse = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/clean-transcript`,
         {
@@ -254,17 +316,42 @@ export default function RecordPage() {
         }
       )
 
+      console.log('[Pipeline] Clean response:', {
+        status: cleaningResponse.status,
+        ok: cleaningResponse.ok
+      })
+
       if (!cleaningResponse.ok) {
-        throw new Error('Transcript cleaning failed')
+        let errorMessage = 'Transcript cleaning failed'
+        let errorDetails = null
+
+        try {
+          errorDetails = await cleaningResponse.json()
+          errorMessage = errorDetails.error || errorMessage
+        } catch (parseErr) {
+          console.error('[Pipeline] Failed to parse error response:', parseErr)
+        }
+
+        console.error('[Pipeline] Cleaning failed:', {
+          status: cleaningResponse.status,
+          error: errorDetails
+        })
+
+        throw new Error(`Transcript cleaning failed (${cleaningResponse.status}): ${errorMessage}`)
       }
 
       const { cleanedTranscript } = await cleaningResponse.json()
       setTranscript(cleanedTranscript)
+      console.log('[Pipeline] Cleaning complete')
 
       // Use the cleaned transcript for extraction
       await handleExtraction(cleanedTranscript)
     } catch (err: any) {
-      console.error('Transcription error:', err)
+      console.error('[Pipeline] Error in handleTranscription:', {
+        name: err.name,
+        message: err.message,
+        cause: err.cause,
+      })
       setError(err.message || 'Failed to transcribe audio')
     } finally {
       setIsTranscribing(false)
@@ -276,8 +363,15 @@ export default function RecordPage() {
     setError(null)
 
     try {
+      console.log('[Pipeline] Step 3/3: Extracting invoice data')
+
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
+      if (!session) {
+        console.error('[Pipeline] No session found')
+        throw new Error('Not authenticated')
+      }
+
+      console.log('[Pipeline] Calling extract-invoice function...')
 
       // Step 3: Call Edge Function for extraction
       const extractionResponse = await fetch(
@@ -295,15 +389,39 @@ export default function RecordPage() {
         }
       )
 
+      console.log('[Pipeline] Extract response:', {
+        status: extractionResponse.status,
+        ok: extractionResponse.ok
+      })
+
       if (!extractionResponse.ok) {
-        const error = await extractionResponse.json()
-        if (error.error.includes('Suspicious input')) {
-          throw new Error('Suspicious input detected. Please record a normal invoice description.')
+        let errorMessage = 'Extraction failed'
+        let errorDetails = null
+
+        try {
+          errorDetails = await extractionResponse.json()
+          errorMessage = errorDetails.error || errorMessage
+
+          if (errorMessage.includes('Suspicious input')) {
+            throw new Error('Suspicious input detected. Please record a normal invoice description.')
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof Error && parseErr.message.includes('Suspicious input')) {
+            throw parseErr
+          }
+          console.error('[Pipeline] Failed to parse error response:', parseErr)
         }
-        throw new Error(error.error || 'Extraction failed')
+
+        console.error('[Pipeline] Extraction failed:', {
+          status: extractionResponse.status,
+          error: errorDetails
+        })
+
+        throw new Error(`Invoice extraction failed (${extractionResponse.status}): ${errorMessage}`)
       }
 
       const { invoice: extractedInvoice } = await extractionResponse.json()
+      console.log('[Pipeline] Extraction complete, customer:', extractedInvoice.customerName)
 
       // Ensure customer record exists and get customer_id
       const customerId = await ensureCustomer(session.user.id, extractedInvoice.customerName)
@@ -369,8 +487,13 @@ export default function RecordPage() {
 
       setInvoice(extractedInvoice)
       setInvoiceId(invoiceData.id)
+      console.log('[Pipeline] ✅ Pipeline complete! Invoice ID:', invoiceData.id)
     } catch (err: any) {
-      console.error('Extraction error:', err)
+      console.error('[Pipeline] Error in handleExtraction:', {
+        name: err.name,
+        message: err.message,
+        cause: err.cause,
+      })
       setError(err.message || 'Failed to extract invoice data')
     } finally {
       setIsExtracting(false)
