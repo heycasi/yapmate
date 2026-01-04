@@ -254,10 +254,16 @@ export default function RecordPage() {
       const formData = new FormData()
       formData.append('file', file)
 
+      const transcribeUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/transcribe`
       console.log('[Pipeline] Calling transcribe function...')
+      console.log('[Pipeline] Config check:', {
+        hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      })
+      console.log('[Pipeline] Transcribe URL:', transcribeUrl)
 
       const transcribeResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/transcribe`,
+        transcribeUrl,
         {
           method: 'POST',
           headers: {
@@ -304,8 +310,11 @@ export default function RecordPage() {
       // Step 2: Call Edge Function for cleaning
       console.log('[Pipeline] Step 2/3: Cleaning transcript')
 
+      const cleanUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/clean-transcript`
+      console.log('[Pipeline] Clean URL:', cleanUrl)
+
       const cleaningResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/clean-transcript`,
+        cleanUrl,
         {
           method: 'POST',
           headers: {
@@ -351,8 +360,16 @@ export default function RecordPage() {
         name: err.name,
         message: err.message,
         cause: err.cause,
+        stack: err.stack,
       })
-      setError(err.message || 'Failed to transcribe audio')
+
+      // Special handling for network failures
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        console.error('[Pipeline] Network failure detected - fetch() failed')
+        setError('Network error: Unable to reach server. Check your connection.')
+      } else {
+        setError(err.message || 'Failed to transcribe audio')
+      }
     } finally {
       setIsTranscribing(false)
     }
@@ -374,8 +391,11 @@ export default function RecordPage() {
       console.log('[Pipeline] Calling extract-invoice function...')
 
       // Step 3: Call Edge Function for extraction
+      const extractUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/extract-invoice`
+      console.log('[Pipeline] Extract URL:', extractUrl)
+
       const extractionResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/extract-invoice`,
+        extractUrl,
         {
           method: 'POST',
           headers: {
@@ -493,8 +513,16 @@ export default function RecordPage() {
         name: err.name,
         message: err.message,
         cause: err.cause,
+        stack: err.stack,
       })
-      setError(err.message || 'Failed to extract invoice data')
+
+      // Special handling for network failures
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        console.error('[Pipeline] Network failure detected - fetch() failed')
+        setError('Network error: Unable to reach server. Check your connection.')
+      } else {
+        setError(err.message || 'Failed to extract invoice data')
+      }
     } finally {
       setIsExtracting(false)
     }
