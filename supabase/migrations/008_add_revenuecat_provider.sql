@@ -35,6 +35,9 @@ ALTER TABLE subscriptions
   DROP CONSTRAINT IF EXISTS subscriptions_check;
 
 ALTER TABLE subscriptions
+  DROP CONSTRAINT IF EXISTS subscriptions_provider_check;
+
+ALTER TABLE subscriptions
   ADD CONSTRAINT subscriptions_provider_check
   CHECK (
     (plan = 'free') OR
