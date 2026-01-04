@@ -43,7 +43,10 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -57,7 +60,10 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -75,7 +81,13 @@ serve(async (req) => {
     } else if (count !== null && count >= 10) {
       return new Response(
         JSON.stringify({ error: 'Rate limit exceeded. Max 10 recordings per hour.' }),
-        { status: 429, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
       )
     }
 
@@ -86,7 +98,10 @@ serve(async (req) => {
     if (!audioFile || !(audioFile instanceof File)) {
       return new Response(JSON.stringify({ error: 'No audio file provided' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -94,7 +109,10 @@ serve(async (req) => {
     if (audioFile.size > 25 * 1024 * 1024) {
       return new Response(JSON.stringify({ error: 'File too large. Max 25MB.' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -119,7 +137,13 @@ serve(async (req) => {
       console.error('OpenAI error:', error)
       return new Response(
         JSON.stringify({ error: 'Transcription failed' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
       )
     }
 
@@ -133,13 +157,22 @@ serve(async (req) => {
     })
 
     return new Response(JSON.stringify({ text: transcription.text }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
     })
   } catch (error) {
     console.error('Transcribe function error:', error)
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
     )
   }
 })

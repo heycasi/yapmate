@@ -138,7 +138,10 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -152,7 +155,10 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -162,7 +168,10 @@ serve(async (req) => {
     if (!transcript || typeof transcript !== 'string') {
       return new Response(JSON.stringify({ error: 'No transcript provided' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -170,7 +179,10 @@ serve(async (req) => {
     if (transcript.length > 2000) {
       return new Response(JSON.stringify({ error: 'Transcript too long' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -201,7 +213,13 @@ serve(async (req) => {
       console.error('OpenAI error:', error)
       return new Response(
         JSON.stringify({ error: 'Extraction failed' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
       )
     }
 
@@ -211,7 +229,10 @@ serve(async (req) => {
     if (!extractedData) {
       return new Response(JSON.stringify({ error: 'No data extracted' }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -221,7 +242,13 @@ serve(async (req) => {
     if (invoice.jobSummary === 'SECURITY_BLOCK') {
       return new Response(
         JSON.stringify({ error: 'Suspicious input detected. Please try again.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
       )
     }
 
@@ -233,13 +260,22 @@ serve(async (req) => {
     })
 
     return new Response(JSON.stringify({ invoice }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
     })
   } catch (error) {
     console.error('Extract invoice function error:', error)
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
     )
   }
 })

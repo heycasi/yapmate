@@ -53,7 +53,10 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -67,7 +70,10 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -77,7 +83,10 @@ serve(async (req) => {
     if (!rawTranscript || typeof rawTranscript !== 'string') {
       return new Response(JSON.stringify({ error: 'No transcript provided' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -85,7 +94,10 @@ serve(async (req) => {
     if (rawTranscript.length > 2000) {
       return new Response(JSON.stringify({ error: 'Transcript too long' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       })
     }
 
@@ -112,7 +124,13 @@ serve(async (req) => {
       console.error('OpenAI error:', error)
       return new Response(
         JSON.stringify({ error: 'Cleaning failed' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
       )
     }
 
@@ -127,13 +145,22 @@ serve(async (req) => {
     })
 
     return new Response(JSON.stringify({ cleanedTranscript }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
     })
   } catch (error) {
     console.error('Clean transcript function error:', error)
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
     )
   }
 })
