@@ -1,17 +1,19 @@
 PODS:
-  - Capacitor (6.2.1):
+  - Capacitor (7.4.4):
     - CapacitorCordova
-  - CapacitorCordova (6.2.1)
-  - CapacitorFilesystem (6.0.4):
+  - CapacitorCordova (7.4.4)
+  - CapacitorFilesystem (7.1.6):
     - Capacitor
-  - CapacitorShare (6.0.4):
+    - IONFilesystemLib (~> 1.0.1)
+  - CapacitorShare (7.0.3):
     - Capacitor
-  - PurchasesHybridCommon (17.26.0):
-    - RevenueCat (= 5.52.0)
-  - RevenueCat (5.52.0)
-  - RevenuecatPurchasesCapacitor (12.0.1):
+  - IONFilesystemLib (1.0.1)
+  - PurchasesHybridCommon (17.25.0):
+    - RevenueCat (= 5.51.1)
+  - RevenueCat (5.51.1)
+  - RevenuecatPurchasesCapacitor (11.3.2):
     - Capacitor
-    - PurchasesHybridCommon (= 17.26.0)
+    - PurchasesHybridCommon (= 17.25.0)
 
 DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
@@ -22,6 +24,7 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
+    - IONFilesystemLib
     - PurchasesHybridCommon
     - RevenueCat
 
@@ -38,13 +41,14 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@revenuecat/purchases-capacitor"
 
 SPEC CHECKSUMS:
-  Capacitor: c95400d761e376be9da6be5a05f226c0e865cebf
-  CapacitorCordova: 8d93e14982f440181be7304aa9559ca631d77fff
-  CapacitorFilesystem: 5b9aec35c0212bd0064e26d278c93e925864f212
-  CapacitorShare: 77ff779e3b7c6ae9fb5461e52cf7ef805d429491
-  PurchasesHybridCommon: 93399cb2ba29164dbab79d6398e79f7723b41653
-  RevenueCat: 946aceaf97c1eee083dd7fad65a0e0d0c64c837e
-  RevenuecatPurchasesCapacitor: 2d2511b140ea68cdcb1436652ea70ac9f8017d17
+  Capacitor: 358dd1c3fdd71d969547b17e159fd8a7736cb45f
+  CapacitorCordova: bf648a636f3c153f652d312ae145fb508b6ffced
+  CapacitorFilesystem: 66f05ee0d8b1ccdc00d509091273a9b3b57c4a0b
+  CapacitorShare: a4f4f86eabd4b3ff52ba6a11b754713c6926a8d1
+  IONFilesystemLib: 89258b8e3e85465da93127d25d7ce37f977e8a6f
+  PurchasesHybridCommon: 6a79a873ab52f777bfa36e9516f3fcd84d3b3428
+  RevenueCat: eab035bbab271faccfef5c36eaff2a1ffef14dc0
+  RevenuecatPurchasesCapacitor: fa376932f9967c7ab4b5eac477e824d90393b91a
 
 PODFILE CHECKSUM: b07e919443fb796e825ef52ad1eb8bce23d5988d
 
