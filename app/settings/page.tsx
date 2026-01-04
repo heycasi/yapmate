@@ -7,6 +7,7 @@ import Navigation from '@/components/Navigation'
 import { getUserPlan, canUseVAT, canUseCIS, type PricingPlan } from '@/lib/plan-access'
 import { isIAPAvailable, restorePurchases, getCustomerInfo } from '@/lib/iap'
 import { syncSubscription } from '@/lib/iap-sync'
+import { isIOS, isWeb, isBillingEnabled } from '@/lib/runtime-config'
 
 interface UserPreferences {
   default_labour_rate: number
@@ -55,7 +56,7 @@ export default function SettingsPage() {
   }, [])
 
   const loadSubscriptionStatus = async () => {
-    if (!isIAPAvailable()) return
+    if (!isIOS() || !isIAPAvailable()) return
 
     try {
       const customerInfo = await getCustomerInfo()
@@ -231,7 +232,11 @@ export default function SettingsPage() {
           // User cancelled - don't show error
           return
         }
-        throw new Error(result.error || 'No purchases found')
+        // Better messaging for no purchases
+        if (result.error?.includes('No purchases') || result.error?.includes('not found')) {
+          throw new Error('No subscription found on this Apple ID. If you purchased on a different Apple ID, sign in with that account and try again.')
+        }
+        throw new Error(result.error || 'Failed to restore purchases')
       }
 
       // 2. Sync to Supabase
@@ -439,7 +444,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Subscription Management (iOS Only) */}
-          {isIAPAvailable() && (
+          {isIOS() && (
             <div className="border-b border-yapmate-slate-700 pb-6">
               <h2 className="text-yapmate-white text-sm font-mono uppercase tracking-wide mb-4">
                 Subscription Management

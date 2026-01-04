@@ -12,6 +12,12 @@ import {
   type IAPOffering
 } from '@/lib/iap'
 import { syncSubscription } from '@/lib/iap-sync'
+import {
+  isIOS,
+  isWeb,
+  isBillingEnabled,
+  getBillingNotConfiguredMessage
+} from '@/lib/runtime-config'
 
 export default function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
@@ -64,11 +70,24 @@ export default function PricingPage() {
     setPurchaseError(null)
     setPurchaseSuccess(false)
 
-    // Check if IAP is available (iOS only)
-    if (!isIAPAvailable()) {
-      // On web: show waitlist message
+    // Web: Always show waitlist
+    if (isWeb()) {
       setShowUpgradeMessage(true)
       setTimeout(() => setShowUpgradeMessage(false), 5000)
+      return
+    }
+
+    // iOS: Check if billing is enabled
+    if (!isBillingEnabled()) {
+      setPurchaseError(getBillingNotConfiguredMessage())
+      setTimeout(() => setPurchaseError(null), 5000)
+      return
+    }
+
+    // iOS: Check if IAP is available
+    if (!isIAPAvailable()) {
+      setPurchaseError('In-app purchases not available. Please try again.')
+      setTimeout(() => setPurchaseError(null), 5000)
       return
     }
 
@@ -156,7 +175,7 @@ export default function PricingPage() {
         <p className="text-xl md:text-2xl text-yapmate-gray-lightest max-w-2xl mx-auto">
           Simple plans for UK trades. Start free. Upgrade when it saves you time.
         </p>
-        {isIAPAvailable() && (
+        {isIOS() && (
           <p className="text-sm text-yapmate-gray-light mt-4">
             7-day free trial included with Pro & Trade plans
           </p>
@@ -334,7 +353,7 @@ export default function PricingPage() {
                 disabled={isPurchasing || isLoadingOfferings}
                 className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPurchasing ? 'Processing...' : isIAPAvailable() ? 'Start Free Trial' : 'Upgrade'}
+                {isPurchasing ? 'Processing...' : isWeb() ? 'Join Waitlist' : 'Start Free Trial'}
               </button>
             ) : (
               <Link
@@ -389,7 +408,7 @@ export default function PricingPage() {
                 disabled={isPurchasing || isLoadingOfferings}
                 className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPurchasing ? 'Processing...' : isIAPAvailable() ? 'Start Free Trial' : 'Upgrade'}
+                {isPurchasing ? 'Processing...' : isWeb() ? 'Join Waitlist' : 'Start Free Trial'}
               </button>
             ) : (
               <Link
