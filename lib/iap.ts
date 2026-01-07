@@ -508,3 +508,46 @@ export function getProductInfo(productId: ProductId): {
       }
   }
 }
+
+/**
+ * Link anonymous RevenueCat user to authenticated user
+ * Call this after user logs in to merge purchases
+ *
+ * @param appUserID - Supabase user ID to link to
+ */
+export async function linkUser(appUserID: string): Promise<{ success: boolean; error?: string }> {
+  if (!isIAPAvailable()) {
+    return {
+      success: false,
+      error: 'IAP not available on web',
+    }
+  }
+
+  if (!isConfigured) {
+    return {
+      success: false,
+      error: 'IAP not configured',
+    }
+  }
+
+  try {
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
+
+    console.log('[IAP] Linking user to RevenueCat:', appUserID)
+
+    // Use logIn to merge anonymous user with authenticated user
+    const result = await Purchases.logIn({ appUserID })
+
+    console.log('[IAP] User linked successfully')
+
+    return {
+      success: true,
+    }
+  } catch (error: any) {
+    console.error('[IAP] Failed to link user:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to link user',
+    }
+  }
+}

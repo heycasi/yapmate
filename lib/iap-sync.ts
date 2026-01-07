@@ -36,9 +36,12 @@ export async function syncSubscription(
     } = await supabase.auth.getSession()
 
     if (!session) {
+      // [GUIDELINE 5.1.1] Allow purchases without session
+      // Subscription is active in RevenueCat, will sync when user logs in
+      console.log('[IAP Sync] No session - subscription active locally via RevenueCat')
       return {
-        success: false,
-        error: 'No active session',
+        success: true,
+        plan: 'free', // Will be updated when user logs in
       }
     }
 

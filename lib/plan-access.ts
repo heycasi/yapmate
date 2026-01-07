@@ -1,9 +1,14 @@
 /**
  * Plan-based access control
  * Centralized logic for checking feature access based on user pricing plan
+ *
+ * Implements entitlement-first access (Guideline 5.1.1):
+ * 1. Check RevenueCat entitlements first (works without login)
+ * 2. Fall back to Supabase user_preferences.plan (requires login)
  */
 
 import { createBrowserClient } from '@/lib/supabase'
+import { getCustomerInfo, getActivePlan, isIAPAvailable } from '@/lib/iap'
 
 // ============================================================================
 // Types and Constants
@@ -50,23 +55,53 @@ const PLAN_LIMITS: Record<PricingPlan, PlanLimits> = {
 
 /**
  * Get the user's current pricing plan
- * Returns 'free' if no plan is set (safe default)
+ * Entitlement-first: Checks RevenueCat first, then Supabase
+ *
+ * @param userId - Optional Supabase user ID (not required for logged-out users)
+ * @returns Current pricing plan
  */
-export async function getUserPlan(userId: string): Promise<PricingPlan> {
-  const supabase = createBrowserClient()
+export async function getUserPlan(userId?: string): Promise<PricingPlan> {
+  // Step 1: Check RevenueCat entitlements (works without login)
+  if (isIAPAvailable()) {
+    try {
+      const customerInfo = await getCustomerInfo()
 
-  const { data, error } = await (supabase
-    .from('user_preferences') as any)
-    .select('plan')
-    .eq('user_id', userId)
-    .single()
+      if (customerInfo) {
+        const plan = getActivePlan(customerInfo)
+        console.log('[PlanAccess] Plan from RevenueCat:', plan)
 
-  if (error || !data) {
-    console.warn('Failed to fetch user plan, defaulting to free:', error)
-    return 'free'
+        if (plan !== 'free') {
+          return plan
+        }
+      }
+    } catch (error) {
+      console.warn('[PlanAccess] Failed to check RevenueCat:', error)
+    }
   }
 
-  return data.plan as PricingPlan
+  // Step 2: Fall back to Supabase (requires user ID)
+  if (userId) {
+    try {
+      const supabase = createBrowserClient()
+
+      const { data, error } = await (supabase
+        .from('user_preferences') as any)
+        .select('plan')
+        .eq('user_id', userId)
+        .single()
+
+      if (!error && data) {
+        console.log('[PlanAccess] Plan from Supabase:', data.plan)
+        return data.plan as PricingPlan
+      }
+    } catch (error) {
+      console.warn('[PlanAccess] Failed to fetch user plan from Supabase:', error)
+    }
+  }
+
+  // Default: Free plan
+  console.log('[PlanAccess] No active plan found, defaulting to free')
+  return 'free'
 }
 
 /**
@@ -98,9 +133,11 @@ export async function getUserInvoiceCount(userId: string): Promise<number> {
 /**
  * Check if a user can create a new invoice
  * Returns { canCreate: boolean, reason?: string }
+ *
+ * @param userId - Optional Supabase user ID (logged-in users only have invoice counts)
  */
 export async function canCreateInvoice(
-  userId: string
+  userId?: string
 ): Promise<{ canCreate: boolean; reason?: string; currentCount?: number; limit?: number }> {
   const plan = await getUserPlan(userId)
   const limits = getPlanLimits(plan)
@@ -110,7 +147,13 @@ export async function canCreateInvoice(
     return { canCreate: true }
   }
 
-  // Free plan - check current count
+  // Free plan - check current count (only if logged in)
+  if (!userId) {
+    // Not logged in + free plan: can create, but won't persist to DB
+    console.warn('[PlanAccess] Not logged in - invoice will not be saved to cloud')
+    return { canCreate: true, limit: limits.maxInvoices }
+  }
+
   const currentCount = await getUserInvoiceCount(userId)
 
   if (currentCount >= limits.maxInvoices) {
@@ -127,8 +170,9 @@ export async function canCreateInvoice(
 
 /**
  * Check if a user can use VAT features
+ * Works for both logged-in and logged-out users (via RevenueCat)
  */
-export async function canUseVAT(userId: string): Promise<boolean> {
+export async function canUseVAT(userId?: string): Promise<boolean> {
   const plan = await getUserPlan(userId)
   const limits = getPlanLimits(plan)
   return limits.canUseVAT
@@ -136,8 +180,9 @@ export async function canUseVAT(userId: string): Promise<boolean> {
 
 /**
  * Check if a user can use CIS features
+ * Works for both logged-in and logged-out users (via RevenueCat)
  */
-export async function canUseCIS(userId: string): Promise<boolean> {
+export async function canUseCIS(userId?: string): Promise<boolean> {
   const plan = await getUserPlan(userId)
   const limits = getPlanLimits(plan)
   return limits.canUseCIS

@@ -91,12 +91,9 @@ export default function PricingPage() {
       return
     }
 
-    // iOS: check if logged in first
-    if (!isLoggedIn) {
-      setPurchaseError('Please log in to purchase a subscription')
-      setTimeout(() => setPurchaseError(null), 5000)
-      return
-    }
+    // [GUIDELINE 5.1.1] Allow purchases without login
+    // User will be prompted to create account after purchase
+    console.log('[Pricing] Starting purchase flow (logged in:', isLoggedIn, ')')
 
     setIsPurchasing(true)
 
@@ -116,10 +113,11 @@ export default function PricingPage() {
         return
       }
 
-      console.log('[Pricing] Purchase successful, syncing to Supabase...')
+      console.log('[Pricing] Purchase successful')
 
-      // Sync to Supabase
-      if (result.customerInfo) {
+      // If logged in, sync to Supabase
+      if (isLoggedIn && result.customerInfo) {
+        console.log('[Pricing] Syncing to Supabase...')
         const syncResult = await syncSubscription(result.customerInfo)
 
         if (syncResult.success) {
@@ -132,9 +130,14 @@ export default function PricingPage() {
             setPurchaseSuccess(false)
           }, 3000)
         } else {
+          console.warn('[Pricing] Sync failed but purchase succeeded')
           setPurchaseError('Purchase succeeded but sync failed. Please contact support.')
           setTimeout(() => setPurchaseError(null), 5000)
         }
+      } else {
+        // Not logged in - redirect to finish setup page
+        console.log('[Pricing] Purchase successful, redirecting to /finish-setup...')
+        window.location.href = '/finish-setup?plan=' + plan
       }
     } catch (error: any) {
       console.error('[Pricing] Purchase error:', error)
@@ -347,7 +350,7 @@ export default function PricingPage() {
               <div className="w-full px-8 py-4 bg-yapmate-gray-dark border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
                 Current Plan
               </div>
-            ) : isLoggedIn ? (
+            ) : (
               <button
                 onClick={() => handleUpgrade('pro')}
                 disabled={isPurchasing || isLoadingOfferings}
@@ -355,13 +358,6 @@ export default function PricingPage() {
               >
                 {isPurchasing ? 'Processing...' : isWeb() ? 'Join Waitlist' : 'Start Free Trial'}
               </button>
-            ) : (
-              <Link
-                href="/signup"
-                className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm"
-              >
-                Sign Up to Upgrade
-              </Link>
             )}
           </div>
 
@@ -402,7 +398,7 @@ export default function PricingPage() {
               <div className="w-full px-8 py-4 border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
                 Current Plan
               </div>
-            ) : isLoggedIn ? (
+            ) : (
               <button
                 onClick={() => handleUpgrade('trade')}
                 disabled={isPurchasing || isLoadingOfferings}
@@ -410,13 +406,6 @@ export default function PricingPage() {
               >
                 {isPurchasing ? 'Processing...' : isWeb() ? 'Join Waitlist' : 'Start Free Trial'}
               </button>
-            ) : (
-              <Link
-                href="/signup"
-                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm"
-              >
-                Sign Up to Upgrade
-              </Link>
             )}
           </div>
         </div>
