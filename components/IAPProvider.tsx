@@ -26,11 +26,20 @@ export function IAPProvider({ children }: { children: React.ReactNode }) {
       try {
         const supabase = createClientComponentClient()
 
+        // Debug: Log platform detection
+        const platform = (window as any).Capacitor?.getPlatform?.() || 'web'
+        console.log('[IAP] Platform detected:', platform)
+        console.log('[IAP] isIAPAvailable:', isIAPAvailable())
+
         // Get RevenueCat API key from env
         const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_IOS_API_KEY
+        const hasApiKey = !!apiKey
+
+        console.log('[IAP] API key present:', hasApiKey)
 
         if (!apiKey) {
           console.error('[IAP] NEXT_PUBLIC_REVENUECAT_IOS_API_KEY not set')
+          console.error('[IAP] Cannot configure RevenueCat without API key')
           return
         }
 
@@ -45,7 +54,30 @@ export function IAPProvider({ children }: { children: React.ReactNode }) {
         await configureIAP(apiKey)
 
         hasConfigured.current = true
-        console.log('[IAP] Initialized successfully (anonymous mode)')
+        console.log('[IAP] ✓ RevenueCat configured successfully (anonymous mode)')
+
+        // Debug: Fetch and log offerings
+        try {
+          const { Purchases } = await import('@revenuecat/purchases-capacitor')
+          const offerings = await Purchases.getOfferings()
+
+          console.log('[IAP] Offerings fetched:')
+          console.log('  - Current offering ID:', offerings?.current?.identifier || 'NONE')
+
+          if (offerings?.current?.availablePackages) {
+            const packages = offerings.current.availablePackages
+            console.log('  - Available packages:', packages.length)
+            packages.forEach((pkg: any) => {
+              console.log('    • Package:', pkg.identifier)
+              console.log('      Product ID:', pkg.product?.identifier)
+              console.log('      Price:', pkg.product?.priceString)
+            })
+          } else {
+            console.warn('[IAP] ⚠️ No packages available in current offering')
+          }
+        } catch (error) {
+          console.error('[IAP] Failed to fetch offerings for debug:', error)
+        }
 
         // If user is already logged in, link their account
         if (session?.user?.id) {

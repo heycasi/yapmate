@@ -53,7 +53,21 @@ export default function PricingPage() {
     try {
       const loadedOfferings = await getOfferings()
       setOfferings(loadedOfferings)
+
       console.log('[Pricing] Loaded offerings:', loadedOfferings.length)
+
+      // Debug: Log all offerings and their packages
+      loadedOfferings.forEach((offering, idx) => {
+        console.log(`[Pricing] Offering ${idx + 1}:`, offering.identifier)
+        console.log(`  - Packages: ${offering.availablePackages.length}`)
+        offering.availablePackages.forEach((pkg) => {
+          console.log(`    • ${pkg.identifier} → ${pkg.product.identifier}`)
+        })
+      })
+
+      if (loadedOfferings.length === 0) {
+        console.warn('[Pricing] ⚠️ No offerings available from RevenueCat')
+      }
     } catch (error) {
       console.error('[Pricing] Failed to load offerings:', error)
     } finally {
@@ -94,6 +108,19 @@ export default function PricingPage() {
     // [GUIDELINE 5.1.1] Allow purchases without login
     // User will be prompted to create account after purchase
     console.log('[Pricing] Starting purchase flow (logged in:', isLoggedIn, ')')
+    console.log('[Pricing] Current offerings state:', offerings.length, 'offerings')
+
+    // Debug: Log offerings and packages before purchase
+    if (offerings.length > 0) {
+      console.log('[Pricing] Available packages:')
+      offerings.forEach((offering) => {
+        offering.availablePackages.forEach((pkg) => {
+          console.log(`  - ${pkg.identifier}: ${pkg.product.identifier}`)
+        })
+      })
+    } else {
+      console.warn('[Pricing] ⚠️ No offerings available - purchase may fail')
+    }
 
     setIsPurchasing(true)
 
@@ -101,7 +128,9 @@ export default function PricingPage() {
       // Purchase via RevenueCat
       const productId = plan === 'pro' ? IAP_PRODUCTS.PRO_MONTHLY : IAP_PRODUCTS.TRADE_MONTHLY
 
-      console.log('[Pricing] Starting purchase:', productId)
+      console.log('[Pricing] Attempting purchase:', productId)
+      console.log('[Pricing] Expected product:', plan === 'pro' ? 'Pro Monthly' : 'Trade Monthly')
+
       const result = await purchaseProduct(productId)
 
       if (!result.success) {

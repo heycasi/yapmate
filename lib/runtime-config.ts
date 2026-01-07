@@ -69,7 +69,19 @@ export function isBillingConfigured(): boolean {
   if (isWeb()) return true
 
   // iOS needs RevenueCat key
-  if (isIOS()) return hasRevenueCatKey()
+  if (isIOS()) {
+    const hasKey = hasRevenueCatKey()
+
+    // Debug logging (only in development)
+    if (!hasKey && typeof window !== 'undefined') {
+      console.error('[BillingConfig] RevenueCat key missing!')
+      console.error('[BillingConfig] Platform: iOS')
+      console.error('[BillingConfig] Key present:', hasKey)
+      console.error('[BillingConfig] Check .env.local for NEXT_PUBLIC_REVENUECAT_IOS_API_KEY')
+    }
+
+    return hasKey
+  }
 
   return false
 }

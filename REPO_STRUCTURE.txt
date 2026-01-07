@@ -1,0 +1,278 @@
+# YAPMATE REPOSITORY STRUCTURE
+
+## ROOT STRUCTURE
+yapmate/
+├── app/                      # Next.js 14 App Router
+├── components/               # React components
+├── lib/                      # Core utilities & clients
+├── public/                   # Static assets
+├── supabase/                 # Backend (migrations, functions)
+├── ios/                      # iOS Capacitor app
+├── scripts/                  # Build/deploy scripts
+├── docs/                     # Documentation
+└── deploy/                   # Deployment configs
+
+
+## LIB DIRECTORY (Core Logic)
+customer-helpers.ts
+iap-sync.ts
+iap.ts
+invoice.ts
+openai_client.ts
+openai.ts
+payments.ts
+plan-access.ts
+runtime-config.ts
+supabase.ts
+tax.ts
+use-subscription.ts
+validation.ts
+
+## COMPONENTS DIRECTORY
+IAPProvider.tsx
+InvoicePDF.tsx
+Navigation.tsx
+
+## BILLING & SUBSCRIPTION FILES
+/Users/conzo/dev/yapmate/ios/App/App/public/pricing.html
+/Users/conzo/dev/yapmate/ios/App/App/public/pricing.txt
+/Users/conzo/dev/yapmate/lib/iap-sync.ts
+/Users/conzo/dev/yapmate/lib/iap.ts
+/Users/conzo/dev/yapmate/lib/payments.ts
+/Users/conzo/dev/yapmate/lib/plan-access.ts
+/Users/conzo/dev/yapmate/lib/use-subscription.ts
+/Users/conzo/dev/yapmate/supabase/migrations/005_add_user_plans.sql
+/Users/conzo/dev/yapmate/supabase/migrations/007_subscriptions.sql
+/Users/conzo/dev/yapmate/supabase/migrations/008_add_revenuecat_provider.sql
+
+## SUPABASE STRUCTURE
+### Migrations
+_archive
+001_initial_schema.sql
+002_waitlist_signups.sql
+003_api_usage_tracking.sql
+004_fix_rls_vulnerabilities.sql
+005_add_user_plans.sql
+006_usage_events.sql
+007_subscriptions.sql
+008_add_revenuecat_provider.sql
+20251230160000_add_bank_details_to_user_preferences.sql
+20251230160100_fix_cis_vat_nullable.sql
+
+### Edge Functions
+clean-transcript
+extract-invoice
+sync-revenuecat
+transcribe
+verify-iap
+
+## iOS APP STRUCTURE
+ios/App/
+├── App.xcodeproj           # Xcode project
+├── App.xcworkspace         # CocoaPods workspace
+├── App/
+│   ├── Assets.xcassets/
+│   │   └── AppIcon.appiconset/  # App icons
+│   ├── public/             # Next.js static build (synced from /out)
+│   ├── Info.plist          # App configuration
+│   └── config.xml          # Capacitor config
+├── Podfile                 # CocoaPods dependencies
+└── Pods/                   # Installed pods
+    ├── Capacitor
+    ├── CapacitorFilesystem
+    ├── CapacitorShare
+    ├── RevenueCat          # ✓ iOS IAP SDK
+    ├── PurchasesHybridCommon
+    └── RevenuecatPurchasesCapacitor  # ✓ Capacitor plugin
+
+## ROUTING & NAVIGATION
+
+### Web Routes (Next.js App Router)
+/                          → Landing page
+/login                     → Authentication
+/signup                    → User registration
+/waitlist                  → Waitlist signup (web-only)
+/dashboard                 → Main dashboard
+/record                    → Voice recording interface
+/invoice                   → Invoice generation/view
+/customers                 → Customer list
+/customers/detail          → Customer detail view
+/pricing                   → Subscription plans (iOS: IAP, Web: Waitlist)
+/settings                  → User settings & subscription management
+/privacy                   → Privacy policy (App Store requirement)
+/debug                     → Diagnostics (?debug=1)
+
+### iOS Navigation
+- Capacitor WebView wrapping Next.js static export
+- Native iOS tabs/navigation handled via Capacitor router
+- All web routes accessible in iOS app
+
+## SCREENS BREAKDOWN
+
+### Authentication
+- /login                   # Login form
+- /signup                  # Registration form
+
+### Core App
+- /dashboard               # Overview, recent invoices
+- /record                  # Voice-to-invoice recording
+- /invoice                 # Invoice generation & PDF export
+- /customers               # Customer management list
+- /customers/detail        # Individual customer detail
+
+### Business/Billing
+- /pricing                 # Plans (iOS: RevenueCat IAP, Web: Waitlist)
+- /settings                # User profile, subscription, restore purchases (iOS only)
+- /waitlist                # Waitlist form (web-only)
+
+### Utility
+- /privacy                 # Privacy policy (required for App Store)
+- /debug                   # Internal diagnostics (env config, user plan, IAP status)
+
+## BILLING ARCHITECTURE
+
+### iOS (Apple In-App Purchases via RevenueCat)
+- Product IDs:
+  - com.yapmate.pro.monthly     (Pro plan)
+  - com.yapmate.trade.monthly   (Trade plan)
+- Entitlements: 'pro', 'trade'
+- 7-day free trial on both plans
+- Flow:
+  1. User taps "Start Free Trial" on /pricing
+  2. RevenueCat SDK (lib/iap.ts) handles Apple IAP
+  3. On purchase, sync-revenuecat edge function updates Supabase
+  4. Plan synced to user_preferences.plan and subscriptions table
+
+### Web (Waitlist Only - No Purchases)
+- /pricing shows "Join Waitlist" button
+- No purchase flow implemented
+- lib/runtime-config.ts: isWeb() checks prevent purchase attempts
+
+### Shared Logic
+- lib/plan-access.ts       # getUserPlan(), checkFeatureAccess()
+- lib/iap.ts               # RevenueCat SDK wrapper (iOS only)
+- lib/iap-sync.ts          # Sync IAP status to Supabase
+- lib/use-subscription.ts  # React hook for subscription state
+- components/IAPProvider.tsx # React context for IAP state
+
+### Database Tables
+- user_preferences         # User plan ('free', 'pro', 'trade')
+- subscriptions            # Subscription records (provider, status, period)
+- Providers: 'stripe' (legacy/web), 'apple' (legacy), 'revenuecat' (current)
+
+### Feature Flags
+- NEXT_PUBLIC_BILLING_DISABLED # Master kill switch for billing
+- lib/runtime-config.ts:
+  - isBillingEnabled()     # Checks if billing is active
+  - isIOS(), isWeb()       # Platform detection
+
+
+## DETAILED FILE TREE
+
+yapmate/
+├── app/
+│   ├── customers/
+│   │   ├── detail/
+│   │   │   └── page.tsx
+│   │   └── page.tsx
+│   ├── dashboard/
+│   │   └── page.tsx
+│   ├── debug/
+│   │   └── page.tsx
+│   ├── invoice/
+│   │   └── page.tsx
+│   ├── login/
+│   │   └── page.tsx
+│   ├── pricing/
+│   │   └── page.tsx
+│   ├── privacy/
+│   │   └── page.tsx
+│   ├── record/
+│   │   └── page.tsx
+│   ├── settings/
+│   │   └── page.tsx
+│   ├── signup/
+│   │   └── page.tsx
+│   ├── waitlist/
+│   │   └── page.tsx
+│   ├── layout.tsx          # Root layout with IAPProvider
+│   ├── page.tsx            # Landing page
+│   └── globals.css
+│
+├── components/
+│   ├── IAPProvider.tsx     # RevenueCat context provider
+│   ├── InvoicePDF.tsx      # PDF generation component
+│   └── Navigation.tsx      # App navigation
+│
+├── lib/
+│   ├── customer-helpers.ts # Customer CRUD operations
+│   ├── iap-sync.ts         # Sync IAP → Supabase
+│   ├── iap.ts              # RevenueCat SDK wrapper (510 lines)
+│   ├── invoice.ts          # Invoice generation logic
+│   ├── openai.ts           # OpenAI client (legacy)
+│   ├── openai_client.ts    # OpenAI client (current)
+│   ├── payments.ts         # Stripe integration (legacy/web)
+│   ├── plan-access.ts      # getUserPlan(), checkFeatureAccess()
+│   ├── runtime-config.ts   # Platform detection & env vars
+│   ├── supabase.ts         # Supabase client
+│   ├── tax.ts              # Tax calculations
+│   ├── use-subscription.ts # React hook for subscription state
+│   └── validation.ts       # Input validation
+│
+├── supabase/
+│   ├── functions/
+│   │   ├── clean-transcript/
+│   │   ├── extract-invoice/
+│   │   ├── sync-revenuecat/     # RevenueCat webhook handler
+│   │   ├── transcribe/
+│   │   └── verify-iap/          # Legacy (returns 410 Gone)
+│   └── migrations/
+│       ├── 001_initial_schema.sql
+│       ├── 002_waitlist_signups.sql
+│       ├── 003_api_usage_tracking.sql
+│       ├── 004_fix_rls_vulnerabilities.sql
+│       ├── 005_add_user_plans.sql
+│       ├── 006_usage_events.sql
+│       ├── 007_subscriptions.sql
+│       └── 008_add_revenuecat_provider.sql
+│
+├── ios/App/
+│   ├── App.xcodeproj
+│   ├── App.xcworkspace
+│   ├── App/
+│   │   ├── Assets.xcassets/
+│   │   │   └── AppIcon.appiconset/
+│   │   ├── public/           # Static Next.js build
+│   │   ├── Info.plist
+│   │   └── config.xml
+│   ├── Podfile
+│   └── Pods/
+│       ├── Capacitor
+│       ├── RevenueCat
+│       └── RevenuecatPurchasesCapacitor
+│
+├── public/
+│   ├── yapmatetransparetnew.png
+│   └── ...
+│
+├── next.config.js          # Next.js config (static export)
+├── capacitor.config.ts     # Capacitor iOS config
+├── package.json
+├── tsconfig.json
+└── vercel.json
+
+## BUILD INFORMATION
+
+Current Build: 10
+Marketing Version: 1.0
+Bundle ID: com.yapmate.app
+Team ID: ATRB8XJ555
+Development Team: Apple Development
+
+## DEPLOYMENT
+
+Web: https://yapmate.co.uk (Vercel)
+Backend: Supabase (nidijdprgoauwkmuioer)
+iOS: TestFlight / App Store Connect
+RevenueCat: API key required (NEXT_PUBLIC_REVENUECAT_IOS_API_KEY)
+

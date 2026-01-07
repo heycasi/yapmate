@@ -1,0 +1,54 @@
+flowchart TD
+    Start[Download YapMate from App Store] --> Signup[Create Account]
+    Signup --> Free[FREE PLAN ACTIVE<br/>3 invoices total]
+
+    Free --> DecisionUpgrade{Choose Plan}
+
+    DecisionUpgrade -->|Tap Pro| ProTrial[7-DAY PRO TRIAL<br/>£15/month]
+    DecisionUpgrade -->|Tap Trade| TradeTrial[7-DAY TRADE TRIAL<br/>£25/month]
+    DecisionUpgrade -->|Stay Free| Free
+
+    ProTrial --> ProTrialDecision{Day 7 Ends}
+    TradeTrial --> TradeTrialDecision{Day 7 Ends}
+
+    ProTrialDecision -->|Cancel Before Day 7| Free
+    ProTrialDecision -->|Don't Cancel| ProActive[PRO SUBSCRIBER<br/>£15/month auto-renew]
+
+    TradeTrialDecision -->|Cancel Before Day 7| Free
+    TradeTrialDecision -->|Don't Cancel| TradeActive[TRADE SUBSCRIBER<br/>£25/month auto-renew]
+
+    ProActive --> ProDecision{Next Steps}
+    TradeActive --> TradeDecision{Next Steps}
+
+    ProDecision -->|Stay Pro| ProActive
+    ProDecision -->|Upgrade to Trade| TradeActive
+    ProDecision -->|Cancel| ProCancelled[Access until period ends]
+
+    TradeDecision -->|Stay Trade| TradeActive
+    TradeDecision -->|Cancel| TradeCancelled[Access until period ends]
+
+    ProCancelled --> Free
+    TradeCancelled --> Free
+
+    subgraph trial ["Free Trial Period (7 Days)"]
+        ProTrial
+        TradeTrial
+    end
+
+    subgraph active ["Active Subscriptions"]
+        ProActive
+        TradeActive
+    end
+
+    subgraph free_tier ["Free Tier"]
+        Free
+    end
+
+    style Start fill:#F97316,stroke:#F97316,color:#0B0B0B
+    style Free fill:#2A2A2A,stroke:#8A8A8A,color:#F2F2F2
+    style ProTrial fill:#3B82F6,stroke:#3B82F6,color:#F2F2F2
+    style TradeTrial fill:#8B5CF6,stroke:#8B5CF6,color:#F2F2F2
+    style ProActive fill:#3B82F6,stroke:#3B82F6,color:#F2F2F2
+    style TradeActive fill:#8B5CF6,stroke:#8B5CF6,color:#F2F2F2
+    style ProCancelled fill:#DC2626,stroke:#DC2626,color:#F2F2F2
+    style TradeCancelled fill:#DC2626,stroke:#DC2626,color:#F2F2F2

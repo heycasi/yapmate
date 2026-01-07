@@ -1,0 +1,13 @@
+{
+	"appId": "com.yapmate.app",
+	"appName": "YapMate",
+	"webDir": "out",
+	"ios": {
+		"contentInset": "always"
+	},
+	"packageClassList": [
+		"FilesystemPlugin",
+		"SharePlugin",
+		"PurchasesPlugin"
+	]
+}

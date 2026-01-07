@@ -1,0 +1,96 @@
+{
+  "pricing_banner": "🎁 Try Pro or Trade free for 7 days. No charge until Day 8.",
+
+  "trial_start_title": "✅ Your 7-day free trial has started!",
+  "trial_start_body": "You now have full access to {{plan}} features. Apple will remind you 24 hours before your trial ends. Cancel anytime in iPhone Settings.",
+
+  "trial_reminder_title": "⏰ Your trial ends in 24 hours",
+  "trial_reminder_body": "Your {{plan}} trial ends tomorrow. If you don't cancel, you'll be charged {{price}} and your subscription will start automatically.",
+
+  "trial_ended_subscribed_title": "🎉 Welcome to {{plan}}!",
+  "trial_ended_subscribed_body": "Your trial has ended and your subscription is now active. You've been charged {{price}}. Your next billing date is {{next_billing_date}}.",
+
+  "trial_cancelled_title": "Trial cancelled",
+  "trial_cancelled_body": "You've cancelled your {{plan}} trial. You'll keep access until {{trial_end_date}}, then drop back to the Free plan.",
+
+  "subscription_active_badge": "{{plan}} Active",
+  "subscription_active_description": "Next billing: {{next_billing_date}} ({{price}})",
+
+  "subscription_cancelled_badge": "Cancelled",
+  "subscription_cancelled_description": "Access until {{period_end_date}}, then Free plan",
+
+  "upgrade_prompt_title": "Upgrade to {{plan}}?",
+  "upgrade_prompt_body": "You'll be charged a pro-rated amount for the remaining days in your current billing cycle. Your next full billing cycle will be {{price}}/month.",
+
+  "downgrade_prompt_title": "Downgrade to Free?",
+  "downgrade_prompt_body": "Cancel your subscription in iPhone Settings. You'll keep {{plan}} access until {{period_end_date}}, then drop to Free.",
+
+  "restore_purchases_success": "✅ Purchases restored! Your {{plan}} subscription is active.",
+  "restore_purchases_no_subscription": "No active subscription found. Start a 7-day free trial to unlock Pro or Trade features.",
+
+  "free_plan_limit_reached_title": "Free plan limit reached",
+  "free_plan_limit_reached_body": "You've created 3 invoices on the Free plan. Upgrade to Pro or Trade to create unlimited invoices.",
+
+  "feature_locked_title": "{{feature}} requires {{plan}}",
+  "feature_locked_body": "Upgrade to {{plan}} to unlock this feature. Start a 7-day free trial to try it risk-free.",
+
+  "manage_subscription_button": "Manage in iPhone Settings",
+  "manage_subscription_description": "Your subscription is managed through your Apple ID. Tap to open iPhone Settings.",
+
+  "cancel_instructions_title": "How to cancel",
+  "cancel_instructions_body": "1. Open iPhone Settings\n2. Tap your Apple ID at the top\n3. Tap Subscriptions\n4. Find YapMate AI\n5. Tap Cancel Subscription",
+
+  "refund_instructions_title": "Request a refund",
+  "refund_instructions_body": "Apple handles all refunds. Visit reportaproblem.apple.com, sign in with your Apple ID, and request a refund for your YapMate subscription.",
+
+  "billing_issue_title": "⚠️ Billing issue",
+  "billing_issue_body": "There was a problem with your payment. Update your payment method in iPhone Settings to keep your {{plan}} subscription active.",
+
+  "grace_period_title": "⚠️ Payment failed",
+  "grace_period_body": "Your payment didn't go through, but you still have access to {{plan}} for now. Update your payment method in iPhone Settings to avoid losing access.",
+
+  "plan_comparison": {
+    "free": {
+      "name": "Free",
+      "price": "£0",
+      "tagline": "Try YapMate",
+      "features": [
+        "3 invoices total",
+        "Voice-to-invoice",
+        "PDF downloads"
+      ]
+    },
+    "pro": {
+      "name": "Pro",
+      "price": "£15/month",
+      "tagline": "For sole traders",
+      "features": [
+        "Unlimited invoices",
+        "VAT support",
+        "Reverse Charge",
+        "Customer list",
+        "Clean PDFs",
+        "7-day free trial"
+      ]
+    },
+    "trade": {
+      "name": "Trade",
+      "price": "£25/month",
+      "tagline": "For CIS contractors",
+      "features": [
+        "Everything in Pro",
+        "CIS deductions",
+        "Bank details",
+        "Priority support",
+        "7-day free trial"
+      ]
+    }
+  },
+
+  "error_messages": {
+    "purchase_failed": "Purchase failed. Please try again or contact Apple Support if the problem persists.",
+    "restore_failed": "Could not restore purchases. Check your internet connection and try again.",
+    "network_error": "Network error. Check your internet connection and try again.",
+    "unknown_error": "Something went wrong. Please try again later."
+  }
+}
