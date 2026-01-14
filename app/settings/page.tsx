@@ -7,7 +7,7 @@ import Navigation from '@/components/Navigation'
 import { getUserPlan, canUseVAT, canUseCIS, type PricingPlan } from '@/lib/plan-access'
 import { isIAPAvailable, restorePurchases, getCustomerInfo } from '@/lib/iap'
 import { syncSubscription } from '@/lib/iap-sync'
-import { isIOS, isWeb, isBillingEnabled } from '@/lib/runtime-config'
+import { isIOS, isWeb, isBillingEnabled, isTradeEnabled } from '@/lib/runtime-config'
 
 interface UserPreferences {
   default_labour_rate: number
@@ -27,6 +27,8 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const [labourRate, setLabourRate] = useState('45.00')
   const [vatEnabled, setVatEnabled] = useState(false)
@@ -268,6 +270,47 @@ export default function SettingsPage() {
     router.push('/login')
   }
 
+  const handleDeleteAccount = async () => {
+    if (!user) return
+
+    setIsDeleting(true)
+    setError(null)
+    setShowDeleteConfirm(false)
+
+    try {
+      // Call delete-account edge function
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('No active session')
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        }
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete account')
+      }
+
+      // Account deleted successfully - sign out and redirect
+      await supabase.auth.signOut()
+      router.push('/login?deleted=true')
+    } catch (err: any) {
+      console.error('Delete account error:', err)
+      setError(err.message || 'Failed to delete account. Please try again or contact support.')
+      setIsDeleting(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <>
@@ -281,6 +324,36 @@ export default function SettingsPage() {
 
   return (
     <>
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-yapmate-black border-2 border-yapmate-status-red max-w-md w-full p-6">
+            <h2 className="text-yapmate-white text-lg font-mono font-bold uppercase mb-4">
+              Confirm Account Deletion
+            </h2>
+            <p className="text-yapmate-slate-300 text-sm font-mono mb-6">
+              Are you absolutely sure? This will permanently delete your account and all data. This action cannot be undone.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="w-full h-12 border-2 border-yapmate-status-red bg-yapmate-status-red text-yapmate-black font-mono font-bold uppercase tracking-wide transition-colors duration-snap active:bg-transparent active:text-yapmate-status-red disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="w-full h-12 border-2 border-yapmate-slate-700 text-yapmate-white font-mono font-bold uppercase tracking-wide bg-transparent transition-colors duration-snap active:bg-yapmate-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="min-h-screen bg-yapmate-black">
         {/* Header */}
         <div className="border-b border-yapmate-slate-700 px-4 py-4">
@@ -346,7 +419,8 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          {/* Default CIS */}
+          {/* Default CIS - Only shown when Trade tier enabled */}
+          {isTradeEnabled() && (
           <div className="border-b border-yapmate-slate-700 pb-6">
             <label className={`flex items-center justify-between ${canAccessCIS ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
               <span className="text-yapmate-white text-xs font-mono uppercase tracking-wide">
@@ -370,6 +444,7 @@ export default function SettingsPage() {
                 : 'Trade plan required'}
             </p>
           </div>
+          )}
 
           {/* Payment Details */}
           <div className="border-b border-yapmate-slate-700 pb-6">
@@ -457,7 +532,7 @@ export default function SettingsPage() {
                     Current Plan
                   </span>
                   <span className="text-sm font-mono font-bold text-yapmate-white uppercase">
-                    {userPlan}
+                    {userPlan === 'trade' && !isTradeEnabled() ? 'Pro' : userPlan}
                   </span>
                 </div>
 
@@ -514,11 +589,37 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Account Deletion */}
+          <div className="border-b border-yapmate-slate-700 pb-6">
+            <h2 className="text-yapmate-white text-sm font-mono uppercase tracking-wide mb-4">
+              Delete Account
+            </h2>
+            <p className="text-xs text-yapmate-slate-400 font-mono mb-4">
+              Permanently delete your account and all associated data. This action cannot be undone.
+            </p>
+            <p className="text-xs text-yapmate-slate-400 font-mono mb-4">
+              This will delete:
+            </p>
+            <ul className="text-xs text-yapmate-slate-400 font-mono mb-4 ml-4 space-y-1">
+              <li>• All invoices and customer records</li>
+              <li>• Your subscription and payment history</li>
+              <li>• All preferences and settings</li>
+              <li>• Your account permanently</li>
+            </ul>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={isDeleting}
+              className="w-full h-12 border-2 border-yapmate-status-red text-yapmate-status-red font-mono font-bold uppercase tracking-wide bg-transparent transition-colors duration-snap active:bg-yapmate-status-red active:text-yapmate-black disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Account'}
+            </button>
+          </div>
+
           {/* Logout */}
           <div className="pt-4">
             <button
               onClick={handleLogout}
-              className="w-full h-12 border-2 border-yapmate-status-red text-yapmate-status-red font-mono font-bold uppercase tracking-wide bg-transparent transition-colors duration-snap active:bg-yapmate-status-red active:text-yapmate-black"
+              className="w-full h-12 border-2 border-yapmate-slate-700 text-yapmate-slate-300 font-mono font-bold uppercase tracking-wide bg-transparent transition-colors duration-snap active:bg-yapmate-slate-700 active:text-yapmate-white"
             >
               Log Out
             </button>

@@ -16,10 +16,20 @@ import {
   isIOS,
   isWeb,
   isBillingEnabled,
-  getBillingNotConfiguredMessage
+  getBillingNotConfiguredMessage,
+  isTradeEnabled
 } from '@/lib/runtime-config'
 
 export default function PricingPage() {
+  // Feature Flags
+  // App Review Mode: When enabled, Trade plan is always shown as purchasable
+  // This allows Apple App Review to test the purchase flow even if Trade IAP is pending approval
+  const isAppReviewMode = process.env.NEXT_PUBLIC_APP_REVIEW_MODE === 'true'
+
+  // Trade Tier: Disabled for v1.0 App Store submission (ships with Free + Pro only)
+  // Set NEXT_PUBLIC_ENABLE_TRADE_TIER=true to re-enable
+  const tradeEnabled = isTradeEnabled()
+
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [currentPlan, setCurrentPlan] = useState<PricingPlan | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -29,12 +39,14 @@ export default function PricingPage() {
   const [offerings, setOfferings] = useState<IAPOffering[]>([])
   const [purchaseError, setPurchaseError] = useState<string | null>(null)
   const [purchaseSuccess, setPurchaseSuccess] = useState(false)
+  const [isTradeAvailable, setIsTradeAvailable] = useState(false)
 
   useEffect(() => {
     checkUserPlan()
     if (isIAPAvailable()) {
       loadOfferings()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const checkUserPlan = async () => {
@@ -55,6 +67,27 @@ export default function PricingPage() {
       setOfferings(loadedOfferings)
 
       console.log('[Pricing] Loaded offerings:', loadedOfferings.length)
+      console.log('[Pricing] App Review Mode:', isAppReviewMode)
+      console.log('[Pricing] Trade Tier Enabled:', tradeEnabled)
+
+      // Check if Trade product is available (only if Trade tier is enabled)
+      // Trade disabled for v1.0 - ships with Free + Pro only
+      if (tradeEnabled) {
+        let tradeFound = false
+        loadedOfferings.forEach((offering) => {
+          offering.availablePackages.forEach((pkg) => {
+            if (pkg.product.identifier === IAP_PRODUCTS.TRADE_MONTHLY) {
+              tradeFound = true
+            }
+          })
+        })
+        setIsTradeAvailable(tradeFound)
+        console.log('[Pricing] Trade plan available:', tradeFound)
+        console.log('[Pricing] Trade plan will show as purchasable:', tradeFound || isAppReviewMode)
+      } else {
+        setIsTradeAvailable(false)
+        console.log('[Pricing] Trade tier disabled via feature flag')
+      }
 
       // Debug: Log all offerings and their packages
       loadedOfferings.forEach((offering, idx) => {
@@ -74,6 +107,11 @@ export default function PricingPage() {
       setIsLoadingOfferings(false)
     }
   }
+
+  // Computed: Trade should be shown as purchasable if:
+  // 1. Trade tier feature flag is enabled, AND
+  // 2. (It's actually available in RevenueCat offerings OR App Review Mode is enabled)
+  const shouldShowTradeAsPurchasable = tradeEnabled && (isAppReviewMode || isTradeAvailable)
 
   const toggleFaq = (index: number) => {
     setOpenFaq(openFaq === index ? null : index)
@@ -110,17 +148,40 @@ export default function PricingPage() {
     console.log('[Pricing] Starting purchase flow (logged in:', isLoggedIn, ')')
     console.log('[Pricing] Current offerings state:', offerings.length, 'offerings')
 
-    // Debug: Log offerings and packages before purchase
-    if (offerings.length > 0) {
-      console.log('[Pricing] Available packages:')
-      offerings.forEach((offering) => {
-        offering.availablePackages.forEach((pkg) => {
-          console.log(`  - ${pkg.identifier}: ${pkg.product.identifier}`)
-        })
-      })
-    } else {
-      console.warn('[Pricing] ⚠️ No offerings available - purchase may fail')
+    // CRITICAL FIX: Wait for offerings to load before allowing purchase
+    if (isLoadingOfferings) {
+      console.warn('[Pricing] ⚠️ Offerings still loading, waiting...')
+      setPurchaseError('Loading subscription options, please wait...')
+      setTimeout(() => setPurchaseError(null), 3000)
+      return
     }
+
+    // CRITICAL FIX: If no offerings loaded, try to reload them
+    // In App Review mode, allow purchase to proceed (will fail gracefully if product not found)
+    if (offerings.length === 0 && !isAppReviewMode) {
+      console.warn('[Pricing] ⚠️ No offerings available, reloading...')
+      setPurchaseError('Loading subscription options, please try again...')
+
+      // Retry loading offerings
+      await loadOfferings()
+
+      setTimeout(() => setPurchaseError(null), 3000)
+      return
+    }
+
+    // App Review Mode: Log that we're proceeding even without offerings
+    if (isAppReviewMode && offerings.length === 0) {
+      console.log('[Pricing] ⚠️ App Review Mode: Proceeding with purchase despite no offerings')
+      console.log('[Pricing] Purchase will be attempted, may fail gracefully if product not found')
+    }
+
+    // Debug: Log offerings and packages before purchase
+    console.log('[Pricing] Available packages:')
+    offerings.forEach((offering) => {
+      offering.availablePackages.forEach((pkg) => {
+        console.log(`  - ${pkg.identifier}: ${pkg.product.identifier} (${pkg.product.priceString})`)
+      })
+    })
 
     setIsPurchasing(true)
 
@@ -136,8 +197,21 @@ export default function PricingPage() {
       if (!result.success) {
         // Don't show error if user cancelled
         if (!result.userCancelled) {
-          setPurchaseError(result.error || 'Purchase failed')
-          setTimeout(() => setPurchaseError(null), 5000)
+          console.error('[Pricing] Purchase failed:', result.error)
+
+          // Provide more helpful error messages
+          let errorMessage = result.error || 'Purchase failed'
+
+          if (errorMessage.includes('not found')) {
+            errorMessage = 'Subscription not available. Please contact support with error: Product not found'
+          } else if (errorMessage.includes('not configured')) {
+            errorMessage = 'Billing system not ready. Please try again or contact support.'
+          }
+
+          setPurchaseError(errorMessage)
+          setTimeout(() => setPurchaseError(null), 8000)
+        } else {
+          console.log('[Pricing] Purchase cancelled by user')
         }
         return
       }
@@ -170,8 +244,16 @@ export default function PricingPage() {
       }
     } catch (error: any) {
       console.error('[Pricing] Purchase error:', error)
-      setPurchaseError(error.message || 'Purchase failed')
-      setTimeout(() => setPurchaseError(null), 5000)
+
+      let errorMessage = error.message || 'Purchase failed'
+
+      // Add helpful context for debugging
+      if (errorMessage.includes('not found')) {
+        errorMessage += '. Error code: PRODUCT_NOT_FOUND. Please contact support.'
+      }
+
+      setPurchaseError(errorMessage)
+      setTimeout(() => setPurchaseError(null), 8000)
     } finally {
       setIsPurchasing(false)
     }
@@ -209,7 +291,9 @@ export default function PricingPage() {
         </p>
         {isIOS() && (
           <p className="text-sm text-yapmate-gray-light mt-4">
-            7-day free trial included with Pro & Trade plans
+            {tradeEnabled
+              ? '7-day free trial included with Pro & Trade plans'
+              : '7-day free trial included with Pro plan'}
           </p>
         )}
       </section>
@@ -276,7 +360,7 @@ export default function PricingPage() {
 
       {/* Pricing Cards */}
       <section className="px-6 pb-16 max-w-6xl mx-auto">
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className={`grid ${tradeEnabled ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
           {/* FREE Plan */}
           <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-8 flex flex-col">
             <h2 className="text-2xl font-bold mb-2 text-white uppercase tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
@@ -390,8 +474,18 @@ export default function PricingPage() {
             )}
           </div>
 
-          {/* TRADE Plan */}
-          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-8 flex flex-col">
+          {/* TRADE Plan - Only shown when feature flag enabled */}
+          {tradeEnabled && (
+          <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-8 flex flex-col relative">
+            {/* Coming Soon Badge (only show if not in App Review mode AND not available) */}
+            {isIOS() && !shouldShowTradeAsPurchasable && (
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <span className="bg-yapmate-gray-light text-yapmate-black px-4 py-1 text-xs font-bold uppercase tracking-wide rounded">
+                  Coming Soon
+                </span>
+              </div>
+            )}
+
             <h2 className="text-2xl font-bold mb-2 text-white uppercase tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               Trade
             </h2>
@@ -427,13 +521,67 @@ export default function PricingPage() {
               <div className="w-full px-8 py-4 border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
                 Current Plan
               </div>
+            ) : isIOS() && !shouldShowTradeAsPurchasable ? (
+              <div className="w-full px-8 py-4 border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
+                Coming Soon
+              </div>
             ) : (
               <button
                 onClick={() => handleUpgrade('trade')}
-                disabled={isPurchasing || isLoadingOfferings}
+                disabled={isPurchasing || isLoadingOfferings || (isIOS() && !shouldShowTradeAsPurchasable)}
                 className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPurchasing ? 'Processing...' : isWeb() ? 'Join Waitlist' : 'Start Free Trial'}
+              </button>
+            )}
+          </div>
+          )}
+        </div>
+      </section>
+
+      {/* Terms & Privacy Links (Apple Guideline 3.1.2) */}
+      <section className="px-6 pb-8 max-w-4xl mx-auto">
+        <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-6">
+          <div className="flex flex-col items-center space-y-3 text-sm">
+            <div className="flex items-center space-x-4">
+              <Link
+                href="/terms"
+                className="text-yapmate-yellow hover:underline font-medium"
+              >
+                Terms of Use
+              </Link>
+              <span className="text-yapmate-gray-light">•</span>
+              <Link
+                href="/privacy"
+                className="text-yapmate-yellow hover:underline font-medium"
+              >
+                Privacy Policy
+              </Link>
+            </div>
+            {isIOS() && (
+              <button
+                onClick={async () => {
+                  setPurchaseError(null)
+                  setPurchaseSuccess(false)
+                  try {
+                    const { restorePurchases } = await import('@/lib/iap')
+                    const result = await restorePurchases()
+                    if (result.success) {
+                      setPurchaseSuccess(true)
+                      await checkUserPlan()
+                      setTimeout(() => setPurchaseSuccess(false), 3000)
+                    } else if (!result.userCancelled) {
+                      setPurchaseError(result.error || 'Failed to restore purchases')
+                      setTimeout(() => setPurchaseError(null), 5000)
+                    }
+                  } catch (err: any) {
+                    setPurchaseError(err.message || 'Failed to restore purchases')
+                    setTimeout(() => setPurchaseError(null), 5000)
+                  }
+                }}
+                className="text-yapmate-gray-light hover:text-yapmate-yellow transition-colors"
+              >
+                Restore Purchases
               </button>
             )}
           </div>

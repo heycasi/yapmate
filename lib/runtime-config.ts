@@ -99,3 +99,19 @@ export function isBillingEnabled(): boolean {
   const disabled = process.env.NEXT_PUBLIC_BILLING_DISABLED === 'true'
   return !disabled && isBillingConfigured()
 }
+
+/**
+ * Check if Trade tier is enabled
+ *
+ * Trade tier disabled for v1.0 App Store submission.
+ * Set NEXT_PUBLIC_ENABLE_TRADE_TIER=true to re-enable.
+ *
+ * When re-enabling:
+ * 1. Set env var to true
+ * 2. Add Trade product to RevenueCat offering
+ * 3. Submit Trade IAP in App Store Connect
+ * 4. Rebuild and deploy
+ */
+export function isTradeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ENABLE_TRADE_TIER === 'true'
+}

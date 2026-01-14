@@ -9,6 +9,7 @@
 
 import { createBrowserClient } from '@/lib/supabase'
 import { getCustomerInfo, getActivePlan, isIAPAvailable } from '@/lib/iap'
+import { isTradeEnabled } from '@/lib/runtime-config'
 
 // ============================================================================
 // Types and Constants
@@ -181,8 +182,15 @@ export async function canUseVAT(userId?: string): Promise<boolean> {
 /**
  * Check if a user can use CIS features
  * Works for both logged-in and logged-out users (via RevenueCat)
+ *
+ * NOTE: CIS features are Trade-only. Always returns false when Trade tier is disabled.
  */
 export async function canUseCIS(userId?: string): Promise<boolean> {
+  // CIS is a Trade-only feature - disabled when Trade tier is disabled
+  if (!isTradeEnabled()) {
+    return false
+  }
+
   const plan = await getUserPlan(userId)
   const limits = getPlanLimits(plan)
   return limits.canUseCIS
@@ -190,8 +198,15 @@ export async function canUseCIS(userId?: string): Promise<boolean> {
 
 /**
  * Get plan display name
+ *
+ * NOTE: When Trade tier is disabled, 'trade' users are shown as 'Pro'
  */
 export function getPlanDisplayName(plan: PricingPlan): string {
+  // When Trade is disabled, show Trade users as Pro
+  if (plan === 'trade' && !isTradeEnabled()) {
+    return 'Pro'
+  }
+
   const names: Record<PricingPlan, string> = {
     free: 'Free',
     pro: 'Pro',

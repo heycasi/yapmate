@@ -11,6 +11,7 @@
  */
 
 import { Capacitor } from '@capacitor/core'
+import { isTradeEnabled } from '@/lib/runtime-config'
 
 // RevenueCat types
 export interface IAPOffering {
@@ -263,32 +264,49 @@ export async function purchaseProduct(productId: ProductId): Promise<PurchaseRes
   }
 
   if (!isConfigured) {
+    console.error('[IAP] purchaseProduct called but SDK not configured')
     return {
       success: false,
-      error: 'IAP not configured',
+      error: 'IAP not configured. Please restart the app.',
     }
   }
 
   try {
     const { Purchases } = await import('@revenuecat/purchases-capacitor')
 
-    console.log('[IAP] Starting purchase by product ID:', productId)
+    console.log('[IAP] ===== STARTING PURCHASE =====')
+    console.log('[IAP] Product ID:', productId)
 
     // Get offerings to find the full product object
+    console.log('[IAP] Fetching offerings from RevenueCat...')
     const offeringsResult = await Purchases.getOfferings()
+
+    console.log('[IAP] Offerings fetched successfully')
+    console.log('[IAP] Current offering:', offeringsResult.current?.identifier || 'NONE')
+    console.log('[IAP] Total offerings:', Object.keys(offeringsResult.all || {}).length)
 
     // Check current offering and all offerings
     const allOfferings = [offeringsResult.current, ...Object.values(offeringsResult.all || {})]
       .filter(Boolean)
 
+    console.log('[IAP] Searching for product in', allOfferings.length, 'offering(s)...')
+
     // Find the product in available offerings
     let productToPurchase = null
+    let foundInOffering: string | null = null
 
     for (const offering of allOfferings) {
       if (offering?.availablePackages) {
+        console.log('[IAP] Checking offering:', offering.identifier)
+        console.log('[IAP] Packages in offering:', offering.availablePackages.length)
+
         for (const pkg of offering.availablePackages) {
+          console.log('[IAP]   - Package:', pkg.identifier, '→ Product:', pkg.product?.identifier)
+
           if (pkg.product?.identifier === productId) {
             productToPurchase = pkg.product
+            foundInOffering = offering.identifier
+            console.log('[IAP] ✓ FOUND! Product found in offering:', foundInOffering)
             break
           }
         }
@@ -297,26 +315,52 @@ export async function purchaseProduct(productId: ProductId): Promise<PurchaseRes
     }
 
     if (!productToPurchase) {
+      console.error('[IAP] ❌ PRODUCT NOT FOUND')
+      console.error('[IAP] Searched for:', productId)
+      console.error('[IAP] Available products:')
+
+      allOfferings.forEach((offering) => {
+        if (offering?.availablePackages) {
+          offering.availablePackages.forEach((pkg) => {
+            console.error('[IAP]   -', pkg.product?.identifier)
+          })
+        }
+      })
+
       return {
         success: false,
-        error: 'Product not found in available offerings',
+        error: `Product not found: ${productId}. Available offerings: ${allOfferings.length}`,
       }
     }
 
+    console.log('[IAP] Product details:')
+    console.log('[IAP]   - ID:', productToPurchase.identifier)
+    console.log('[IAP]   - Title:', productToPurchase.title)
+    console.log('[IAP]   - Price:', productToPurchase.priceString)
+    console.log('[IAP]   - Intro Offer:', productToPurchase.introPrice ? 'YES' : 'NO')
+
     // Purchase using the full product object
+    console.log('[IAP] Initiating purchase with StoreKit...')
     const result = await Purchases.purchaseStoreProduct({
       product: productToPurchase,
     })
 
-    console.log('[IAP] Purchase successful')
+    console.log('[IAP] ===== PURCHASE SUCCESSFUL =====')
+    console.log('[IAP] Customer ID:', result.customerInfo?.originalAppUserId)
+    console.log('[IAP] Active subscriptions:', result.customerInfo?.activeSubscriptions?.length || 0)
+
     return {
       success: true,
       customerInfo: result.customerInfo as IAPCustomerInfo,
     }
   } catch (error: any) {
-    console.error('[IAP] Purchase failed:', error)
+    console.error('[IAP] ===== PURCHASE FAILED =====')
+    console.error('[IAP] Error code:', error.code)
+    console.error('[IAP] Error message:', error.message)
+    console.error('[IAP] Full error:', error)
 
     if (error.code === 'USER_CANCELLED' || error.userCancelled) {
+      console.log('[IAP] User cancelled the purchase')
       return {
         success: false,
         error: 'Purchase cancelled',
@@ -324,9 +368,15 @@ export async function purchaseProduct(productId: ProductId): Promise<PurchaseRes
       }
     }
 
+    // Provide more context in error message
+    let errorMessage = error.message || 'Purchase failed'
+    if (error.code) {
+      errorMessage += ` (Error: ${error.code})`
+    }
+
     return {
       success: false,
-      error: error.message || 'Purchase failed',
+      error: errorMessage,
     }
   }
 }
@@ -397,6 +447,8 @@ export async function getCustomerInfo(): Promise<IAPCustomerInfo | null> {
 /**
  * Get active plan from customer info
  * Maps RevenueCat entitlements to YapMate plans
+ *
+ * NOTE: When Trade tier is disabled, Trade entitlements are treated as Pro
  */
 export function getActivePlan(customerInfo: IAPCustomerInfo | null): 'free' | 'pro' | 'trade' {
   if (!customerInfo) {
@@ -407,8 +459,9 @@ export function getActivePlan(customerInfo: IAPCustomerInfo | null): 'free' | 'p
   const { active } = customerInfo.entitlements
 
   // Trade takes precedence (higher tier)
+  // When Trade is disabled, treat Trade entitlements as Pro
   if (active[IAP_ENTITLEMENTS.TRADE]?.isActive) {
-    return 'trade'
+    return isTradeEnabled() ? 'trade' : 'pro'
   }
 
   if (active[IAP_ENTITLEMENTS.PRO]?.isActive) {

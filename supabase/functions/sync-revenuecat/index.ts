@@ -78,14 +78,19 @@ serve(async (req) => {
     const activeEntitlements = entitlements?.active || {}
 
     // Determine plan based on active entitlements
+    // NOTE: When Trade tier is disabled (v1.0), Trade entitlements are treated as Pro
+    // Check NEXT_PUBLIC_ENABLE_TRADE_TIER environment variable
+    const isTradeEnabled = Deno.env.get('NEXT_PUBLIC_ENABLE_TRADE_TIER') === 'true'
+
     let plan: 'free' | 'pro' | 'trade' = 'free'
     let status: 'active' | 'trialing' | 'expired' | 'cancelled' = 'expired'
     let expirationDate: string | null = null
     let willRenew = false
 
     // Trade takes precedence (higher tier)
+    // When Trade is disabled, treat as Pro
     if (activeEntitlements.trade?.isActive) {
-      plan = 'trade'
+      plan = isTradeEnabled ? 'trade' : 'pro'
       const ent = activeEntitlements.trade
       status = ent.periodType === 'TRIAL' || ent.periodType === 'INTRO' ? 'trialing' : 'active'
       expirationDate = ent.expirationDate
