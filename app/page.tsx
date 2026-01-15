@@ -1,12 +1,14 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import AppStoreBadge from '@/components/AppStoreBadge'
+import Footer from '@/components/Footer'
 
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-yapmate-black text-white">
       {/* Navigation Header */}
       <nav className="border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-end gap-3">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-end items-center gap-3">
           <Link
             href="/login"
             className="px-6 py-2 text-yapmate-yellow hover:text-yapmate-white font-semibold transition-all"
@@ -25,6 +27,7 @@ export default function HomePage() {
           >
             PRICING
           </Link>
+          <AppStoreBadge className="hidden md:block w-32" />
         </div>
       </nav>
 
@@ -84,8 +87,13 @@ export default function HomePage() {
             </Link>
           </div>
 
+          {/* App Store Badge */}
+          <div className="mt-6">
+            <AppStoreBadge className="w-36 md:w-40" />
+          </div>
+
           {/* Social Proof / Tagline */}
-          <p className="mt-8 text-sm text-yapmate-gray-light">
+          <p className="mt-6 text-sm text-yapmate-gray-light">
             Built for sparkies, plumbers, joiners, and every tradie who grafts
           </p>
         </div>
@@ -124,9 +132,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="px-6 py-8 text-center text-yapmate-gray-light text-sm border-t border-gray-800 mt-16">
-        <p>© {new Date().getFullYear()} YapMate. Built for tradies, by tradies.</p>
-      </footer>
+      <Footer />
     </main>
   )
 }

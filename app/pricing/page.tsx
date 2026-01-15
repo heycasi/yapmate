@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import AppStoreBadge from '@/components/AppStoreBadge'
+import Footer from '@/components/Footer'
 import { createBrowserClient } from '@/lib/supabase'
 import { getUserPlan, getPlanDisplayName, type PricingPlan } from '@/lib/plan-access'
 import {
@@ -542,7 +544,10 @@ export default function PricingPage() {
       {/* Terms & Privacy Links (Apple Guideline 3.1.2) */}
       <section className="px-6 pb-8 max-w-4xl mx-auto">
         <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-6">
-          <div className="flex flex-col items-center space-y-3 text-sm">
+          <div className="flex flex-col items-center space-y-4 text-sm">
+            {/* App Store Badge */}
+            <AppStoreBadge className="w-32" />
+
             <div className="flex items-center space-x-4">
               <Link
                 href="/terms"
@@ -660,6 +665,9 @@ export default function PricingPage() {
           </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <Footer />
     </main>
   )
 }
