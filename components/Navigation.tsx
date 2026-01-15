@@ -24,7 +24,7 @@ export default function Navigation() {
               href={item.href}
               className={`flex flex-col items-center justify-center flex-1 h-full transition-colors duration-200 tap-highlight ${
                 isActive
-                  ? 'text-yapmate-amber-500'
+                  ? 'text-yapmate-amber'
                   : 'text-yapmate-slate-400 active:text-yapmate-slate-200'
               }`}
             >

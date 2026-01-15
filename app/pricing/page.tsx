@@ -268,14 +268,14 @@ export default function PricingPage() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
           <Link
             href="/"
-            className="px-6 py-2 border border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-semibold rounded transition-all uppercase tracking-wide text-sm"
+            className="px-6 py-2 border border-yapmate-amber text-yapmate-amber hover:bg-yapmate-amber hover:text-yapmate-black font-semibold rounded transition-all uppercase tracking-wide text-sm"
           >
             ← Home
           </Link>
           {isLoggedIn && (
             <Link
               href="/dashboard"
-              className="px-6 py-2 bg-yapmate-gray-dark text-white border border-gray-800 hover:border-yapmate-yellow/50 font-medium rounded transition-all uppercase tracking-wide text-sm"
+              className="px-6 py-2 bg-yapmate-gray-dark text-white border border-gray-800 hover:border-yapmate-amber/50 font-medium rounded transition-all uppercase tracking-wide text-sm"
             >
               Dashboard
             </Link>
@@ -331,19 +331,18 @@ export default function PricingPage() {
       {/* Upgrade Message (Web Only) */}
       {showUpgradeMessage && (
         <div className="max-w-5xl mx-auto px-6 mb-8">
-          <div className="bg-yapmate-gray-dark border border-yapmate-yellow rounded-xl p-6 text-center">
-            <p className="text-white font-semibold mb-2">
-              Paid plans launch soon.
+          <div className="bg-yapmate-gray-dark border border-yapmate-amber rounded-xl p-6 text-center">
+            <p className="text-white font-semibold mb-4">
+              Download YapMate on iOS to start your free trial
             </p>
-            <p className="text-yapmate-gray-lightest text-sm mb-4">
-              Join early access to get priority when subscriptions go live.
-            </p>
-            <Link
-              href="/waitlist"
-              className="inline-block px-6 py-2 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button uppercase tracking-wide text-sm"
+            <a
+              href="https://apps.apple.com/us/app/yapmate/id6756750891"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block px-6 py-2 bg-yapmate-amber text-yapmate-black font-bold rounded-lg hover:bg-yapmate-amber/80 transition-all uppercase tracking-wide text-sm"
             >
-              Join Waitlist
-            </Link>
+              Open in App Store
+            </a>
           </div>
         </div>
       )}
@@ -353,7 +352,7 @@ export default function PricingPage() {
         <div className="max-w-5xl mx-auto px-6 mb-8">
           <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-4 text-center">
             <span className="text-yapmate-gray-light text-sm uppercase tracking-wide mr-2">Current Plan:</span>
-            <span className="text-yapmate-yellow font-bold uppercase tracking-wide">
+            <span className="text-yapmate-amber font-bold uppercase tracking-wide">
               {getPlanDisplayName(currentPlan)}
             </span>
           </div>
@@ -362,7 +361,7 @@ export default function PricingPage() {
 
       {/* Pricing Cards */}
       <section className="px-6 pb-16 max-w-6xl mx-auto">
-        <div className={`grid ${tradeEnabled ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
+        <div className={`grid ${tradeEnabled ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-8`}>
           {/* FREE Plan */}
           <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-8 flex flex-col">
             <h2 className="text-2xl font-bold mb-2 text-white uppercase tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
@@ -375,19 +374,19 @@ export default function PricingPage() {
 
             <ul className="space-y-3 mb-8 flex-grow text-sm">
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest"><strong>3 invoices total</strong></span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">Voice to invoice</span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">PDF download</span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">Yapmate branding</span>
               </li>
               <li className="flex items-start text-yapmate-gray-light">
@@ -403,14 +402,14 @@ export default function PricingPage() {
             ) : isLoggedIn ? (
               <Link
                 href="/dashboard"
-                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm"
+                className="w-full px-8 py-4 border-2 border-yapmate-amber text-yapmate-amber hover:bg-yapmate-amber hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm"
               >
                 Go to Dashboard
               </Link>
             ) : (
               <Link
                 href="/signup"
-                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm"
+                className="w-full px-8 py-4 border-2 border-yapmate-amber text-yapmate-amber hover:bg-yapmate-amber hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm"
               >
                 Start Free
               </Link>
@@ -418,15 +417,15 @@ export default function PricingPage() {
           </div>
 
           {/* PRO Plan - Most Popular */}
-          <div className="bg-yapmate-gray-dark border-2 border-yapmate-yellow rounded-xl p-8 flex flex-col relative">
+          <div className="bg-yapmate-gray-dark border border-yapmate-amber rounded-xl p-8 flex flex-col relative">
             {/* Most Popular Badge */}
             <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-              <span className="bg-yapmate-yellow text-yapmate-black px-4 py-1 text-xs font-bold uppercase tracking-wide rounded">
+              <span className="bg-yapmate-amber text-yapmate-black px-4 py-1 text-xs font-bold uppercase tracking-wide rounded">
                 Recommended
               </span>
             </div>
 
-            <h2 className="text-2xl font-bold mb-2 text-yapmate-yellow uppercase tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            <h2 className="text-2xl font-bold mb-2 text-yapmate-amber uppercase tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               Pro
             </h2>
             <div className="mb-6">
@@ -436,23 +435,23 @@ export default function PricingPage() {
 
             <ul className="space-y-3 mb-8 flex-grow text-sm">
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest"><strong>Unlimited invoices</strong></span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">Voice to invoice</span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">VAT + Reverse Charge</span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">Customer list</span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">Clean PDFs</span>
               </li>
               <li className="flex items-start">
@@ -469,9 +468,9 @@ export default function PricingPage() {
               <button
                 onClick={() => handleUpgrade('pro')}
                 disabled={isPurchasing || isLoadingOfferings}
-                className="w-full px-8 py-4 bg-gradient-to-br from-yapmate-gold to-yapmate-gold-dark text-yapmate-black font-bold rounded-lg hover:from-yapmate-gold-dark hover:to-yapmate-gold-darker transition-all shadow-yapmate-button text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-8 py-4 bg-yapmate-amber text-yapmate-black font-bold rounded-lg hover:bg-yapmate-amber/80 transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPurchasing ? 'Processing...' : isWeb() ? 'Join Waitlist' : 'Start Free Trial'}
+                {isPurchasing ? 'Processing...' : isWeb() ? 'Download App' : 'Start Free Trial'}
               </button>
             )}
           </div>
@@ -498,19 +497,19 @@ export default function PricingPage() {
 
             <ul className="space-y-3 mb-8 flex-grow text-sm">
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest"><strong>Everything in Pro</strong></span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">CIS deduction</span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">Bank details on invoice</span>
               </li>
               <li className="flex items-start">
-                <span className="text-yapmate-yellow mr-3 text-lg">✓</span>
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
                 <span className="text-yapmate-gray-lightest">Priority support</span>
               </li>
               <li className="flex items-start">
@@ -531,9 +530,9 @@ export default function PricingPage() {
               <button
                 onClick={() => handleUpgrade('trade')}
                 disabled={isPurchasing || isLoadingOfferings || (isIOS() && !shouldShowTradeAsPurchasable)}
-                className="w-full px-8 py-4 border-2 border-yapmate-yellow text-yapmate-yellow hover:bg-yapmate-yellow hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-8 py-4 border-2 border-yapmate-amber text-yapmate-amber hover:bg-yapmate-amber hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPurchasing ? 'Processing...' : isWeb() ? 'Join Waitlist' : 'Start Free Trial'}
+                {isPurchasing ? 'Processing...' : isWeb() ? 'Download App' : 'Start Free Trial'}
               </button>
             )}
           </div>
@@ -551,14 +550,14 @@ export default function PricingPage() {
             <div className="flex items-center space-x-4">
               <Link
                 href="/terms"
-                className="text-yapmate-yellow hover:underline font-medium"
+                className="text-yapmate-amber hover:underline font-medium"
               >
                 Terms of Use
               </Link>
               <span className="text-yapmate-gray-light">•</span>
               <Link
                 href="/privacy"
-                className="text-yapmate-yellow hover:underline font-medium"
+                className="text-yapmate-amber hover:underline font-medium"
               >
                 Privacy Policy
               </Link>
@@ -584,7 +583,7 @@ export default function PricingPage() {
                     setTimeout(() => setPurchaseError(null), 5000)
                   }
                 }}
-                className="text-yapmate-gray-light hover:text-yapmate-yellow transition-colors"
+                className="text-yapmate-gray-light hover:text-yapmate-amber transition-colors"
               >
                 Restore Purchases
               </button>
@@ -607,7 +606,7 @@ export default function PricingPage() {
               className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
               <span className="font-semibold">Can I try before I buy?</span>
-              <span className="text-yapmate-yellow text-xl">{openFaq === 0 ? '−' : '+'}</span>
+              <span className="text-yapmate-amber text-xl">{openFaq === 0 ? '−' : '+'}</span>
             </button>
             {openFaq === 0 && (
               <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
@@ -623,7 +622,7 @@ export default function PricingPage() {
               className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
               <span className="font-semibold">What happens after my free trial?</span>
-              <span className="text-yapmate-yellow text-xl">{openFaq === 1 ? '−' : '+'}</span>
+              <span className="text-yapmate-amber text-xl">{openFaq === 1 ? '−' : '+'}</span>
             </button>
             {openFaq === 1 && (
               <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
@@ -639,7 +638,7 @@ export default function PricingPage() {
               className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
               <span className="font-semibold">Can I upgrade or downgrade later?</span>
-              <span className="text-yapmate-yellow text-xl">{openFaq === 2 ? '−' : '+'}</span>
+              <span className="text-yapmate-amber text-xl">{openFaq === 2 ? '−' : '+'}</span>
             </button>
             {openFaq === 2 && (
               <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
@@ -655,7 +654,7 @@ export default function PricingPage() {
               className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
               <span className="font-semibold">How do I cancel my subscription?</span>
-              <span className="text-yapmate-yellow text-xl">{openFaq === 3 ? '−' : '+'}</span>
+              <span className="text-yapmate-amber text-xl">{openFaq === 3 ? '−' : '+'}</span>
             </button>
             {openFaq === 3 && (
               <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">

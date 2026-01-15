@@ -43,13 +43,6 @@ export default function CustomersPage() {
     }
   }
 
-  const getInitials = (name: string): string => {
-    if (!name) return '?'
-    const parts = name.trim().split(' ')
-    if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
-    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -82,13 +75,6 @@ export default function CustomersPage() {
                       href={`/customers/detail?id=${customer.id}`}
                       className="bg-black/20 rounded-lg p-4 flex items-center gap-4 hover:bg-black/30 transition-colors cursor-pointer block"
                     >
-                      {/* Initials Avatar */}
-                      <div className="w-12 h-12 rounded-full bg-yapmate-amber-500 flex items-center justify-center flex-shrink-0">
-                        <span className="text-yapmate-black font-bold text-lg">
-                          {getInitials(customer.name)}
-                        </span>
-                      </div>
-
                       {/* Customer Info */}
                       <div className="flex-1 min-w-0">
                         <h3 className="text-white font-semibold text-base mb-1">

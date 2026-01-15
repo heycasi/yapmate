@@ -115,10 +115,15 @@ export default function DashboardPage() {
       <main className="min-h-screen">
         {filteredInvoices.length === 0 ? (
           // EMPTY STATE
-          <div className="flex items-center justify-center py-24">
-            <span className="font-mono text-sm text-yapmate-slate-300">
+          <div className="flex flex-col items-center justify-center py-24 px-6 max-w-md mx-auto text-center">
+            <span className="font-mono text-sm text-yapmate-slate-300 mb-3">
               {'/ / NO RECORDS FOUND'}
             </span>
+            {filter === 'PAID' && (
+              <p className="text-xs text-yapmate-slate-400 font-mono leading-relaxed">
+                No paid invoices yet. Open an invoice to mark it as paid.
+              </p>
+            )}
           </div>
         ) : (
           // DATA ROWS
