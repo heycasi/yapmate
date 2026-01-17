@@ -63,13 +63,15 @@ def generate_email_html(
 
                     <!-- Logo Header -->
                     <tr>
-                        <td style="padding: 20px 0 30px 0; text-align: center; background-color: #ffffff;">
-                            <a href="{APP_STORE_URL}" style="text-decoration: none; display: inline-block; background-color: #ffffff; padding: 20px 40px; border-radius: 12px;">
-                                <img src="{LOGO_URL}"
-                                     alt="YapMate"
-                                     height="180"
-                                     style="display: block; height: 180px; width: auto; border: 0;">
-                            </a>
+                        <td style="padding: 30px 0 40px 0; text-align: center;">
+                            <div style="background-color: #ffffff; display: inline-block; padding: 30px 60px; border-radius: 16px;">
+                                <a href="{APP_STORE_URL}" style="text-decoration: none; display: block;">
+                                    <img src="{LOGO_URL}"
+                                         alt="YapMate"
+                                         height="240"
+                                         style="display: block; height: 240px; width: auto; border: 0; background-color: #ffffff;">
+                                </a>
+                            </div>
                         </td>
                     </tr>
 
