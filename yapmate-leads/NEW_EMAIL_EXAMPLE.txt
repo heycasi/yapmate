@@ -1,0 +1,85 @@
+NEW EMAIL FORMAT - EXAMPLE
+==========================
+
+SUBJECT LINE (randomly selected):
+"Talk the job. Invoice done."
+
+---
+
+EMAIL BODY:
+
+From: Connor <support@yapmate.co.uk>
+To: info@quickfixplumbing.co.uk
+Subject: Talk the job. Invoice done.
+
+---
+
+Hi Quick Fix Plumbing,
+
+Invoice done before you even leave site. No forms, just talk.
+
+We built YapMate for trades who want invoices done without the admin.
+
+Just talk through the job (labour, boiler parts) and YapMate builds a clean PDF invoice instantly.
+
+Handles labour, materials, VAT, CIS and Reverse Charge properly.
+
+No typing. No forms.
+
+[Download YapMate] → https://yapmate.co.uk
+
+Reply if you've got any questions.
+
+Cheers,
+Connor
+
+[Image: YapMate invoice showcase]
+alt: "YapMate – voice to invoice for UK trades"
+
+---
+
+CHANGES FROM OLD VERSION:
+==========================
+
+✅ Subject: No business name, randomly rotated (4 options)
+✅ Hook: No "driving" language, safer accent phrasing (20% max)
+✅ Body: Shorter, clearer, mentions VAT/CIS/Reverse Charge
+✅ CTA: "Download YapMate" instead of "Try YapMate Free"
+✅ Link: Clean URL (no UTM params)
+✅ New line: "Reply if you've got any questions"
+✅ Footer: Updated alt text for image
+
+REMOVED:
+❌ "while you're driving home"
+❌ "tired of late-night admin"
+❌ "No subscriptions until you're ready"
+❌ Business name in subject
+❌ Frequent accent hooks with "bark"
+
+---
+
+SUBJECT LINE ROTATION (picks 1 randomly):
+
+1. "Stop doing invoices at 9pm"
+2. "Invoices done before you leave site"
+3. "Talk the job. Invoice done."
+4. "Still typing invoices at night?"
+
+---
+
+HOOK EXAMPLES (NO DRIVING LANGUAGE):
+
+✅ "Invoice done before you even leave site. No forms, just talk."
+✅ "Stop losing cash because you forgot to add the materials—just say it once the job's done."
+✅ "Grafted all day? Last thing you need is typing up invoices at 9pm."
+✅ "VAT and CIS sorted automatically—just tell the app what you did and it does the math."
+✅ "Capture the job details before you leave site—yap it into the app and forget about it."
+
+ACCENT HOOK (20% ONLY - NO "BARK"):
+
+✅ "Finally, an app that understands you when you just say the job out loud—no typing, no hassle."
+
+---
+
+File: /Users/conzo/dev/yapmate/yapmate-leads/NEW_EMAIL_EXAMPLE.txt
+Updated: January 17, 2026

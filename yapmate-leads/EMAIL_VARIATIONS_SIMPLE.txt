@@ -1,0 +1,206 @@
+YAPMATE EMAIL VARIATIONS - QUICK REFERENCE
+==========================================
+
+SUBJECT LINE FORMULA:
+"Stop doing invoices at 9pm, {FirstName}"
+
+Examples:
+- Stop doing invoices at 9pm, ABC
+- Stop doing invoices at 9pm, Quick
+- Stop doing invoices at 9pm, John
+
+
+15 AI HOOK VARIATIONS:
+======================
+
+1. "Grafted all day? Last thing you need is typing up invoices on your phone at 9pm."
+
+2. "Stop losing cash because you forgot to add the materials—just say it while you're driving home."
+
+3. "Finally, an app that actually understands a Glasgow accent when you bark an invoice at it."
+   - Glasgow: Glasgow accent
+   - Liverpool: Scouse accent
+   - Newcastle: Geordie accent
+
+4. "Invoice done before you even leave the driveway. No forms, just talk."
+
+5. "Office software is for desks. YapMate is built for the van."
+
+6. "Typing invoices with big thumbs on a small screen is a nightmare. Just speak it instead."
+
+7. "Don't let admin pile up for the weekend. Speak your jobs into YapMate and get paid faster."
+
+8. "VAT and CIS sorted automatically—just tell the app what you did and it does the math."
+
+9. "30 seconds to explain the job, 0 seconds typing. That's how invoicing should be."
+
+10. "Your hands are for tools, not for fighting with fiddly dropdown menus."
+
+11. "Invoicing shouldn't be harder than the actual job. Talk, send, paid."
+
+12. "Built for trades, not accountants. No bloat, just voice-to-invoice."
+
+13. "Send professional PDF invoices instantly without touching a keyboard."
+
+14. "Capture the job details while they're fresh—yap it into the app and forget about it."
+
+15. "Stop doing unpaid admin on the sofa at night. Get it done in the van."
+
+
+EMAIL BODY TEMPLATE:
+====================
+
+Hi {BusinessName},
+
+{AI_HOOK}
+
+I'm reaching out because we built YapMate specifically for trades who are tired of late-night admin.
+
+Just speak your job details (labour, {MATERIALS}, VAT) while you're driving home, and YapMate generates a professional PDF invoice instantly.
+
+No typing. No forms. No subscriptions until you're ready.
+
+[Try YapMate Free Button → https://yapmate.co.uk?utm_source=email&utm_campaign=leads]
+
+Cheers,
+Connor
+
+[Footer Image: https://yapmate.co.uk/invoice-showcase.png]
+
+---
+YapMate | Built for tradies, by tradies
+
+
+TRADE-SPECIFIC MATERIALS:
+=========================
+
+Plumber → "boiler parts"
+Electrician → "wiring"
+Builder → "materials"
+Heating Engineer → "boiler parts"
+Gas Engineer → "boiler parts"
+Sparky → "wiring"
+Carpenter → "timber"
+Joiner → "timber"
+Roofer → "roofing materials"
+Plasterer → "plaster"
+Painter → "paint"
+Decorator → "materials"
+Default → "materials"
+
+
+COMPLETE EMAIL EXAMPLES:
+========================
+
+--- EXAMPLE 1: Plumber in Glasgow ---
+
+Subject: Stop doing invoices at 9pm, ABC
+
+Hi ABC Plumbing Ltd,
+
+Finally, an app that actually understands a Glasgow accent when you bark an invoice at it.
+
+I'm reaching out because we built YapMate specifically for trades who are tired of late-night admin.
+
+Just speak your job details (labour, boiler parts, VAT) while you're driving home, and YapMate generates a professional PDF invoice instantly.
+
+No typing. No forms. No subscriptions until you're ready.
+
+[Try YapMate Free]
+
+Cheers,
+Connor
+
+[Footer Image]
+
+
+--- EXAMPLE 2: Electrician in Manchester ---
+
+Subject: Stop doing invoices at 9pm, Quick
+
+Hi Quick Fix Electrical,
+
+Grafted all day rewiring? Last thing you need is typing up invoices on your phone at 9pm.
+
+I'm reaching out because we built YapMate specifically for trades who are tired of late-night admin.
+
+Just speak your job details (labour, wiring, VAT) while you're driving home, and YapMate generates a professional PDF invoice instantly.
+
+No typing. No forms. No subscriptions until you're ready.
+
+[Try YapMate Free]
+
+Cheers,
+Connor
+
+[Footer Image]
+
+
+--- EXAMPLE 3: Builder in London ---
+
+Subject: Stop doing invoices at 9pm, Solid
+
+Hi Solid Builds Ltd,
+
+VAT and CIS sorted automatically—just tell the app what you did and it does the math.
+
+I'm reaching out because we built YapMate specifically for trades who are tired of late-night admin.
+
+Just speak your job details (labour, materials, VAT) while you're driving home, and YapMate generates a professional PDF invoice instantly.
+
+No typing. No forms. No subscriptions until you're ready.
+
+[Try YapMate Free]
+
+Cheers,
+Connor
+
+[Footer Image]
+
+
+--- EXAMPLE 4: Roofer in Birmingham ---
+
+Subject: Stop doing invoices at 9pm, Peak
+
+Hi Peak Roofing,
+
+Stop losing cash because you forgot to add the roofing materials—just say it while you're driving home.
+
+I'm reaching out because we built YapMate specifically for trades who are tired of late-night admin.
+
+Just speak your job details (labour, roofing materials, VAT) while you're driving home, and YapMate generates a professional PDF invoice instantly.
+
+No typing. No forms. No subscriptions until you're ready.
+
+[Try YapMate Free]
+
+Cheers,
+Connor
+
+[Footer Image]
+
+
+--- EXAMPLE 5: Carpenter in Liverpool ---
+
+Subject: Stop doing invoices at 9pm, Custom
+
+Hi Custom Carpentry,
+
+Finally, an app that actually understands a Scouse accent when you bark an invoice at it.
+
+I'm reaching out because we built YapMate specifically for trades who are tired of late-night admin.
+
+Just speak your job details (labour, timber, VAT) while you're driving home, and YapMate generates a professional PDF invoice instantly.
+
+No typing. No forms. No subscriptions until you're ready.
+
+[Try YapMate Free]
+
+Cheers,
+Connor
+
+[Footer Image]
+
+
+END OF FILE
+File saved: /Users/conzo/yapmate-leads/EMAIL_VARIATIONS_SIMPLE.txt
