@@ -66,13 +66,11 @@ def generate_email_html(
                         <td style="padding: 30px 0 40px 0; text-align: center;">
                             <table role="presentation" style="margin: 0 auto; border-collapse: collapse;">
                                 <tr>
-                                    <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 40px 80px; border-radius: 16px; text-align: center;">
-                                        <a href="{APP_STORE_URL}" style="text-decoration: none; display: block;">
+                                    <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 30px 40px; border-radius: 12px; text-align: center;">
+                                        <a href="{APP_STORE_URL}" style="text-decoration: none; display: inline-block;">
                                             <img src="{LOGO_URL}"
                                                  alt="YapMate"
-                                                 height="240"
-                                                 width="auto"
-                                                 style="display: block; height: 240px; width: auto; border: 0; margin: 0 auto;">
+                                                 style="display: block; max-width: 400px; width: 100%; height: auto; border: 0;">
                                         </a>
                                     </td>
                                 </tr>
