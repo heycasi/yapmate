@@ -24,16 +24,16 @@ export default function UnsubscribePage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            You've been unsubscribed
+            You&apos;ve been unsubscribed
           </h1>
           <p className="text-gray-600">
-            You won't receive marketing emails from YapMate anymore.
+            You won&apos;t receive marketing emails from YapMate anymore.
           </p>
         </div>
 
         <div className="border-t border-gray-200 pt-6 mt-6 text-sm text-gray-500">
           <p className="mb-4">
-            If you didn't mean to unsubscribe, or if this was a mistake, get in touch:
+            If you didn&apos;t mean to unsubscribe, or if this was a mistake, get in touch:
           </p>
           <a
             href="mailto:support@yapmate.co.uk"
