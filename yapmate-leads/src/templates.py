@@ -67,8 +67,8 @@ def generate_email_html(
                             <a href="{APP_STORE_URL}" style="text-decoration: none;">
                                 <img src="{LOGO_URL}"
                                      alt="YapMate"
-                                     height="52"
-                                     style="display: inline-block; height: 52px; width: auto; border: 0;">
+                                     height="100"
+                                     style="display: inline-block; height: 100px; width: auto; border: 0;">
                             </a>
                         </td>
                     </tr>
