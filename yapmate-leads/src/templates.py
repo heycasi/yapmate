@@ -6,7 +6,9 @@ import random
 # Constants
 APP_STORE_URL = "https://apps.apple.com/gb/app/yapmate/id6756750891"
 UNSUBSCRIBE_URL = "https://www.yapmate.co.uk/unsubscribe"
-INVOICE_IMAGE_URL = "https://yapmate.co.uk/invoice-showcase.png"
+LOGO_URL = "https://www.yapmate.co.uk/email/yapmate-logo.png"
+APPSTORE_BADGE_URL = "https://www.yapmate.co.uk/email/appstore-badge.png"
+INVOICE_IMAGE_URL = "https://www.yapmate.co.uk/invoice-showcase.png"
 
 
 def generate_email_html(
@@ -56,49 +58,71 @@ def generate_email_html(
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
     <table role="presentation" style="width: 100%; border-collapse: collapse;">
         <tr>
-            <td style="padding: 40px 20px;">
+            <td style="padding: 30px 20px;">
                 <table role="presentation" style="max-width: 600px; margin: 0 auto;">
+
+                    <!-- Logo Header -->
+                    <tr>
+                        <td style="padding: 0 0 30px 0; text-align: center;">
+                            <a href="{APP_STORE_URL}" style="text-decoration: none;">
+                                <img src="{LOGO_URL}"
+                                     alt="YapMate"
+                                     height="52"
+                                     style="display: inline-block; height: 52px; width: auto; border: 0;">
+                            </a>
+                        </td>
+                    </tr>
 
                     <!-- Email Body -->
                     <tr>
                         <td style="padding: 0;">
 
-                            <p style="margin: 0 0 20px; color: #000000; font-size: 16px; line-height: 1.5;">
+                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
                                 Hi {business_name},
                             </p>
 
-                            <p style="margin: 0 0 20px; color: #000000; font-size: 16px; line-height: 1.5;">
+                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
                                 {hook}
                             </p>
 
-                            <p style="margin: 0 0 20px; color: #000000; font-size: 16px; line-height: 1.5;">
+                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
                                 We built YapMate for trades who want invoices done without the admin.
                             </p>
 
-                            <p style="margin: 0 0 20px; color: #000000; font-size: 16px; line-height: 1.5;">
+                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
                                 Just talk through the job (labour, {materials}) and YapMate builds a clean PDF invoice instantly.
                             </p>
 
-                            <p style="margin: 0 0 20px; color: #000000; font-size: 16px; line-height: 1.5;">
+                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
                                 Handles labour, materials, VAT, CIS and Reverse Charge properly.
                             </p>
 
-                            <p style="margin: 0 0 20px; color: #000000; font-size: 16px; line-height: 1.5;">
+                            <p style="margin: 0 0 30px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
                                 No typing. No forms.
-                            </p>
-
-                            <p style="margin: 0 0 10px; color: #000000; font-size: 16px; line-height: 1.5;">
-                                → Download YapMate on the App Store
-                            </p>
-
-                            <p style="margin: 0 0 30px; color: #0066CC; font-size: 16px; line-height: 1.5;">
-                                <a href="{APP_STORE_URL}" style="color: #0066CC; text-decoration: underline;">{APP_STORE_URL}</a>
                             </p>
 
                         </td>
                     </tr>
 
-                    <!-- Optional Invoice Image -->
+                    <!-- CTA Section -->
+                    <tr>
+                        <td style="padding: 0 0 30px 0; text-align: center;">
+                            <p style="margin: 0 0 12px; color: #1a1a1a; font-size: 16px; font-weight: 500;">
+                                Download YapMate on the App Store
+                            </p>
+                            <a href="{APP_STORE_URL}" style="text-decoration: none; display: inline-block;">
+                                <img src="{APPSTORE_BADGE_URL}"
+                                     alt="Download on the App Store"
+                                     height="40"
+                                     style="display: block; height: 40px; width: auto; border: 0;">
+                            </a>
+                            <p style="margin: 10px 0 0; font-size: 13px; color: #666666;">
+                                <a href="{APP_STORE_URL}" style="color: #0066cc; text-decoration: none;">{APP_STORE_URL}</a>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Invoice Screenshot -->
                     <tr>
                         <td style="padding: 0 0 30px 0;">
                             <a href="{APP_STORE_URL}" style="display: block; text-decoration: none;">
@@ -113,7 +137,7 @@ def generate_email_html(
                     <!-- Signoff -->
                     <tr>
                         <td style="padding: 0;">
-                            <p style="margin: 0; color: #000000; font-size: 16px; line-height: 1.5;">
+                            <p style="margin: 0; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
                                 Cheers,<br>
                                 Connor
                             </p>
@@ -122,9 +146,9 @@ def generate_email_html(
 
                     <!-- Unsubscribe -->
                     <tr>
-                        <td style="padding: 40px 0 0 0;">
-                            <p style="margin: 0; text-align: center; color: #666666; font-size: 12px;">
-                                <a href="{UNSUBSCRIBE_URL}" style="color: #666666; text-decoration: underline;">Unsubscribe</a>
+                        <td style="padding: 30px 0 0 0;">
+                            <p style="margin: 0; text-align: center; color: #999999; font-size: 12px;">
+                                <a href="{UNSUBSCRIBE_URL}" style="color: #999999; text-decoration: underline;">Unsubscribe</a>
                             </p>
                         </td>
                     </tr>
@@ -186,8 +210,7 @@ Handles labour, materials, VAT, CIS and Reverse Charge properly.
 
 No typing. No forms.
 
-→ Download YapMate on the App Store
-
+Download YapMate on the App Store:
 {APP_STORE_URL}
 
 Cheers,
