@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import resend
 from src.sheets_manager import SheetsManager
-from src.templates import generate_email_html, generate_email_subject
+from src.templates import generate_email_html, generate_email_text, generate_email_subject
 
 
 def send_approved_leads():
@@ -135,7 +135,7 @@ def send_approved_leads():
 
         print(f"\n[{i}/{len(approved_leads)}] {business_name} <{email}>")
 
-        # Generate email content
+        # Generate email content (HTML + plain text for deliverability)
         html_content = generate_email_html(
             business_name=business_name,
             hook=hook,
@@ -143,15 +143,26 @@ def send_approved_leads():
             image_url=image_url
         )
 
+        text_content = generate_email_text(
+            business_name=business_name,
+            hook=hook,
+            trade=trade
+        )
+
         subject = generate_email_subject(business_name, trade)
 
-        # Send via Resend
+        # Send via Resend with multipart (HTML + text) and List-Unsubscribe headers
         try:
             params = {
                 "from": f"{email_from_name} <{email_from}>",
                 "to": [email],
                 "subject": subject,
-                "html": html_content
+                "html": html_content,
+                "text": text_content,
+                "headers": {
+                    "List-Unsubscribe": "<https://www.yapmate.co.uk/unsubscribe>",
+                    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+                }
             }
 
             response = resend.Emails.send(params)

@@ -15,7 +15,7 @@ script_dir = Path(__file__).parent
 project_dir = script_dir.parent
 sys.path.insert(0, str(project_dir))
 
-from src.templates import generate_email_html, generate_email_subject
+from src.templates import generate_email_html, generate_email_text, generate_email_subject
 
 
 # ANSI colors
@@ -82,7 +82,7 @@ def send_test_email():
     print(f"{BOLD}Generated Subject Line:{RESET}")
     print(f"   {BLUE}{subject}{RESET}\n")
 
-    # Generate email HTML
+    # Generate email HTML + plain text (for deliverability)
     html_content = generate_email_html(
         business_name=test_business_name,
         hook=test_hook,
@@ -90,13 +90,21 @@ def send_test_email():
         image_url=image_url
     )
 
+    text_content = generate_email_text(
+        business_name=test_business_name,
+        hook=test_hook,
+        trade=test_trade
+    )
+
     print(f"{BOLD}Email Template:{RESET}")
     print(f"   ✅ Subject: Random rotation (4 options)")
+    print(f"   ✅ Multipart: HTML + plain text")
     print(f"   ✅ CTA Text: 'Download YapMate'")
-    print(f"   ✅ CTA Link: https://yapmate.co.uk")
+    print(f"   ✅ CTA Link: https://apps.apple.com/gb/app/yapmate/id6756750891")
     print(f"   ✅ Footer Image: {image_url}")
     print(f"   ✅ Image Alt: 'YapMate – voice to invoice for UK trades'")
-    print(f"   ✅ Materials: {test_materials}\n")
+    print(f"   ✅ Materials: {test_materials}")
+    print(f"   ✅ List-Unsubscribe headers added\n")
 
     # Confirmation
     print(f"{YELLOW}{'=' * 80}{RESET}")
@@ -120,7 +128,12 @@ def send_test_email():
             "from": f"{email_from_name} <{email_from}>",
             "to": [test_recipient],
             "subject": subject,
-            "html": html_content
+            "html": html_content,
+            "text": text_content,
+            "headers": {
+                "List-Unsubscribe": "<https://www.yapmate.co.uk/unsubscribe>",
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+            }
         }
 
         response = resend.Emails.send(params)
@@ -137,17 +150,22 @@ def send_test_email():
 
         print(f"\n{BOLD}Template Verification:{RESET}")
         print(f"   ✅ Subject rotated from pool")
-        print(f"   ✅ Updated body copy used")
-        print(f"   ✅ CTA: 'Download YapMate' → https://yapmate.co.uk")
+        print(f"   ✅ Multipart email (HTML + plain text)")
+        print(f"   ✅ Branded header (logo + App Store badge)")
+        print(f"   ✅ CTA: 'Download YapMate' → App Store")
         print(f"   ✅ Footer image: {image_url}")
-        print(f"   ✅ Image is clickable (links to yapmate.co.uk)")
+        print(f"   ✅ Image is clickable (links to App Store)")
+        print(f"   ✅ List-Unsubscribe headers included")
+        print(f"   ✅ Unsubscribe link in footer")
 
         print(f"\n{BLUE}Next Steps:{RESET}")
         print(f"   1. Check {test_recipient} inbox")
-        print(f"   2. Verify subject line displays correctly")
+        print(f"   2. Verify branded header displays (logo + App Store badge)")
         print(f"   3. Verify footer image loads and is clickable")
-        print(f"   4. Verify CTA button says 'Download YapMate'")
-        print(f"   5. Verify updated body copy (no driving language)")
+        print(f"   4. Verify CTA button links to App Store")
+        print(f"   5. Verify unsubscribe link in footer")
+        print(f"   6. Check spam folder placement (should be inbox)")
+        print(f"   7. View plain-text version if images blocked")
 
         print(f"\n{GREEN}{'=' * 80}{RESET}\n")
 
