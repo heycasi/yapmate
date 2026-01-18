@@ -453,8 +453,12 @@ function InvoiceEditContent() {
                 onTranscribed={(text) => handleVoiceInput('customer_name', text)}
                 globalRecordingActive={isVoiceRecordingActive}
                 onRecordingStateChange={setIsVoiceRecordingActive}
+                size="md"
               />
             </div>
+            <p className="text-yapmate-slate-400 text-xs font-mono mb-2">
+              Tap the mic to re-record this field
+            </p>
             <input
               type="text"
               value={invoice.customer?.name || invoice.customer_name || ''}
@@ -474,6 +478,7 @@ function InvoiceEditContent() {
                 onTranscribed={(text) => handleVoiceInput('job_summary', text)}
                 globalRecordingActive={isVoiceRecordingActive}
                 onRecordingStateChange={setIsVoiceRecordingActive}
+                size="md"
               />
             </div>
             <textarea
@@ -630,6 +635,7 @@ function InvoiceEditContent() {
                 onTranscribed={(text) => handleVoiceInput('notes', text)}
                 globalRecordingActive={isVoiceRecordingActive}
                 onRecordingStateChange={setIsVoiceRecordingActive}
+                size="md"
               />
             </div>
             <textarea

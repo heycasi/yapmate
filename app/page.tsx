@@ -71,7 +71,7 @@ export default function HomePage() {
           <div className="flex flex-col items-center gap-6 mt-8">
             {/* Primary CTA */}
             <a
-              href="https://apps.apple.com/us/app/yapmate/id6756750891"
+              href="https://apps.apple.com/gb/app/yapmate/id6756750891"
               target="_blank"
               rel="noopener noreferrer"
               className="px-12 py-5 bg-yapmate-amber text-yapmate-black font-bold rounded-lg hover:bg-yapmate-amber/80 transition-all text-center text-lg shadow-lg shadow-yapmate-amber/20"

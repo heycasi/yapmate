@@ -6,7 +6,7 @@ interface AppStoreBadgeProps {
 }
 
 export default function AppStoreBadge({ className = '' }: AppStoreBadgeProps) {
-  const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL || 'https://apps.apple.com/us/app/yapmate/id6756750891'
+  const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL || 'https://apps.apple.com/gb/app/yapmate/id6756750891'
 
   return (
     <a

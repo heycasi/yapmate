@@ -336,7 +336,7 @@ export default function PricingPage() {
               Download YapMate on iOS to start your free trial
             </p>
             <a
-              href="https://apps.apple.com/us/app/yapmate/id6756750891"
+              href="https://apps.apple.com/gb/app/yapmate/id6756750891"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block px-6 py-2 bg-yapmate-amber text-yapmate-black font-bold rounded-lg hover:bg-yapmate-amber/80 transition-all uppercase tracking-wide text-sm"
