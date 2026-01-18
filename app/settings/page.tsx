@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
 import { getUserPlan, canUseVAT, canUseCIS, type PricingPlan } from '@/lib/plan-access'
 import { isIAPAvailable, restorePurchases, getCustomerInfo } from '@/lib/iap'
-import { syncSubscription } from '@/lib/iap-sync'
+import { syncRevenueCatToSupabase } from '@/lib/iap-sync'
 import { isIOS, isWeb, isBillingEnabled, isTradeEnabled } from '@/lib/runtime-config'
 
 interface UserPreferences {
@@ -227,6 +227,7 @@ export default function SettingsPage() {
 
     try {
       // 1. Restore via RevenueCat
+      console.log('[Settings] Starting restore purchases...')
       const result = await restorePurchases()
 
       if (!result.success) {
@@ -241,14 +242,18 @@ export default function SettingsPage() {
         throw new Error(result.error || 'Failed to restore purchases')
       }
 
-      // 2. Sync to Supabase
-      if (result.customerInfo) {
-        const syncResult = await syncSubscription(result.customerInfo)
+      console.log('[Settings] Restore successful, syncing to Supabase...')
 
-        if (!syncResult.success) {
-          throw new Error('Restore succeeded but sync failed. Please contact support.')
-        }
+      // 2. Sync to Supabase using canonical function
+      // This links RC user and syncs subscription data
+      const syncResult = await syncRevenueCatToSupabase(user.id)
+
+      if (!syncResult.success) {
+        console.error('[Settings] Sync failed:', syncResult.error)
+        throw new Error('Restore succeeded but sync failed. Please contact support.')
       }
+
+      console.log('[Settings] Sync successful:', syncResult)
 
       // 3. Refresh plan and subscription state
       setSuccess(true)

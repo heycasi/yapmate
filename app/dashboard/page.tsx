@@ -1,13 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navigation from '@/components/Navigation'
 import { formatCurrency, calculateInvoiceTotals } from '@/lib/tax'
+import { syncRevenueCatToSupabase } from '@/lib/iap-sync'
 
 type FilterType = 'ALL' | 'UNPAID' | 'PAID'
+
+// Session-level flag to prevent multiple syncs
+let hasSyncedThisSession = false
 
 export default function DashboardPage() {
   const [invoices, setInvoices] = useState<any[]>([])
@@ -15,6 +19,7 @@ export default function DashboardPage() {
   const [filter, setFilter] = useState<FilterType>('ALL')
   const router = useRouter()
   const supabase = createBrowserClient()
+  const syncAttempted = useRef(false)
 
   useEffect(() => {
     checkAuth()
@@ -28,6 +33,21 @@ export default function DashboardPage() {
     } = await supabase.auth.getSession()
     if (!session) {
       router.push('/login')
+      return
+    }
+
+    // Safety net: Sync RevenueCat subscription on dashboard load
+    // Only runs once per session to avoid redundant API calls
+    if (!hasSyncedThisSession && !syncAttempted.current) {
+      syncAttempted.current = true
+      hasSyncedThisSession = true
+
+      try {
+        console.log('[Dashboard] Safety net sync...')
+        await syncRevenueCatToSupabase(session.user.id)
+      } catch (syncError) {
+        console.error('[Dashboard] RevenueCat sync failed:', syncError)
+      }
     }
   }
 

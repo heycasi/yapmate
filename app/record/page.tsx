@@ -637,18 +637,18 @@ export default function RecordPage() {
 
         {/* PLAN LIMIT MESSAGE - Full Width Bar */}
         {!canCreate && planLimitMessage && !error && (
-          <div className="w-full bg-[#2A2A2A] border-y border-[#3A3A3A] py-4 px-4">
+          <div className="w-full bg-black/20 border-y border-yapmate-slate-700 py-4 px-4">
             <div className="max-w-md mx-auto text-center">
-              <span className="data-label text-[#F97316]">FREE PLAN LIMIT REACHED</span>
-              <p className="text-[#F2F2F2] font-mono text-sm mt-2 mb-3">
+              <span className="data-label text-yapmate-status-orange">FREE PLAN LIMIT REACHED</span>
+              <p className="text-yapmate-gray-lightest font-mono text-sm mt-2 mb-3">
                 {planLimitMessage}
               </p>
-              <p className="text-[#8A8A8A] text-sm mb-3">
+              <p className="text-yapmate-slate-300 text-sm mb-3">
                 Upgrade to Pro to create unlimited invoices
               </p>
               <button
                 onClick={() => router.push('/pricing')}
-                className="bg-[#F97316] text-[#0B0B0B] font-semibold px-6 py-3 rounded-[4px] text-sm uppercase tracking-wide"
+                className="bg-yapmate-status-orange text-yapmate-black font-semibold px-6 py-3 rounded text-sm uppercase tracking-wide"
               >
                 View Plans
               </button>

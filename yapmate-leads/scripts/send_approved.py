@@ -1,17 +1,31 @@
 """Send emails to approved leads via Resend API."""
 
+import argparse
 import os
 import sys
 import time
 from pathlib import Path
+
+# Add parent directory to path so we can import from src
+script_dir = Path(__file__).parent
+project_dir = script_dir.parent
+sys.path.insert(0, str(project_dir))
+
 from dotenv import load_dotenv
 import resend
 from src.sheets_manager import SheetsManager
 from src.templates import generate_email_html, generate_email_text, generate_email_subject
+from src.notifications import notify_send_complete
 
 
-def send_approved_leads():
-    """Send emails to all APPROVED leads in Google Sheets"""
+def send_approved_leads(auto: bool = False, limit: int = None):
+    """
+    Send emails to APPROVED leads in Google Sheets.
+
+    Args:
+        auto: If True, skip confirmation prompt (for scheduled sends)
+        limit: If set, only process first N APPROVED leads
+    """
 
     # Load environment variables
     load_dotenv()
@@ -19,6 +33,11 @@ def send_approved_leads():
     print("=" * 80)
     print("YapMate Lead Email Sender")
     print("=" * 80)
+
+    if auto:
+        print("   Mode: AUTO (no confirmation)")
+    if limit:
+        print(f"   Limit: {limit} leads max")
 
     # Check required env vars
     resend_key = os.getenv("RESEND_API_KEY")
@@ -57,7 +76,7 @@ def send_approved_leads():
 
     # Get all rows from sheet
     print("🔍 Finding APPROVED leads...")
-    all_rows = sheets.worksheet.get_all_values()
+    all_rows = sheets.sheet.get_all_values()
 
     if len(all_rows) < 2:
         print("❌ No data found in sheet (only headers or empty)")
@@ -98,25 +117,36 @@ def send_approved_leads():
         print("   (Set status to 'APPROVED' in Google Sheets to send)")
         sys.exit(0)
 
-    print(f"✅ Found {len(approved_leads)} APPROVED leads\n")
+    total_approved = len(approved_leads)
+    print(f"✅ Found {total_approved} APPROVED leads")
 
-    # Confirmation
-    print("=" * 80)
-    print("PREVIEW")
-    print("=" * 80)
-    for i, lead in enumerate(approved_leads[:3], 1):
-        print(f"{i}. {lead['business_name']} <{lead['email']}>")
-        print(f"   Hook: {lead['ai_hook'][:60]}...")
+    # Apply limit if set
+    if limit and limit < len(approved_leads):
+        approved_leads = approved_leads[:limit]
+        print(f"   (Limited to first {limit})\n")
+    else:
         print()
 
-    if len(approved_leads) > 3:
-        print(f"   ... and {len(approved_leads) - 3} more\n")
+    leads_to_process = len(approved_leads)
 
-    print("=" * 80)
-    confirm = input(f"\nSend {len(approved_leads)} emails? [y/N]: ").strip().lower()
-    if confirm != 'y':
-        print("❌ Sending cancelled")
-        sys.exit(0)
+    # Confirmation (skip if auto mode)
+    if not auto:
+        print("=" * 80)
+        print("PREVIEW")
+        print("=" * 80)
+        for i, lead in enumerate(approved_leads[:3], 1):
+            print(f"{i}. {lead['business_name']} <{lead['email']}>")
+            print(f"   Hook: {lead['ai_hook'][:60]}...")
+            print()
+
+        if leads_to_process > 3:
+            print(f"   ... and {leads_to_process - 3} more\n")
+
+        print("=" * 80)
+        confirm = input(f"\nSend {leads_to_process} emails? [y/N]: ").strip().lower()
+        if confirm != 'y':
+            print("❌ Sending cancelled")
+            sys.exit(0)
 
     # Send emails
     print("\n" + "=" * 80)
@@ -133,7 +163,7 @@ def send_approved_leads():
         hook = lead["ai_hook"]
         row_number = lead["row_number"]
 
-        print(f"\n[{i}/{len(approved_leads)}] {business_name} <{email}>")
+        print(f"\n[{i}/{leads_to_process}] {business_name} <{email}>")
 
         # Generate email content (HTML + plain text for deliverability)
         html_content = generate_email_html(
@@ -171,7 +201,7 @@ def send_approved_leads():
 
             # Update status to SENT in Google Sheets
             try:
-                sheets.worksheet.update_cell(row_number, col_status + 1, "SENT")
+                sheets.sheet.update_cell(row_number, col_status + 1, "SENT")
                 print(f"   ✅ Updated status to SENT")
             except Exception as e:
                 print(f"   ⚠️  Failed to update status: {str(e)}")
@@ -185,7 +215,7 @@ def send_approved_leads():
 
             # Update status to FAILED
             try:
-                sheets.worksheet.update_cell(row_number, col_status + 1, "FAILED")
+                sheets.sheet.update_cell(row_number, col_status + 1, "FAILED")
             except:
                 pass
 
@@ -195,9 +225,46 @@ def send_approved_leads():
     print("=" * 80)
     print(f"✅ Sent: {sent_count}")
     print(f"❌ Failed: {failed_count}")
-    print(f"📊 Total: {len(approved_leads)}")
+    print(f"📊 Total: {leads_to_process}")
     print("=" * 80)
+
+    # Send notification (non-blocking)
+    notify_send_complete(
+        total_processed=leads_to_process,
+        sent=sent_count,
+        failed=failed_count
+    )
+
+    # Return counts for programmatic use
+    return {
+        "total_approved": total_approved,
+        "processed": leads_to_process,
+        "sent": sent_count,
+        "failed": failed_count
+    }
+
+
+def main():
+    """CLI entry point with argparse."""
+    parser = argparse.ArgumentParser(
+        description="Send emails to APPROVED leads in Google Sheets"
+    )
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        default=False,
+        help="Skip confirmation prompt (for scheduled/automated sends)"
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of APPROVED leads to process"
+    )
+    args = parser.parse_args()
+
+    send_approved_leads(auto=args.auto, limit=args.limit)
 
 
 if __name__ == "__main__":
-    send_approved_leads()
+    main()

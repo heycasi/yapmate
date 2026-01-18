@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Space_Grotesk, Inter } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/react'
 import './globals.css'
 import { IAPProvider } from '@/components/IAPProvider'
 
@@ -44,6 +45,7 @@ export default function RootLayout({
     <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`}>
       <body className="min-h-screen w-full bg-[#0B0B0B] text-[#F2F2F2] antialiased selection:bg-[#F97316] selection:text-[#0B0B0B]">
         <IAPProvider>{children}</IAPProvider>
+        <Analytics />
       </body>
     </html>
   )

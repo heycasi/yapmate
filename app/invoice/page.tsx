@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Navigation from '@/components/Navigation'
@@ -9,6 +9,8 @@ import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/InvoicePDF'
 import { ensureCustomer } from '@/lib/customer-helpers'
 import { canUseVAT, canUseCIS } from '@/lib/plan-access'
+import { StatusPill } from '@/components/ui/StatusPill'
+import { VoiceInputButton } from '@/components/VoiceInputButton'
 
 function InvoiceEditContent() {
   const searchParams = useSearchParams()
@@ -22,6 +24,26 @@ function InvoiceEditContent() {
   const [materials, setMaterials] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
   const [hasBankDetails, setHasBankDetails] = useState(true)
+  const [invoiceStatus, setInvoiceStatus] = useState<string>('draft')
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [showUndo, setShowUndo] = useState(false)
+  const [previousStatus, setPreviousStatus] = useState<string | null>(null)
+  // Track if any voice recording is active to prevent concurrent recordings
+  const [isVoiceRecordingActive, setIsVoiceRecordingActive] = useState(false)
+
+  // Handler for updating invoice fields from voice input
+  const handleVoiceInput = useCallback((field: string, value: string) => {
+    setInvoice((prev: typeof invoice) => prev ? { ...prev, [field]: value } : prev)
+  }, [])
+
+  // Handler for updating material description from voice input
+  const handleMaterialVoiceInput = useCallback((index: number, value: string) => {
+    setMaterials((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], description: value }
+      return updated
+    })
+  }, [])
 
   useEffect(() => {
     if (id) {
@@ -56,6 +78,7 @@ function InvoiceEditContent() {
 
       setInvoice(data)
       setMaterials((data as any).materials || [])
+      setInvoiceStatus(data.status || 'draft')
     } catch (error) {
       console.error('Error fetching invoice:', error)
       setError('Failed to load invoice')
@@ -283,6 +306,69 @@ function InvoiceEditContent() {
     }
   }
 
+  const handleStatusToggle = async () => {
+    const newStatus = invoiceStatus === 'paid' ? 'draft' : 'paid'
+
+    // Disable button
+    setIsUpdatingStatus(true)
+
+    // Store previous status for undo
+    setPreviousStatus(invoiceStatus)
+
+    // Optimistic update
+    setInvoiceStatus(newStatus)
+
+    // Update database
+    const { error } = await (supabase
+      .from('invoices') as any)
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', id)
+
+    if (error) {
+      // Rollback optimistic update
+      setInvoiceStatus(previousStatus || invoice.status)
+      setPreviousStatus(null)
+      console.error('Failed to update invoice status:', error)
+      setIsUpdatingStatus(false)
+      return
+    }
+
+    // Show undo bar
+    setShowUndo(true)
+    setIsUpdatingStatus(false)
+
+    // Auto-hide undo bar after 3 seconds
+    setTimeout(() => {
+      setShowUndo(false)
+      setPreviousStatus(null)
+    }, 3000)
+  }
+
+  const handleUndo = async () => {
+    if (!previousStatus) return
+
+    // Hide undo bar immediately
+    setShowUndo(false)
+    setIsUpdatingStatus(true)
+
+    // Revert to previous status
+    setInvoiceStatus(previousStatus)
+
+    // Update database
+    const { error } = await (supabase
+      .from('invoices') as any)
+      .update({ status: previousStatus, updated_at: new Date().toISOString() })
+      .eq('id', id)
+
+    if (error) {
+      console.error('Failed to undo status change:', error)
+      // Could show error, but keep UI in reverted state
+    }
+
+    setPreviousStatus(null)
+    setIsUpdatingStatus(false)
+  }
+
   if (isLoading) {
     return (
       <>
@@ -350,9 +436,16 @@ function InvoiceEditContent() {
         <div className="p-4 space-y-6">
           {/* Customer */}
           <div className="border-b border-yapmate-slate-700 pb-4">
-            <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
-              Customer
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-yapmate-slate-300 text-xs font-mono uppercase">
+                Customer
+              </label>
+              <VoiceInputButton
+                onTranscribed={(text) => handleVoiceInput('customer_name', text)}
+                globalRecordingActive={isVoiceRecordingActive}
+                onRecordingStateChange={setIsVoiceRecordingActive}
+              />
+            </div>
             <input
               type="text"
               value={invoice.customer?.name || invoice.customer_name || ''}
@@ -364,9 +457,16 @@ function InvoiceEditContent() {
 
           {/* Job Summary */}
           <div className="border-b border-yapmate-slate-700 pb-4">
-            <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
-              Job Summary
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-yapmate-slate-300 text-xs font-mono uppercase">
+                Job Summary
+              </label>
+              <VoiceInputButton
+                onTranscribed={(text) => handleVoiceInput('job_summary', text)}
+                globalRecordingActive={isVoiceRecordingActive}
+                onRecordingStateChange={setIsVoiceRecordingActive}
+              />
+            </div>
             <textarea
               value={invoice.job_summary || ''}
               onChange={(e) => setInvoice({ ...invoice, job_summary: e.target.value })}
@@ -426,13 +526,21 @@ function InvoiceEditContent() {
             <div className="space-y-3">
               {materials.map((material, index) => (
                 <div key={index} className="border border-yapmate-slate-700 p-3">
-                  <input
-                    type="text"
-                    value={material.description || ''}
-                    onChange={(e) => updateMaterial(index, 'description', e.target.value)}
-                    className="w-full mb-2 px-2 py-1 bg-yapmate-black border border-yapmate-slate-700 text-yapmate-white text-sm focus:outline-none focus:border-yapmate-amber"
-                    placeholder="Description"
-                  />
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={material.description || ''}
+                      onChange={(e) => updateMaterial(index, 'description', e.target.value)}
+                      className="flex-1 px-2 py-1 bg-yapmate-black border border-yapmate-slate-700 text-yapmate-white text-sm focus:outline-none focus:border-yapmate-amber"
+                      placeholder="Description"
+                    />
+                    <VoiceInputButton
+                      onTranscribed={(text) => handleMaterialVoiceInput(index, text)}
+                      globalRecordingActive={isVoiceRecordingActive}
+                      onRecordingStateChange={setIsVoiceRecordingActive}
+                      size="sm"
+                    />
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     <input
                       type="number"
@@ -505,9 +613,16 @@ function InvoiceEditContent() {
 
           {/* Notes */}
           <div className="border-b border-yapmate-slate-700 pb-4">
-            <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
-              Notes / Payment Terms
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-yapmate-slate-300 text-xs font-mono uppercase">
+                Notes / Payment Terms
+              </label>
+              <VoiceInputButton
+                onTranscribed={(text) => handleVoiceInput('notes', text)}
+                globalRecordingActive={isVoiceRecordingActive}
+                onRecordingStateChange={setIsVoiceRecordingActive}
+              />
+            </div>
             <textarea
               value={invoice.notes || ''}
               onChange={(e) => setInvoice({ ...invoice, notes: e.target.value })}
@@ -551,6 +666,41 @@ function InvoiceEditContent() {
                   <p className="text-yapmate-slate-400 text-xs">You receive this amount</p>
                 </>
               )}
+            </div>
+
+            {/* Status Section */}
+            <div className="mt-4 pt-4 border-t border-yapmate-slate-700">
+              <div className="bg-black/20 rounded-lg p-4 mb-4">
+                {/* Status Badge */}
+                <div className="mb-3">
+                  <span className="text-xs text-yapmate-slate-300 uppercase tracking-wide mr-2">
+                    Invoice Status:
+                  </span>
+                  <StatusPill status={invoiceStatus as 'draft' | 'sent' | 'paid' | 'cancelled' | 'overdue'} />
+                </div>
+
+                {/* Action Button */}
+                <button
+                  onClick={handleStatusToggle}
+                  disabled={isUpdatingStatus}
+                  className="border-2 border-yapmate-amber text-yapmate-amber hover:bg-yapmate-amber hover:text-yapmate-black disabled:opacity-50 disabled:cursor-not-allowed w-full py-3 rounded font-semibold uppercase tracking-wide text-sm transition-colors duration-snap"
+                >
+                  {invoiceStatus === 'paid' ? 'Mark as Unpaid' : 'Mark as Paid'}
+                </button>
+
+                {/* Undo Bar */}
+                {showUndo && (
+                  <div className="bg-yapmate-status-green/10 border-l-4 border-yapmate-status-green text-yapmate-status-green px-4 py-2 mt-3 flex justify-between items-center text-sm rounded">
+                    <span>✓ Marked as {invoiceStatus === 'paid' ? 'paid' : 'unpaid'}</span>
+                    <button
+                      onClick={handleUndo}
+                      className="text-yapmate-amber hover:underline cursor-pointer font-semibold"
+                    >
+                      Undo
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* PDF Button */}

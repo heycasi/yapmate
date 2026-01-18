@@ -1,7 +1,29 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx supabase functions deploy:*)"
+      "Bash(npx supabase functions deploy:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run build)",
+      "Bash(npx cap:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(vercel:*)",
+      "Bash(curl:*)",
+      "Bash(supabase status:*)",
+      "Bash(supabase db:*)",
+      "Bash(node scripts/apply-rls-fix-simple.js:*)",
+      "Bash(pbcopy)",
+      "Bash(open \"https://supabase.com/dashboard/project/lbosugliylbusksphdov/editor/sql\")",
+      "Bash(open \"https://supabase.com/dashboard/project/nidijdprgoauwkmuioer/editor/sql\")",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(lsof:*)",
+      "Bash(python3:*)",
+      "Bash(source venv/bin/activate:*)",
+      "Bash(python:*)",
+      "Bash(npm i:*)",
+      "Bash(npm run test:iap-sync:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

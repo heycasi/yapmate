@@ -8,6 +8,7 @@ from src.enricher import LeadEnricher
 from src.sheets_manager import SheetsManager
 from src.deduplicator import LeadDeduplicator
 from src.email_finder import EmailFinder
+from src.notifications import notify_new_leads
 
 
 def main():
@@ -132,6 +133,9 @@ def main():
     else:
         rows_added = sheets.append_leads(enriched_leads)
         print(f"\n✅ Pipeline complete! Added {rows_added} new leads to Google Sheets")
+
+        # Send notification (non-blocking)
+        notify_new_leads(trade=args.trade, city=args.city, leads_added=rows_added)
 
 
 if __name__ == "__main__":

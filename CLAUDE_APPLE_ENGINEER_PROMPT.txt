@@ -1,0 +1,364 @@
+You are a senior software engineer at Apple on the App Review team with 10+ years of experience reviewing iOS apps, specifically with deep expertise in:
+- StoreKit and in-app purchase implementations
+- RevenueCat integration patterns
+- App Store Connect configuration
+- Common IAP rejection issues and their solutions
+- Sandbox testing workflows
+
+I have an iOS app called "YapMate AI" that has been rejected for an IAP purchase failure issue. I need your expert help to identify the root cause and fix it before my call with Apple support.
+
+## THE REJECTION
+
+**Guideline 2.1 - Performance - App Completeness**
+
+The In-App Purchase products in the app exhibited one or more bugs which create a poor user experience. Specifically, **app failed to proceed with in app purchase buying process**.
+
+Review device details:
+- Device type: iPad Air 11-inch (M3)
+- OS version: iPadOS 26.2
+- Review date: January 08, 2026
+
+## APP DETAILS
+
+- **App:** YapMate AI
+- **Bundle ID:** com.yapmate.app
+- **Version:** 1.0
+- **Build Rejected:** Build 14
+- **Build With Fixes:** Build 15 (uploaded, processing)
+- **Platform:** iOS (Capacitor + Next.js)
+- **IAP SDK:** RevenueCat (@revenuecat/purchases-capacitor@11.3.2)
+
+## IAP PRODUCT CONFIGURATION
+
+### Pro Monthly Subscription
+- **Product ID:** com.yapmate.pro.monthly
+- **Status in App Store Connect:** Waiting for Review
+- **Status in RevenueCat:** Waiting for Review
+- **Price:** £15.00/month
+- **Free Trial:** 7 days
+- **Subscription Group:** YapMate Subscriptions (ID: 21571031)
+
+### Trade Monthly Subscription
+- **Product ID:** com.yapmate.trade.monthly
+- **Status:** Waiting for Review
+- **Price:** £25.00/month
+- **Free Trial:** 7 days
+- **Note:** Currently REMOVED from RevenueCat offering for safety
+
+## REVENUECAT CONFIGURATION
+
+**API Keys:**
+- Public SDK Key: `appl_UEgIczjDOxxBNzwMrWabgaKLnxy` ✅
+- App Store Connect API Key: `W7XQDMX472` ✅
+- Issuer ID: `116b1e2c-6820-4ed2-9315-bd0b19ed86d0` ✅
+- Permissions: Valid key format ✅, Permissions to list apps ✅, Permissions to get subscriptions info ✅
+
+**Offerings Configuration:**
+- Current offering: "default"
+- Packages in offering: **Pro Monthly ONLY** (1 package)
+- Package identifier: "pro"
+- Package type: "$rc_monthly"
+- Linked product: com.yapmate.pro.monthly
+
+**Entitlements:**
+- Entitlement "pro" → com.yapmate.pro.monthly
+- Entitlement "trade" → com.yapmate.trade.monthly
+
+## THE PURCHASE FLOW CODE
+
+### Initialization (IAPProvider.tsx)
+```typescript
+useEffect(() => {
+  const initializeIAP = async () => {
+    const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_IOS_API_KEY // appl_UEgIczjDOxxBNzwMrWabgaKLnxy
+
+    if (!apiKey) {
+      console.error('[IAP] NEXT_PUBLIC_REVENUECAT_IOS_API_KEY not set')
+      return
+    }
+
+    console.log('[IAP] Configuring RevenueCat...')
+    await configureIAP(apiKey)
+
+    console.log('[IAP] ✓ RevenueCat configured successfully (anonymous mode)')
+
+    // Fetch and log offerings
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
+    const offerings = await Purchases.getOfferings()
+
+    console.log('[IAP] Offerings fetched:')
+    console.log('  - Current offering ID:', offerings?.current?.identifier || 'NONE')
+
+    if (offerings?.current?.availablePackages) {
+      const packages = offerings.current.availablePackages
+      console.log('  - Available packages:', packages.length)
+      packages.forEach((pkg: any) => {
+        console.log('    • Package:', pkg.identifier)
+        console.log('      Product ID:', pkg.product?.identifier)
+        console.log('      Price:', pkg.product?.priceString)
+      })
+    } else {
+      console.warn('[IAP] ⚠️ No packages available in current offering')
+    }
+  }
+
+  if (!hasConfigured.current) {
+    initializeIAP()
+  }
+}, [])
+```
+
+### Purchase Flow (pricing/page.tsx)
+```typescript
+const handleUpgrade = async (plan: 'pro' | 'trade') => {
+  // Platform checks
+  if (isWeb()) {
+    setShowUpgradeMessage(true)
+    return
+  }
+
+  if (!isBillingEnabled() || !isIAPAvailable()) {
+    setPurchaseError('In-app purchases not available')
+    return
+  }
+
+  // BUILD 15 FIX: Check if offerings still loading
+  if (isLoadingOfferings) {
+    console.warn('[Pricing] ⚠️ Offerings still loading, waiting...')
+    setPurchaseError('Loading subscription options, please wait...')
+    return
+  }
+
+  // BUILD 15 FIX: Check if offerings empty and retry
+  if (offerings.length === 0) {
+    console.warn('[Pricing] ⚠️ No offerings available, reloading...')
+    setPurchaseError('Loading subscription options, please try again...')
+    await loadOfferings()
+    return
+  }
+
+  // Log available packages
+  console.log('[Pricing] Available packages:')
+  offerings.forEach((offering) => {
+    offering.availablePackages.forEach((pkg) => {
+      console.log(`  - ${pkg.identifier}: ${pkg.product.identifier} (${pkg.product.priceString})`)
+    })
+  })
+
+  setIsPurchasing(true)
+
+  try {
+    const productId = plan === 'pro' ? IAP_PRODUCTS.PRO_MONTHLY : IAP_PRODUCTS.TRADE_MONTHLY
+
+    console.log('[Pricing] Attempting purchase:', productId)
+
+    const result = await purchaseProduct(productId)
+
+    if (!result.success) {
+      if (!result.userCancelled) {
+        console.error('[Pricing] Purchase failed:', result.error)
+
+        let errorMessage = result.error || 'Purchase failed'
+        if (errorMessage.includes('not found')) {
+          errorMessage = 'Subscription not available. Please contact support with error: Product not found'
+        }
+
+        setPurchaseError(errorMessage)
+      }
+      return
+    }
+
+    console.log('[Pricing] Purchase successful')
+
+    // Handle success (sync or redirect)
+    if (isLoggedIn && result.customerInfo) {
+      await syncSubscription(result.customerInfo)
+      setPurchaseSuccess(true)
+    } else {
+      window.location.href = '/finish-setup?plan=' + plan
+    }
+  } catch (error: any) {
+    console.error('[Pricing] Purchase error:', error)
+    setPurchaseError(error.message || 'Purchase failed')
+  } finally {
+    setIsPurchasing(false)
+  }
+}
+```
+
+### Purchase Function (lib/iap.ts)
+```typescript
+export async function purchaseProduct(productId: ProductId): Promise<PurchaseResult> {
+  if (!isIAPAvailable() || !isConfigured) {
+    return { success: false, error: 'IAP not configured' }
+  }
+
+  try {
+    const { Purchases } = await import('@revenuecat/purchases-capacitor')
+
+    console.log('[IAP] ===== STARTING PURCHASE =====')
+    console.log('[IAP] Product ID:', productId)
+
+    // Fetch offerings
+    console.log('[IAP] Fetching offerings from RevenueCat...')
+    const offeringsResult = await Purchases.getOfferings()
+
+    console.log('[IAP] Offerings fetched successfully')
+    console.log('[IAP] Current offering:', offeringsResult.current?.identifier || 'NONE')
+    console.log('[IAP] Total offerings:', Object.keys(offeringsResult.all || {}).length)
+
+    // Search for product in offerings
+    const allOfferings = [offeringsResult.current, ...Object.values(offeringsResult.all || {})]
+      .filter(Boolean)
+
+    console.log('[IAP] Searching for product in', allOfferings.length, 'offering(s)...')
+
+    let productToPurchase = null
+    let foundInOffering: string | null = null
+
+    for (const offering of allOfferings) {
+      if (offering?.availablePackages) {
+        console.log('[IAP] Checking offering:', offering.identifier)
+        console.log('[IAP] Packages in offering:', offering.availablePackages.length)
+
+        for (const pkg of offering.availablePackages) {
+          console.log('[IAP]   - Package:', pkg.identifier, '→ Product:', pkg.product?.identifier)
+
+          if (pkg.product?.identifier === productId) {
+            productToPurchase = pkg.product
+            foundInOffering = offering.identifier
+            console.log('[IAP] ✓ FOUND! Product found in offering:', foundInOffering)
+            break
+          }
+        }
+      }
+      if (productToPurchase) break
+    }
+
+    // Product not found
+    if (!productToPurchase) {
+      console.error('[IAP] ❌ PRODUCT NOT FOUND')
+      console.error('[IAP] Searched for:', productId)
+      console.error('[IAP] Available products:')
+      allOfferings.forEach((offering) => {
+        if (offering?.availablePackages) {
+          offering.availablePackages.forEach((pkg) => {
+            console.error('[IAP]   -', pkg.product?.identifier)
+          })
+        }
+      })
+
+      return {
+        success: false,
+        error: `Product not found: ${productId}. Available offerings: ${allOfferings.length}`,
+      }
+    }
+
+    // Product found - log details
+    console.log('[IAP] Product details:')
+    console.log('[IAP]   - ID:', productToPurchase.identifier)
+    console.log('[IAP]   - Title:', productToPurchase.title)
+    console.log('[IAP]   - Price:', productToPurchase.priceString)
+    console.log('[IAP]   - Intro Offer:', productToPurchase.introPrice ? 'YES' : 'NO')
+
+    // Initiate purchase
+    console.log('[IAP] Initiating purchase with StoreKit...')
+    const result = await Purchases.purchaseStoreProduct({ product: productToPurchase })
+
+    console.log('[IAP] ===== PURCHASE SUCCESSFUL =====')
+    console.log('[IAP] Customer ID:', result.customerInfo?.originalAppUserId)
+    console.log('[IAP] Active subscriptions:', result.customerInfo?.activeSubscriptions?.length || 0)
+
+    return {
+      success: true,
+      customerInfo: result.customerInfo as IAPCustomerInfo,
+    }
+  } catch (error: any) {
+    console.error('[IAP] ===== PURCHASE FAILED =====')
+    console.error('[IAP] Error code:', error.code)
+    console.error('[IAP] Error message:', error.message)
+    console.error('[IAP] Full error:', error)
+
+    if (error.code === 'USER_CANCELLED' || error.userCancelled) {
+      return { success: false, error: 'Purchase cancelled', userCancelled: true }
+    }
+
+    let errorMessage = error.message || 'Purchase failed'
+    if (error.code) {
+      errorMessage += ` (Error: ${error.code})`
+    }
+
+    return { success: false, error: errorMessage }
+  }
+}
+```
+
+## WHAT WE'VE FIXED IN BUILD 15
+
+1. **Race Condition:** Added checks to prevent purchase while offerings are loading
+2. **Empty Offerings:** Added retry mechanism if offerings array is empty
+3. **Error Handling:** Improved error messages and extended display time to 8 seconds
+4. **Comprehensive Logging:** Added detailed logs at every step to identify failures
+5. **Error Context:** Better error messages for debugging (includes error codes, product IDs)
+
+## CRITICAL GAPS WE COULDN'T VERIFY
+
+1. **⚠️ CRITICAL:** We couldn't verify if `com.yapmate.pro.monthly` is actually attached to version 1.0 in App Store Connect
+2. We couldn't check the real product status in App Store Connect (might not be "Waiting for Review")
+3. We haven't tested Build 15 in sandbox yet (still processing)
+
+## YOUR TASK
+
+As a senior Apple engineer who has reviewed thousands of IAP implementations:
+
+1. **Review this implementation** - What stands out as wrong or suspicious?
+
+2. **Identify the most likely root cause** - Based on the rejection message "app failed to proceed with in app purchase buying process", what's the #1 most likely issue?
+
+3. **Check our configuration** - Is the RevenueCat setup correct? Are we missing something obvious?
+
+4. **Evaluate our fixes** - Will Build 15 actually fix the issue? Or did we miss something?
+
+5. **Suggest additional diagnostics** - What else should we log or check?
+
+6. **Review product attachment** - The fact that we couldn't find where to verify if Pro Monthly is attached to version 1.0 is concerning. Is that likely the issue?
+
+7. **Product status clarification** - Both products show "Waiting for Review" - is that normal? Should Pro Monthly be in a different status?
+
+8. **Offering configuration** - We removed Trade Monthly from the offering because it's "Waiting for Review". Was that correct? Does having only 1 package in an offering cause issues?
+
+9. **StoreKit considerations** - Is there anything iPad-specific that could cause failures that wouldn't happen on iPhone?
+
+10. **Next steps** - What should I tell Apple support when they call? What specific questions should I ask?
+
+Please be thorough and critical. The app needs to launch and this IAP issue is blocking us. I have a call with Apple support soon and need to understand exactly what's wrong.
+
+## EXPECTED RESPONSE FORMAT
+
+Please structure your response as:
+
+### 1. PRIMARY ROOT CAUSE (Your Best Guess)
+[What you think is the #1 issue]
+
+### 2. SECONDARY ISSUES (If Any)
+[Other problems you spotted]
+
+### 3. CONFIGURATION REVIEW
+[Assessment of RevenueCat/App Store Connect setup]
+
+### 4. CODE REVIEW
+[Assessment of the purchase flow implementation]
+
+### 5. BUILD 15 EFFICACY
+[Will our fixes actually solve the problem?]
+
+### 6. ADDITIONAL DIAGNOSTICS NEEDED
+[What else to check/log]
+
+### 7. QUESTIONS FOR APPLE SUPPORT
+[Specific questions I should ask on the call]
+
+### 8. ACTION PLAN
+[Step-by-step what to do next]
+
+Thank you for your expertise. This is critical and time-sensitive.

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { syncRevenueCatToSupabase } from '@/lib/iap-sync'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -18,12 +19,24 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) throw error
+
+      // Sync RevenueCat subscriptions to Supabase after login
+      // This handles anonymous purchases made before login
+      if (data.user) {
+        try {
+          console.log('[Login] Syncing RevenueCat to Supabase...')
+          await syncRevenueCatToSupabase(data.user.id)
+        } catch (syncError) {
+          // Don't block login if sync fails - user can still use the app
+          console.error('[Login] RevenueCat sync failed:', syncError)
+        }
+      }
 
       router.push('/dashboard')
       router.refresh()
