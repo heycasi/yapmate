@@ -8,6 +8,7 @@ import { getUserPlan, canUseVAT, canUseCIS, type PricingPlan } from '@/lib/plan-
 import { isIAPAvailable, restorePurchases, getCustomerInfo } from '@/lib/iap'
 import { syncRevenueCatToSupabase } from '@/lib/iap-sync'
 import { isIOS, isWeb, isBillingEnabled, isTradeEnabled } from '@/lib/runtime-config'
+import { uploadLogo, deleteLogo, validateLogoFile } from '@/lib/logo-upload'
 
 interface UserPreferences {
   default_labour_rate: number
@@ -17,6 +18,8 @@ interface UserPreferences {
   bank_sort_code: string | null
   bank_account_number: string | null
   payment_reference: string | null
+  invoice_logo_url: string | null
+  invoice_company_name: string | null
   plan?: 'free' | 'pro' | 'trade'
 }
 
@@ -38,6 +41,12 @@ export default function SettingsPage() {
   const [bankSortCode, setBankSortCode] = useState('')
   const [bankAccountNumber, setBankAccountNumber] = useState('')
   const [paymentReference, setPaymentReference] = useState('')
+
+  // Invoice branding
+  const [invoiceLogoUrl, setInvoiceLogoUrl] = useState<string | null>(null)
+  const [invoiceCompanyName, setInvoiceCompanyName] = useState('')
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+  const [logoError, setLogoError] = useState<string | null>(null)
 
   // Plan-based access control
   const [userPlan, setUserPlan] = useState<PricingPlan>('free')
@@ -131,7 +140,7 @@ export default function SettingsPage() {
       }
 
       if (data) {
-        setLabourRate(data.default_labour_rate.toString())
+        setLabourRate(data.default_labour_rate?.toString() || '45.00')
         // Only set VAT/CIS if user has access
         setVatEnabled(vatAccess && data.default_vat_enabled)
         setCisEnabled(cisAccess && data.default_cis_enabled)
@@ -139,6 +148,9 @@ export default function SettingsPage() {
         setBankSortCode(data.bank_sort_code || '')
         setBankAccountNumber(data.bank_account_number || '')
         setPaymentReference(data.payment_reference || '')
+        // Invoice branding
+        setInvoiceLogoUrl(data.invoice_logo_url || null)
+        setInvoiceCompanyName(data.invoice_company_name || '')
       }
     } catch (err) {
       console.error('Error:', err)
@@ -185,6 +197,8 @@ export default function SettingsPage() {
         bank_sort_code: bankSortCode || null,
         bank_account_number: bankAccountNumber || null,
         payment_reference: paymentReference || null,
+        invoice_logo_url: invoiceLogoUrl,
+        invoice_company_name: invoiceCompanyName || null,
       }
 
       // Upsert preferences
@@ -267,6 +281,93 @@ export default function SettingsPage() {
       setTimeout(() => setError(null), 5000)
     } finally {
       setIsRestoring(false)
+    }
+  }
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    // Clear previous errors
+    setLogoError(null)
+
+    // Validate file first
+    const validation = validateLogoFile(file)
+    if (!validation.valid) {
+      setLogoError(validation.error || 'Invalid file')
+      return
+    }
+
+    setIsUploadingLogo(true)
+
+    try {
+      const result = await uploadLogo(file, user.id)
+
+      if (!result.success) {
+        setLogoError(result.error || 'Upload failed')
+        return
+      }
+
+      // Update state with new URL
+      setInvoiceLogoUrl(result.url || null)
+
+      // Save to database immediately
+      await (supabase
+        .from('user_preferences') as any)
+        .upsert({
+          user_id: user.id,
+          invoice_logo_url: result.url,
+        }, {
+          onConflict: 'user_id'
+        })
+
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 2000)
+    } catch (err) {
+      console.error('Logo upload error:', err)
+      setLogoError('Failed to upload logo')
+    } finally {
+      setIsUploadingLogo(false)
+      // Reset the input
+      e.target.value = ''
+    }
+  }
+
+  const handleLogoRemove = async () => {
+    if (!user) return
+
+    setIsUploadingLogo(true)
+    setLogoError(null)
+
+    try {
+      // Delete from storage
+      const result = await deleteLogo(user.id)
+
+      if (!result.success) {
+        setLogoError(result.error || 'Failed to remove logo')
+        return
+      }
+
+      // Update state
+      setInvoiceLogoUrl(null)
+
+      // Update database
+      await (supabase
+        .from('user_preferences') as any)
+        .upsert({
+          user_id: user.id,
+          invoice_logo_url: null,
+        }, {
+          onConflict: 'user_id'
+        })
+
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 2000)
+    } catch (err) {
+      console.error('Logo remove error:', err)
+      setLogoError('Failed to remove logo')
+    } finally {
+      setIsUploadingLogo(false)
     }
   }
 
@@ -397,6 +498,93 @@ export default function SettingsPage() {
             <p className="text-xs text-yapmate-slate-300 mt-2 font-mono">
               Used as default for new invoices
             </p>
+          </div>
+
+          {/* Invoice Branding */}
+          <div className="border-b border-yapmate-slate-700 pb-6">
+            <h2 className="text-yapmate-white text-sm font-mono uppercase tracking-wide mb-4">
+              Invoice Branding
+            </h2>
+            <p className="text-xs text-yapmate-slate-400 font-mono mb-4">
+              Add your logo or company name to appear on invoice PDFs
+            </p>
+
+            {/* Logo Upload */}
+            <div className="mb-4">
+              <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
+                Company Logo
+              </label>
+
+              {invoiceLogoUrl ? (
+                <div className="flex items-start gap-4">
+                  <div className="w-20 h-20 border-2 border-yapmate-slate-700 overflow-hidden flex items-center justify-center bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={invoiceLogoUrl}
+                      alt="Company logo"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <button
+                      onClick={handleLogoRemove}
+                      disabled={isUploadingLogo}
+                      className="text-yapmate-status-red text-xs font-mono uppercase hover:underline disabled:opacity-50"
+                    >
+                      {isUploadingLogo ? 'Removing...' : 'Remove Logo'}
+                    </button>
+                    <p className="text-xs text-yapmate-slate-400 font-mono mt-1">
+                      Logo will appear on invoice header
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block">
+                    <div className="w-full px-4 py-4 border-2 border-dashed border-yapmate-slate-700 text-center cursor-pointer hover:border-yapmate-amber transition-colors duration-snap">
+                      <span className="text-yapmate-slate-300 text-sm font-mono">
+                        {isUploadingLogo ? 'Uploading...' : 'Tap to upload logo'}
+                      </span>
+                      <p className="text-xs text-yapmate-slate-500 font-mono mt-1">
+                        PNG, JPG or WebP (max 2MB)
+                      </p>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg,image/webp"
+                      onChange={handleLogoUpload}
+                      disabled={isUploadingLogo}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {logoError && (
+                <p className="text-xs text-yapmate-status-red font-mono mt-2">
+                  {logoError}
+                </p>
+              )}
+            </div>
+
+            {/* Company Name */}
+            <div>
+              <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
+                Company/Trading Name
+              </label>
+              <input
+                type="text"
+                value={invoiceCompanyName}
+                onChange={(e) => setInvoiceCompanyName(e.target.value)}
+                className="w-full px-4 py-3 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
+                placeholder="Your Business Name"
+              />
+              <p className="text-xs text-yapmate-slate-400 font-mono mt-1">
+                {invoiceLogoUrl
+                  ? 'Shown alongside your logo'
+                  : 'Shown as header if no logo uploaded'}
+              </p>
+            </div>
           </div>
 
           {/* Default VAT */}

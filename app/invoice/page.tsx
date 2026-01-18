@@ -214,10 +214,11 @@ function InvoiceEditContent() {
       } = await supabase.auth.getSession()
 
       let bankDetails = null
+      let branding = null
       if (session) {
         const { data } = await (supabase
           .from('user_preferences') as any)
-          .select('bank_account_name, bank_sort_code, bank_account_number, payment_reference')
+          .select('bank_account_name, bank_sort_code, bank_account_number, payment_reference, invoice_logo_url, invoice_company_name')
           .eq('user_id', session.user.id)
           .single()
 
@@ -227,6 +228,14 @@ function InvoiceEditContent() {
             sortCode: data.bank_sort_code,
             accountNumber: data.bank_account_number,
             paymentReference: data.payment_reference || invoice.id.slice(0, 8).toUpperCase(),
+          }
+        }
+
+        // Extract branding info
+        if (data && (data.invoice_logo_url || data.invoice_company_name)) {
+          branding = {
+            logoUrl: data.invoice_logo_url || null,
+            companyName: data.invoice_company_name || null,
           }
         }
       }
@@ -247,7 +256,7 @@ function InvoiceEditContent() {
       }
 
       const blob = await pdf(
-        <InvoicePDF invoice={invoiceWithMaterials} calculations={calculations} bankDetails={bankDetails} />
+        <InvoicePDF invoice={invoiceWithMaterials} calculations={calculations} bankDetails={bankDetails} branding={branding} />
       ).toBlob()
 
       const customerName = invoice.customer?.name || invoice.customer_name || 'draft'

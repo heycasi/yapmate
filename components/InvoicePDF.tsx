@@ -156,42 +156,50 @@ interface BankDetails {
   paymentReference: string
 }
 
+interface InvoiceBranding {
+  logoUrl: string | null
+  companyName: string | null
+}
+
 interface InvoicePDFProps {
   invoice: any
   calculations: InvoiceCalculation
   bankDetails: BankDetails | null
+  branding?: InvoiceBranding | null
 }
 
 // Helper to check if a value is effectively false/null
 const isNA = (val: boolean | null) => val === false || val === null
 
-const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations, bankDetails }) => {
-  // Use public URL or absolute path if possible. 
-  // For Vercel/Next.js, we might need the full URL for server-side generation if it's external,
-  // or file system path if local. React-PDF Image src can be a url.
-  // Using the hosted URL (production) is safest for PDF generation if local file access issues arise,
-  // but let's try the public path first. If it fails, fallback to text.
-  // Actually, let's just use text for the logo placeholder if image is risky, 
-  // BUT the requirement says "Logo top-left".
-  // I will assume the deployment URL or just use a placeholder text if I can't guarantee the path.
-  // Wait, I can use process.cwd() + public... but let's try just the string path.
-  // Or better, let's use the yapmate.vercel.app URL if safe, or a relative path.
-  // Given constraints, I will use the path `/yapmatetransparetnew112.png` and hope Next.js resolves it.
-  
+const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations, bankDetails, branding }) => {
+  // Determine branding: use user's logo/company name if provided, otherwise fallback
+  const hasUserLogo = branding?.logoUrl && branding.logoUrl.length > 0
+  const hasUserCompanyName = branding?.companyName && branding.companyName.length > 0
+
+  // Fallback to YapMate logo only if no user branding at all
+  const showFallbackLogo = !hasUserLogo && !hasUserCompanyName
+  const logoUrl = hasUserLogo ? branding.logoUrl : (showFallbackLogo ? 'https://yapmate.vercel.app/yapmatetransparetnew112.png' : null)
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            {/* 
-               In production (Vercel), local file access for PDF might be tricky. 
-               Using the public URL is often reliable. 
-            */}
-             <Image 
-                src="https://yapmate.vercel.app/yapmatetransparetnew112.png" 
-                style={styles.logo} 
-             />
+            {/* User's logo or fallback */}
+            {logoUrl && (
+              <Image
+                src={logoUrl}
+                style={styles.logo}
+              />
+            )}
+            {/* User's company name (shown if provided, either with or without logo) */}
+            {hasUserCompanyName && (
+              <Text style={{ fontSize: 14, fontWeight: 'bold', marginTop: logoUrl ? 5 : 0 }}>
+                {branding.companyName}
+              </Text>
+            )}
+            {/* If no logo and no company name, show nothing extra - fallback logo already shown */}
           </View>
           <View style={styles.headerRight}>
             <Text style={styles.title}>INVOICE</Text>
@@ -199,7 +207,6 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, calculations, bankDeta
             <Text style={styles.companyInfo}>
               Date: {new Date(invoice.created_at).toLocaleDateString('en-GB')}
             </Text>
-            {/* Add user's details if we had them, for now just generic */}
           </View>
         </View>
 
