@@ -36,8 +36,8 @@ export default function HomePage() {
             <div className="absolute inset-0 bg-yapmate-amber rounded-full blur-3xl opacity-30 scale-150" />
             {/* Inner glow */}
             <div className="absolute inset-0 bg-yapmate-amber rounded-full blur-xl opacity-40 scale-125" />
-            {/* Logo background circle */}
-            <div className="relative bg-yapmate-amber p-5 rounded-full shadow-yapmate-glow">
+            {/* Logo - no background circle to avoid overlap */}
+            <div className="relative">
               <Image
                 src="/yapmatetransparetnew112.png"
                 alt="YapMate Logo"
