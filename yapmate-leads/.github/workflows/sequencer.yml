@@ -30,6 +30,10 @@ concurrency:
 env:
   PYTHON_VERSION: '3.11'
 
+defaults:
+  run:
+    working-directory: yapmate-leads
+
 jobs:
   run-sequencer:
     runs-on: ubuntu-latest
