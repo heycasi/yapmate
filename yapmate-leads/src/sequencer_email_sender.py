@@ -403,8 +403,14 @@ The YapMate Team
             True if test email sent successfully
         """
         try:
+            from_header = f"{self.from_name} <{self.from_email}>"
+            print(f"    DEBUG: from_name='{self.from_name}'")
+            print(f"    DEBUG: from_email='{self.from_email}'")
+            print(f"    DEBUG: from_header='{from_header}'")
+            print(f"    DEBUG: to_email='{to_email}'")
+
             params = {
-                "from": f"{self.from_name} <{self.from_email}>",
+                "from": from_header,
                 "to": [to_email],
                 "subject": "[YapMate Test] Email Sender Verification",
                 "html": """
