@@ -144,9 +144,10 @@ class SequencerEmailSender:
         resend.api_key = resend_key
 
         # Get email configuration from env (with fallbacks from config)
-        self.from_email = os.getenv("EMAIL_FROM", self.config.from_email)
-        self.from_name = os.getenv("EMAIL_FROM_NAME", self.config.from_name)
-        self.reply_to = os.getenv("EMAIL_REPLY_TO", self.config.reply_to)
+        # Use 'or' to handle empty strings from GitHub Actions when secrets aren't set
+        self.from_email = os.getenv("EMAIL_FROM") or self.config.from_email
+        self.from_name = os.getenv("EMAIL_FROM_NAME") or self.config.from_name
+        self.reply_to = os.getenv("EMAIL_REPLY_TO") or self.config.reply_to
         self.footer_image_url = os.getenv("EMAIL_FOOTER_IMAGE_URL", "")
 
     # =========================================================================
