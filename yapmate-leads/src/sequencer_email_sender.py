@@ -403,18 +403,16 @@ The YapMate Team
             True if test email sent successfully
         """
         try:
-            # Use hardcoded values to ensure no secret encoding issues
-            from_name = "YapMate"
-            from_email = "support@yapmate.co.uk"
+            # Use hardcoded values - all ASCII, no secrets
+            from_header = "YapMate <support@yapmate.co.uk>"
             clean_to = to_email.strip() if to_email else None
 
             if not clean_to:
                 print("    Test email failed: No recipient address")
                 return False
 
-            from_header = f"{from_name} <{from_email}>"
-            print(f"    Sending to: {clean_to}")
-            print(f"    From: {from_header}")
+            print(f"    Attempting to send test email...")
+            print(f"    Recipient length: {len(clean_to)}")
 
             params = {
                 "from": from_header,
