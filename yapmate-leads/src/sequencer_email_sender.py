@@ -136,8 +136,8 @@ class SequencerEmailSender:
         # Load environment
         load_dotenv()
 
-        # Initialize Resend
-        resend_key = os.getenv("RESEND_API_KEY")
+        # Initialize Resend - strip whitespace to handle secrets with trailing newlines
+        resend_key = os.getenv("RESEND_API_KEY", "").strip()
         if not resend_key:
             raise ValueError("RESEND_API_KEY not found in environment")
 
