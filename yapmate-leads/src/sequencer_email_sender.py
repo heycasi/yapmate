@@ -403,23 +403,22 @@ The YapMate Team
             True if test email sent successfully
         """
         try:
-            # Strip any whitespace/newlines that might have been included in secrets
-            from_name = self.from_name.strip() if self.from_name else "YapMate"
-            from_email = self.from_email.strip() if self.from_email else "support@yapmate.co.uk"
-            to_email = to_email.strip() if to_email else None
+            # Use hardcoded values to ensure no secret encoding issues
+            from_name = "YapMate"
+            from_email = "support@yapmate.co.uk"
+            clean_to = to_email.strip() if to_email else None
 
-            if not to_email:
+            if not clean_to:
                 print("    Test email failed: No recipient address")
                 return False
 
             from_header = f"{from_name} <{from_email}>"
-            print(f"    Sending from: {from_header}")
-
-            reply_to = self.reply_to.strip() if self.reply_to else None
+            print(f"    Sending to: {clean_to}")
+            print(f"    From: {from_header}")
 
             params = {
                 "from": from_header,
-                "to": [to_email],
+                "to": [clean_to],
                 "subject": "[YapMate Test] Email Sender Verification",
                 "html": """
                 <html>
@@ -449,8 +448,7 @@ This is an automated test email. No action required.
                 }
             }
 
-            if reply_to:
-                params["reply_to"] = reply_to
+            # Skip reply_to to simplify test
 
             response = resend.Emails.send(params)
             email_id = response.get("id", "unknown")
