@@ -403,12 +403,19 @@ The YapMate Team
             True if test email sent successfully
         """
         try:
-            from_header = f"{self.from_name} <{self.from_email}>"
-            print(f"    DEBUG: from_name repr={repr(self.from_name)}")
-            print(f"    DEBUG: from_email repr={repr(self.from_email)}")
-            print(f"    DEBUG: from_header repr={repr(from_header)}")
-            print(f"    DEBUG: to_email repr={repr(to_email)}")
-            print(f"    DEBUG: reply_to repr={repr(self.reply_to)}")
+            # Strip any whitespace/newlines that might have been included in secrets
+            from_name = self.from_name.strip() if self.from_name else "YapMate"
+            from_email = self.from_email.strip() if self.from_email else "support@yapmate.co.uk"
+            to_email = to_email.strip() if to_email else None
+
+            if not to_email:
+                print("    Test email failed: No recipient address")
+                return False
+
+            from_header = f"{from_name} <{from_email}>"
+            print(f"    Sending from: {from_header}")
+
+            reply_to = self.reply_to.strip() if self.reply_to else None
 
             params = {
                 "from": from_header,
@@ -442,12 +449,12 @@ This is an automated test email. No action required.
                 }
             }
 
-            if self.reply_to:
-                params["reply_to"] = self.reply_to
+            if reply_to:
+                params["reply_to"] = reply_to
 
             response = resend.Emails.send(params)
             email_id = response.get("id", "unknown")
-            print(f"    Test email sent (ID: {email_id})")
+            print(f"    Test email sent successfully (ID: {email_id})")
             return True
 
         except Exception as e:
