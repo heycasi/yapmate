@@ -403,28 +403,53 @@ The YapMate Team
             True if test email sent successfully
         """
         try:
-            # Use hardcoded values - all ASCII, no secrets
-            from_header = "YapMate <support@yapmate.co.uk>"
+            from_header = f"{self.from_name} <{self.from_email}>"
             clean_to = to_email.strip() if to_email else None
 
             if not clean_to:
                 print("    Test email failed: No recipient address")
                 return False
 
-            import resend as resend_module
-            api_key = resend_module.api_key
-            print(f"    Attempting to send test email...")
-            print(f"    Recipient length: {len(clean_to)}")
-            print(f"    API key length: {len(api_key) if api_key else 0}")
-            print(f"    API key has newline: {chr(10) in api_key if api_key else False}")
+            # Build test email content
+            html_content = """
+            <html>
+            <body style="font-family: Arial, sans-serif; color: #333;">
+            <h2>YapMate Lead Engine - Test Email</h2>
+            <p>This is a test email from the YapMate Lead Engine.</p>
+            <p>If you received this, the email sender is working correctly.</p>
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+            <p style="color: #666; font-size: 12px;">
+                Sent at: {timestamp}<br>
+                From: {from_email}
+            </p>
+            </body>
+            </html>
+            """.format(
+                timestamp=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                from_email=self.from_email
+            )
 
-            # Minimal params - no custom headers
+            text_content = f"""
+YapMate Lead Engine - Test Email
+
+This is a test email from the YapMate Lead Engine.
+
+If you received this, the email sender is working correctly.
+
+Sent at: {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}
+From: {self.from_email}
+            """.strip()
+
             params = {
                 "from": from_header,
                 "to": [clean_to],
-                "subject": "YapMate Test Email",
-                "text": "This is a test email from YapMate Lead Engine."
+                "subject": "YapMate Lead Engine - Test Email",
+                "html": html_content,
+                "text": text_content,
             }
+
+            if self.reply_to:
+                params["reply_to"] = self.reply_to
 
             response = resend.Emails.send(params)
             email_id = response.get("id", "unknown")
