@@ -11,9 +11,14 @@ on:
   workflow_dispatch:
     inputs:
       send_limit:
-        description: 'Maximum emails to send (optional, defaults to remaining daily quota)'
+        description: 'Maximum emails to send (overrides SEND_LIMIT_PER_RUN)'
         required: false
         type: number
+      dry_run:
+        description: 'Dry run mode (no actual sending)'
+        required: false
+        default: 'false'
+        type: boolean
 
 concurrency:
   group: email-sender
@@ -21,6 +26,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.11'
+  SEND_LIMIT_PER_RUN: '3'
 
 defaults:
   run:
@@ -56,31 +62,46 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_FROM_NAME: ${{ secrets.EMAIL_FROM_NAME }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
-          # Pipeline control flags
+          # Pipeline control (from secrets)
           PIPELINE_ENABLED: 'true'
-          SEND_ENABLED: 'true'
-          DRY_RUN: 'false'
+          SEND_ENABLED: ${{ secrets.SEND_ENABLED || 'false' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           SAFE_MODE: 'true'
+          SEND_LIMIT_PER_RUN: ${{ env.SEND_LIMIT_PER_RUN }}
         run: |
-          echo "============================================"
+          echo "========================================"
           echo "EMAIL SENDER"
-          echo "============================================"
-          echo "Started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "========================================"
+          echo "Started: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "Configuration:"
+          echo "  SEND_ENABLED: $SEND_ENABLED"
+          echo "  DRY_RUN: $DRY_RUN"
+          echo "  SAFE_MODE: $SAFE_MODE"
+          echo "  SEND_LIMIT_PER_RUN: $SEND_LIMIT_PER_RUN"
           echo ""
 
-          # Build command with optional limit
-          if [ -n "${{ github.event.inputs.send_limit }}" ]; then
-            echo "Send limit: ${{ github.event.inputs.send_limit }}"
-            python scripts/run_sequencer.py --send-only --send-limit ${{ github.event.inputs.send_limit }}
-          else
-            echo "Send limit: (using daily quota)"
-            python scripts/run_sequencer.py --send-only
+          # Determine send limit
+          LIMIT="${{ github.event.inputs.send_limit }}"
+          if [ -z "$LIMIT" ]; then
+            LIMIT="$SEND_LIMIT_PER_RUN"
+          fi
+          echo "Send limit: $LIMIT"
+
+          # Build command
+          CMD="python scripts/run_sequencer.py --send-only --send-limit $LIMIT"
+          if [ "$DRY_RUN" = "true" ]; then
+            CMD="$CMD --dry-run"
           fi
 
+          echo "Command: $CMD"
           echo ""
-          echo "============================================"
-          echo "EMAIL SENDER COMPLETED SUCCESSFULLY"
-          echo "============================================"
+          $CMD
+
+          echo ""
+          echo "========================================"
+          echo "COMPLETED"
+          echo "========================================"
 
   alert-on-failure:
     runs-on: ubuntu-latest
@@ -108,10 +129,8 @@ jobs:
           ALERT_TO_EMAIL: ${{ secrets.ALERT_TO_EMAIL }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
         run: |
-          echo "Sending failure alert email..."
           python3 << 'EOF'
           from src.ci_helpers import send_failure_alert
-
           send_failure_alert(
               workflow_name="Email Sender",
               job_name="send-emails",
@@ -120,6 +139,6 @@ jobs:
               repo="${{ github.repository }}",
               branch="${{ github.ref_name }}",
               commit_sha="${{ github.sha }}",
-              error_summary="The email sender failed. This may indicate issues with Google Sheets, Resend API, or email delivery. Check the workflow logs for details."
+              error_summary="Email sender failed. Check workflow logs."
           )
           EOF

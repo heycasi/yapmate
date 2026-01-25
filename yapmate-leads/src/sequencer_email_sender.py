@@ -1,11 +1,14 @@
 """Email Sender for City-Trade Sequencing Engine.
 
 This module handles email sending with:
+- SEND_ENABLED gate (fail-closed)
+- Email sanitization pipeline
 - Daily limits enforced at sender level
 - Warm-up ramp to gradually increase sending volume
 - Safety checks based on bounce/complaint rates
 - Integration with Resend API
 - Status updates to Google Sheets
+- Structured logging for each lead
 """
 
 import os
@@ -13,6 +16,7 @@ import time
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass
+from enum import Enum
 
 import resend
 from dotenv import load_dotenv
@@ -21,6 +25,58 @@ from src.sequencer_config import DEFAULT_EMAIL_SENDER_CONFIG, EmailSenderConfig
 from src.sequencer_models import EnhancedLead, RunnerState
 from src.sequencer_sheets import SequencerSheetsManager
 from src.sequencer_alerts import alert_sending_paused, alert_sender_error
+from src.email_sanitizer import sanitize_email, SanitizationResult
+from src.config import get_config
+
+
+# =============================================================================
+# STRUCTURED LOGGING
+# =============================================================================
+
+class SendStatus(Enum):
+    """Status of a send operation."""
+    SENT = "SENT"
+    BLOCKED = "BLOCKED"
+    INVALID = "INVALID"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+
+
+@dataclass
+class StructuredLog:
+    """Structured log entry for each lead."""
+    lead_id: str
+    status: SendStatus
+    reason: str
+    email_original: str
+    email_sanitized: Optional[str]
+    business_name: str
+    timestamp: str = ""
+
+    def __post_init__(self):
+        if not self.timestamp:
+            self.timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "lead_id": self.lead_id,
+            "status": self.status.value,
+            "reason": self.reason,
+            "email_original": self.email_original,
+            "email_sanitized": self.email_sanitized,
+            "business_name": self.business_name,
+            "timestamp": self.timestamp,
+        }
+
+    def log(self) -> None:
+        """Print structured log entry."""
+        print(f"  STATUS: {self.status.value}")
+        print(f"  REASON: {self.reason}")
+        print(f"  EMAIL_ORIGINAL: {self.email_original}")
+        print(f"  EMAIL_SANITIZED: {self.email_sanitized or 'N/A'}")
+        print(f"  BUSINESS: {self.business_name}")
+        print(f"  TIMESTAMP: {self.timestamp}")
+        print("-" * 40)
 
 
 @dataclass
@@ -29,8 +85,11 @@ class SendResult:
 
     lead_id: str
     success: bool
+    status: SendStatus = SendStatus.FAILED
     email_id: Optional[str] = None  # Resend email ID
     error: Optional[str] = None
+    email_original: Optional[str] = None
+    email_sanitized: Optional[str] = None
 
 
 @dataclass
@@ -40,7 +99,11 @@ class SendBatchResult:
     total_attempted: int
     total_sent: int
     total_failed: int
+    total_blocked: int
+    total_invalid: int
+    total_sanitized: int
     results: List[SendResult]
+    logs: List[StructuredLog]
     stopped_reason: Optional[str] = None  # Why sending stopped (if not all sent)
 
 
@@ -326,40 +389,166 @@ The YapMate Team
     # SENDING
     # =========================================================================
 
-    def send_email(self, lead: EnhancedLead) -> SendResult:
+    def _check_send_enabled(self) -> tuple[bool, str]:
         """
-        Send an email to a single lead.
+        Check if sending is enabled. Fail-closed logic.
+
+        Returns:
+            Tuple of (is_enabled, reason)
+        """
+        config = get_config()
+
+        # Hard block if SEND_ENABLED is not explicitly "true"
+        if not config.pipeline.send_enabled:
+            return (False, "SEND_ENABLED is not 'true' - sending blocked")
+
+        return (True, "SEND_ENABLED is true")
+
+    def sanitize_and_validate_email(self, lead: EnhancedLead) -> tuple[SanitizationResult, StructuredLog]:
+        """
+        Sanitize and validate lead email.
+
+        Returns:
+            Tuple of (sanitization_result, structured_log)
+        """
+        original_email = lead.email or ""
+        result = sanitize_email(original_email)
+
+        if not result.valid:
+            log = StructuredLog(
+                lead_id=lead.lead_id,
+                status=SendStatus.INVALID,
+                reason=result.reason or "Unknown validation error",
+                email_original=original_email,
+                email_sanitized=None,
+                business_name=lead.business_name,
+            )
+            return (result, log)
+
+        # Check if email was modified during sanitization
+        was_sanitized = result.sanitized != original_email.lower().strip()
+
+        log = StructuredLog(
+            lead_id=lead.lead_id,
+            status=SendStatus.SENT,  # Will be updated later
+            reason="Email valid" + (" (sanitized)" if was_sanitized else ""),
+            email_original=original_email,
+            email_sanitized=result.sanitized,
+            business_name=lead.business_name,
+        )
+
+        return (result, log)
+
+    def send_email(self, lead: EnhancedLead, dry_run: bool = False) -> tuple[SendResult, StructuredLog]:
+        """
+        Send an email to a single lead with sanitization.
+
+        Pipeline: lead.email → sanitize_email() → validate → send
 
         Args:
             lead: Lead to send email to
+            dry_run: If True, validate but don't actually send
 
         Returns:
-            SendResult with outcome
+            Tuple of (SendResult, StructuredLog)
         """
+        config = get_config()
+
+        # Step 1: Check if sending is enabled (fail-closed)
+        send_enabled, enable_reason = self._check_send_enabled()
+
+        if not send_enabled and not dry_run:
+            log = StructuredLog(
+                lead_id=lead.lead_id,
+                status=SendStatus.BLOCKED,
+                reason=enable_reason,
+                email_original=lead.email or "",
+                email_sanitized=None,
+                business_name=lead.business_name,
+            )
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=False,
+                status=SendStatus.BLOCKED,
+                error=enable_reason,
+                email_original=lead.email,
+            ), log)
+
+        # Step 2: Check if email exists
         if not lead.email:
-            return SendResult(
+            log = StructuredLog(
+                lead_id=lead.lead_id,
+                status=SendStatus.INVALID,
+                reason="No email address",
+                email_original="",
+                email_sanitized=None,
+                business_name=lead.business_name,
+            )
+            return (SendResult(
                 lead_id=lead.lead_id,
                 success=False,
-                error="No email address"
-            )
+                status=SendStatus.INVALID,
+                error="No email address",
+                email_original="",
+            ), log)
 
+        # Step 3: Sanitize and validate email
+        sanitization, log = self.sanitize_and_validate_email(lead)
+
+        if not sanitization.valid:
+            # Mark as INVALID in sheets
+            self.sheets.update_lead_status(
+                lead.lead_id,
+                "INVALID",
+                eligibility_reason=sanitization.reason
+            )
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=False,
+                status=SendStatus.INVALID,
+                error=sanitization.reason,
+                email_original=lead.email,
+            ), log)
+
+        # Use sanitized email
+        clean_email = sanitization.sanitized
+
+        # Step 4: Check eligibility
         if not lead.send_eligible:
-            return SendResult(
+            log.status = SendStatus.BLOCKED
+            log.reason = f"Not eligible: {lead.eligibility_reason}"
+            return (SendResult(
                 lead_id=lead.lead_id,
                 success=False,
-                error=f"Not eligible: {lead.eligibility_reason}"
-            )
+                status=SendStatus.BLOCKED,
+                error=f"Not eligible: {lead.eligibility_reason}",
+                email_original=lead.email,
+                email_sanitized=clean_email,
+            ), log)
 
+        # Step 5: Dry run check
+        if dry_run or config.pipeline.dry_run:
+            log.status = SendStatus.BLOCKED
+            log.reason = "Dry run mode - email validated but not sent"
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=True,  # Validation passed
+                status=SendStatus.BLOCKED,
+                email_original=lead.email,
+                email_sanitized=clean_email,
+            ), log)
+
+        # Step 6: Actually send the email
         try:
             # Generate email content
             subject = self.generate_subject(lead)
             html_body = self.generate_html_body(lead)
             text_body = self.generate_text_body(lead)
 
-            # Prepare send parameters
+            # Prepare send parameters (use sanitized email)
             params = {
                 "from": f"{self.from_name} <{self.from_email}>",
-                "to": [lead.email],
+                "to": [clean_email],
                 "subject": subject,
                 "html": html_body,
                 "text": text_body,
@@ -383,11 +572,17 @@ The YapMate Team
                 sent_at=datetime.utcnow()
             )
 
-            return SendResult(
+            log.status = SendStatus.SENT
+            log.reason = f"Email sent successfully (ID: {email_id})"
+
+            return (SendResult(
                 lead_id=lead.lead_id,
                 success=True,
-                email_id=email_id
-            )
+                status=SendStatus.SENT,
+                email_id=email_id,
+                email_original=lead.email,
+                email_sanitized=clean_email,
+            ), log)
 
         except Exception as e:
             # Update lead status to FAILED
@@ -397,25 +592,57 @@ The YapMate Team
                 eligibility_reason=str(e)
             )
 
-            return SendResult(
+            log.status = SendStatus.FAILED
+            log.reason = f"Send failed: {str(e)}"
+
+            return (SendResult(
                 lead_id=lead.lead_id,
                 success=False,
-                error=str(e)
-            )
+                status=SendStatus.FAILED,
+                error=str(e),
+                email_original=lead.email,
+                email_sanitized=clean_email,
+            ), log)
 
-    def send_batch(self, limit: int = None) -> SendBatchResult:
+    def send_batch(self, limit: int = None, dry_run: bool = False) -> SendBatchResult:
         """
         Send emails to eligible leads up to the daily limit.
 
+        Pipeline per lead:
+        1. Fetch eligible leads
+        2. Claim lead (idempotency)
+        3. Sanitize email
+        4. Validate email
+        5. Check SEND_ENABLED gate
+        6. Send (or dry-run)
+        7. Log structured output
+
         Args:
             limit: Maximum emails to send (defaults to remaining daily quota)
+            dry_run: If True, validate but don't actually send
 
         Returns:
-            SendBatchResult with outcomes
+            SendBatchResult with outcomes and structured logs
         """
-        print("\n" + "=" * 60)
-        print("EMAIL SENDER")
-        print("=" * 60)
+        config = get_config()
+
+        print("\n" + "=" * 70)
+        print("EMAIL SENDER - STRUCTURED PIPELINE")
+        print("=" * 70)
+        print(f"  Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+        # Check SEND_ENABLED gate (fail-closed)
+        send_enabled, enable_reason = self._check_send_enabled()
+        effective_dry_run = dry_run or config.pipeline.dry_run or not send_enabled
+
+        print(f"\n  SEND_ENABLED: {send_enabled} ({enable_reason})")
+        print(f"  DRY_RUN: {config.pipeline.dry_run}")
+        print(f"  SAFE_MODE: {config.pipeline.safe_mode}")
+        print(f"  EFFECTIVE MODE: {'DRY RUN' if effective_dry_run else 'LIVE SEND'}")
+
+        if not send_enabled:
+            print(f"\n  ⚠️  SEND_ENABLED gate is CLOSED - all sends will be BLOCKED")
+            print(f"      Pipeline will run for validation/logging only")
 
         # Check if sending is paused
         state = self.sheets.get_runner_state()
@@ -425,42 +652,63 @@ The YapMate Team
                 total_attempted=0,
                 total_sent=0,
                 total_failed=0,
+                total_blocked=0,
+                total_invalid=0,
+                total_sanitized=0,
                 results=[],
+                logs=[],
                 stopped_reason=f"Sending paused: {state.pause_reason}"
             )
 
-        # Check safety thresholds
-        is_safe, pause_reason = self.check_safety_thresholds()
-        if not is_safe:
-            self.pause_sending(pause_reason)
-            return SendBatchResult(
-                total_attempted=0,
-                total_sent=0,
-                total_failed=0,
-                results=[],
-                stopped_reason=pause_reason
-            )
+        # Check safety thresholds (only matters if actually sending)
+        if send_enabled and not effective_dry_run:
+            is_safe, pause_reason = self.check_safety_thresholds()
+            if not is_safe:
+                self.pause_sending(pause_reason)
+                return SendBatchResult(
+                    total_attempted=0,
+                    total_sent=0,
+                    total_failed=0,
+                    total_blocked=0,
+                    total_invalid=0,
+                    total_sanitized=0,
+                    results=[],
+                    logs=[],
+                    stopped_reason=pause_reason
+                )
 
         # Calculate how many to send
         remaining_quota = self.get_remaining_daily_quota()
         daily_limit = self.calculate_daily_limit()
 
-        print(f"  Daily limit: {daily_limit}")
+        print(f"\n  Daily limit: {daily_limit}")
         print(f"  Remaining quota: {remaining_quota}")
 
-        if remaining_quota <= 0:
+        # Get SEND_LIMIT_PER_RUN from env
+        send_limit_per_run = int(os.getenv("SEND_LIMIT_PER_RUN", "3"))
+        print(f"  SEND_LIMIT_PER_RUN: {send_limit_per_run}")
+
+        if remaining_quota <= 0 and not effective_dry_run:
             print("\n  Daily limit reached. No more emails will be sent today.")
             return SendBatchResult(
                 total_attempted=0,
                 total_sent=0,
                 total_failed=0,
+                total_blocked=0,
+                total_invalid=0,
+                total_sanitized=0,
                 results=[],
+                logs=[],
                 stopped_reason="Daily limit reached"
             )
 
-        # Use limit if provided, otherwise use remaining quota
-        send_limit = min(limit, remaining_quota) if limit else remaining_quota
-        print(f"  Will send up to: {send_limit}")
+        # Use limit if provided, otherwise use SEND_LIMIT_PER_RUN, then remaining quota
+        if limit:
+            send_limit = min(limit, remaining_quota) if not effective_dry_run else limit
+        else:
+            send_limit = min(send_limit_per_run, remaining_quota) if not effective_dry_run else send_limit_per_run
+
+        print(f"  Will process up to: {send_limit}")
 
         # Get eligible leads
         print(f"\n  Fetching eligible leads...")
@@ -472,63 +720,94 @@ The YapMate Team
                 total_attempted=0,
                 total_sent=0,
                 total_failed=0,
+                total_blocked=0,
+                total_invalid=0,
+                total_sanitized=0,
                 results=[],
+                logs=[],
                 stopped_reason="No eligible leads"
             )
 
-        # Send emails with claim-before-send for idempotency
+        # Process leads with structured logging
         results = []
+        logs = []
         sent_count = 0
         failed_count = 0
+        blocked_count = 0
+        invalid_count = 0
+        sanitized_count = 0
         skipped_count = 0
 
-        print(f"\n  Sending emails (with claim step for idempotency)...")
-        print("-" * 60)
+        print(f"\n" + "=" * 70)
+        print("PROCESSING LEADS")
+        print("=" * 70)
 
         try:
             for i, lead in enumerate(leads, 1):
-                print(f"  [{i}/{len(leads)}] {lead.business_name} <{lead.email}>...", end=" ")
+                print(f"\n[{i}/{len(leads)}] {lead.business_name}")
+                print("-" * 40)
 
                 # Step 1: Claim the lead (compare-and-set from NEW/APPROVED -> QUEUED)
                 claimed = self.sheets.claim_lead_for_sending(lead.lead_id, lead.status)
                 if not claimed:
                     skipped_count += 1
-                    print("SKIPPED (already claimed)")
+                    log = StructuredLog(
+                        lead_id=lead.lead_id,
+                        status=SendStatus.SKIPPED,
+                        reason="Already claimed by another process",
+                        email_original=lead.email or "",
+                        email_sanitized=None,
+                        business_name=lead.business_name,
+                    )
+                    log.log()
+                    logs.append(log)
                     continue
 
-                # Step 2: Send the email
-                result = self.send_email(lead)
+                # Step 2: Send the email (includes sanitization)
+                result, log = self.send_email(lead, dry_run=effective_dry_run)
                 results.append(result)
+                logs.append(log)
+                log.log()
 
-                if result.success:
+                # Track sanitization
+                if result.email_original and result.email_sanitized:
+                    if result.email_original.lower().strip() != result.email_sanitized:
+                        sanitized_count += 1
+
+                # Update counters
+                if result.status == SendStatus.SENT:
                     sent_count += 1
-                    print(f"SENT (ID: {result.email_id})")
-                    # Status already set to SENT by send_email()
-                else:
+                elif result.status == SendStatus.BLOCKED:
+                    blocked_count += 1
+                    # Revert to original status if blocked (not invalid)
+                    if lead.status in ("NEW", "APPROVED"):
+                        self.sheets.update_lead_status(
+                            lead.lead_id,
+                            lead.status,
+                            eligibility_reason=log.reason
+                        )
+                elif result.status == SendStatus.INVALID:
+                    invalid_count += 1
+                    # Already marked as INVALID in send_email
+                elif result.status == SendStatus.FAILED:
                     failed_count += 1
-                    print(f"FAILED: {result.error}")
                     # Revert to original status so lead isn't lost
                     self.sheets.update_lead_status(
                         lead.lead_id,
-                        lead.status,  # Revert to original (NEW or APPROVED)
+                        lead.status,
                         eligibility_reason=f"Send failed: {result.error}"
                     )
 
-                # Rate limiting
-                time.sleep(self.config.delay_between_sends_seconds)
+                # Rate limiting (only if actually sending)
+                if result.status == SendStatus.SENT:
+                    time.sleep(self.config.delay_between_sends_seconds)
 
                 # Re-check safety thresholds periodically (every 10 emails)
-                if i % 10 == 0:
+                if i % 10 == 0 and send_enabled and not effective_dry_run:
                     is_safe, pause_reason = self.check_safety_thresholds()
                     if not is_safe:
                         self.pause_sending(pause_reason)
-                        return SendBatchResult(
-                            total_attempted=i,
-                            total_sent=sent_count,
-                            total_failed=failed_count,
-                            results=results,
-                            stopped_reason=pause_reason
-                        )
+                        break
 
         except Exception as e:
             # Unexpected error in sender loop - alert and re-raise
@@ -536,24 +815,32 @@ The YapMate Team
             alert_sender_error(e, sheets_manager=self.sheets)
             raise
 
-        # Update send counter
+        # Update send counter (only for actual sends)
         if sent_count > 0:
             self.increment_send_counter(sent_count)
 
         # Summary
-        print("-" * 60)
-        print(f"\n  SUMMARY:")
-        print(f"    Attempted: {len(leads)}")
-        print(f"    Claimed & Sent: {sent_count}")
-        print(f"    Failed: {failed_count}")
-        print(f"    Skipped (already claimed): {skipped_count}")
-        print("=" * 60)
+        print("\n" + "=" * 70)
+        print("BATCH SUMMARY")
+        print("=" * 70)
+        print(f"  Total processed: {len(leads)}")
+        print(f"  SENT:      {sent_count}")
+        print(f"  BLOCKED:   {blocked_count}")
+        print(f"  INVALID:   {invalid_count}")
+        print(f"  FAILED:    {failed_count}")
+        print(f"  SKIPPED:   {skipped_count}")
+        print(f"  Sanitized: {sanitized_count}")
+        print("=" * 70)
 
         return SendBatchResult(
             total_attempted=len(leads) - skipped_count,
             total_sent=sent_count,
             total_failed=failed_count,
-            results=results
+            total_blocked=blocked_count,
+            total_invalid=invalid_count,
+            total_sanitized=sanitized_count,
+            results=results,
+            logs=logs,
         )
 
 

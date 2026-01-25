@@ -67,6 +67,7 @@ class LimitsConfig:
     max_send_per_hour: int = 20
     max_per_domain_per_day: int = 5
     max_per_company_per_day: int = 1
+    send_limit_per_run: int = 3
 
     # Warmup ramp (days -> daily limit)
     warmup_ramp: Dict[int, int] = field(default_factory=lambda: {
@@ -77,6 +78,56 @@ class LimitsConfig:
     # Cooldowns (seconds)
     domain_cooldown: int = 3600  # 1 hour
     company_cooldown: int = 86400  # 24 hours
+
+
+@dataclass
+class ScalingConfig:
+    """
+    Scaling configuration for production ramp-up.
+
+    These are prep configs - NOT enabled by default.
+    Enable by setting SCALING_ENABLED=true in environment.
+    """
+    # Master toggle
+    scaling_enabled: bool = False
+
+    # Target goals
+    daily_target: int = 100  # Target emails per day at full scale
+    ramp_start: int = 10     # Starting emails per day
+    ramp_increment: int = 10 # Increase by this many per day
+    max_cap: int = 100       # Hard cap (never exceed)
+
+    # Current ramp day (auto-calculated from start date)
+    ramp_start_date: Optional[str] = None  # Format: YYYY-MM-DD
+
+    def get_todays_limit(self) -> int:
+        """
+        Calculate today's limit based on ramp schedule.
+
+        Returns:
+            Number of emails allowed today (capped at max_cap)
+        """
+        if not self.scaling_enabled:
+            return self.ramp_start
+
+        if not self.ramp_start_date:
+            return self.ramp_start
+
+        try:
+            from datetime import datetime
+            start = datetime.strptime(self.ramp_start_date, "%Y-%m-%d")
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            days_active = (today - start).days
+
+            if days_active < 0:
+                return self.ramp_start
+
+            # Calculate ramped limit
+            limit = self.ramp_start + (days_active * self.ramp_increment)
+            return min(limit, self.max_cap, self.daily_target)
+
+        except ValueError:
+            return self.ramp_start
 
 
 @dataclass
@@ -106,6 +157,7 @@ class Config:
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     limits: LimitsConfig = field(default_factory=LimitsConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
+    scaling: ScalingConfig = field(default_factory=ScalingConfig)
 
     # Runtime state
     is_ci: bool = False
@@ -133,6 +185,10 @@ class Config:
               f"send={self.pipeline.send_enabled}")
         print(f"[CONFIG] Mode: dry_run={self.pipeline.dry_run}, "
               f"safe_mode={self.pipeline.safe_mode}")
+        if self.scaling.scaling_enabled:
+            print(f"[CONFIG] Scaling: enabled, "
+                  f"daily_target={self.scaling.daily_target}, "
+                  f"today_limit={self.scaling.get_todays_limit()}")
 
 
 def load_config() -> Config:
@@ -171,6 +227,21 @@ def load_config() -> Config:
         config.limits.max_enrich_per_run = int(os.getenv("MAX_ENRICH_PER_RUN"))
     if os.getenv("MAX_SEND_PER_DAY"):
         config.limits.max_send_per_day = int(os.getenv("MAX_SEND_PER_DAY"))
+    if os.getenv("SEND_LIMIT_PER_RUN"):
+        config.limits.send_limit_per_run = int(os.getenv("SEND_LIMIT_PER_RUN"))
+
+    # Scaling config (prep for production ramp-up - NOT enabled by default)
+    config.scaling.scaling_enabled = os.getenv("SCALING_ENABLED", "false").lower() == "true"
+    if os.getenv("DAILY_TARGET"):
+        config.scaling.daily_target = int(os.getenv("DAILY_TARGET"))
+    if os.getenv("RAMP_START"):
+        config.scaling.ramp_start = int(os.getenv("RAMP_START"))
+    if os.getenv("RAMP_INCREMENT"):
+        config.scaling.ramp_increment = int(os.getenv("RAMP_INCREMENT"))
+    if os.getenv("MAX_CAP"):
+        config.scaling.max_cap = int(os.getenv("MAX_CAP"))
+    if os.getenv("RAMP_START_DATE"):
+        config.scaling.ramp_start_date = os.getenv("RAMP_START_DATE")
 
     # Runtime flags
     config.is_ci = bool(os.getenv("CI") or os.getenv("GITHUB_ACTIONS"))
