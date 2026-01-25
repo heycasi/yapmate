@@ -49,12 +49,18 @@ jobs:
 
       - name: Run email sender
         env:
+          # Core credentials
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_FROM_NAME: ${{ secrets.EMAIL_FROM_NAME }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          # Pipeline control flags
+          PIPELINE_ENABLED: 'true'
+          SEND_ENABLED: 'true'
+          DRY_RUN: 'false'
+          SAFE_MODE: 'true'
         run: |
           echo "============================================"
           echo "EMAIL SENDER"
