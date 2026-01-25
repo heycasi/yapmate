@@ -421,9 +421,22 @@ class TaskRunner:
 
         try:
             # Step 1: Scrape leads
-            print(f"\n[1/5] Scraping leads...")
+            print(f"\n[1/6] Scraping leads...")
             if not self.scraper:
-                raise Exception("Apify scraper not configured")
+                print("  WARNING: Apify scraper not configured - skipping scraping")
+                print("  Set APIFY_API_TOKEN and APIFY_ACTOR_ID to enable scraping")
+                # Complete task as skipped (no leads)
+                self.sheets.update_task_status(
+                    task.task_id, TaskStatus.COMPLETED,
+                    leads_found=0, leads_after_dedupe=0,
+                    error_message="Apify not configured - task skipped"
+                )
+                log_entry.status = "completed"
+                log_entry.error_message = "Apify not configured"
+                log_entry.completed_at = datetime.utcnow()
+                log_entry.duration_seconds = (log_entry.completed_at - started_at).total_seconds()
+                self.sheets.append_run_log(log_entry)
+                return log_entry
 
             raw_leads = self.scraper.scrape_leads(
                 trade=task.trade,
@@ -447,7 +460,7 @@ class TaskRunner:
                 return log_entry
 
             # Step 2: Deduplicate
-            print(f"\n[2/5] Deduplicating...")
+            print(f"\n[2/6] Deduplicating...")
             unique_leads = []
             duplicates = 0
 
@@ -508,7 +521,7 @@ class TaskRunner:
                 return log_entry
 
             # Step 3: Website email discovery
-            print(f"\n[3/5] Discovering emails from websites...")
+            print(f"\n[3/6] Discovering emails from websites...")
             leads_with_maps_email = 0
             leads_with_website_email = 0
             leads_with_no_email = 0
@@ -546,7 +559,7 @@ class TaskRunner:
             print(f"  Discovery rate: {discovery_rate:.1f}%")
 
             # Step 4: Enrich with AI
-            print(f"\n[4/5] Enriching with AI...")
+            print(f"\n[4/6] Enriching with AI...")
             if self.enricher:
                 enriched_count = 0
                 for lead in unique_leads:
@@ -576,7 +589,7 @@ class TaskRunner:
                 print("  Skipping enrichment (not configured)")
 
             # Step 5: Evaluate email eligibility
-            print(f"\n[5/5] Evaluating email eligibility...")
+            print(f"\n[5/6] Evaluating email eligibility...")
             eligible_count = 0
             for lead in unique_leads:
                 lead = self.evaluate_email_eligibility(lead)

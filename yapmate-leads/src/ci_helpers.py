@@ -144,6 +144,30 @@ def setup_credentials_from_env() -> Optional[str]:
 # FAILURE ALERTS
 # =============================================================================
 
+def _sanitize_header_value(value: str) -> str:
+    """
+    Sanitize a string for use in email headers.
+
+    Removes newlines, non-ASCII characters, and strips whitespace
+    to prevent "Invalid header value" errors.
+
+    Args:
+        value: Raw header value
+
+    Returns:
+        Sanitized ASCII-safe header value
+    """
+    if not value:
+        return ""
+    # Remove newlines and carriage returns
+    value = value.replace('\n', ' ').replace('\r', ' ')
+    # Encode to ASCII, replacing non-ASCII with ?
+    value = value.encode('ascii', errors='replace').decode('ascii')
+    # Strip extra whitespace
+    value = ' '.join(value.split())
+    return value
+
+
 def send_failure_alert(
     workflow_name: str,
     job_name: str,
@@ -179,10 +203,10 @@ def send_failure_alert(
         print(error_msg)
         raise ValueError(error_msg)
 
-    to_email = os.getenv("ALERT_TO_EMAIL", "support@yapmate.co.uk")
-    from_email = os.getenv("ALERT_FROM_EMAIL", "YapMate Leads CI <support@yapmate.co.uk>")
+    to_email = _sanitize_header_value(os.getenv("ALERT_TO_EMAIL", "support@yapmate.co.uk"))
+    from_email = _sanitize_header_value(os.getenv("ALERT_FROM_EMAIL", "YapMate Leads CI <support@yapmate.co.uk>"))
 
-    subject = f"[YapMate Leads] CI Failure: {workflow_name}"
+    subject = _sanitize_header_value(f"[YapMate Leads] CI Failure: {workflow_name}")
 
     # Build email body
     body = f"""GitHub Actions Workflow Failed

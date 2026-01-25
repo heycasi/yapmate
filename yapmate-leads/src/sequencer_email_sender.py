@@ -389,6 +389,63 @@ The YapMate Team
     # SENDING
     # =========================================================================
 
+    def _send_test_email(self, to_email: str) -> bool:
+        """
+        Send a test email to verify email sending works.
+
+        Used as a fallback when TEST_EMAIL is set but no eligible leads exist.
+
+        Args:
+            to_email: Email address to send test to
+
+        Returns:
+            True if test email sent successfully
+        """
+        try:
+            params = {
+                "from": f"{self.from_name} <{self.from_email}>",
+                "to": [to_email],
+                "subject": "[YapMate Test] Email Sender Verification",
+                "html": """
+                <html>
+                <body>
+                <h2>YapMate Email Sender Test</h2>
+                <p>This is a test email from the YapMate Lead Engine.</p>
+                <p>If you received this, email sending is working correctly.</p>
+                <p><strong>Timestamp:</strong> """ + datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC') + """</p>
+                <hr>
+                <p><em>This is an automated test email. No action required.</em></p>
+                </body>
+                </html>
+                """,
+                "text": f"""YapMate Email Sender Test
+
+This is a test email from the YapMate Lead Engine.
+If you received this, email sending is working correctly.
+
+Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
+
+---
+This is an automated test email. No action required.
+""",
+                "headers": {
+                    "List-Unsubscribe": "<https://www.yapmate.co.uk/unsubscribe>",
+                    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+                }
+            }
+
+            if self.reply_to:
+                params["reply_to"] = self.reply_to
+
+            response = resend.Emails.send(params)
+            email_id = response.get("id", "unknown")
+            print(f"    Test email sent (ID: {email_id})")
+            return True
+
+        except Exception as e:
+            print(f"    Test email failed: {e}")
+            return False
+
     def _check_send_enabled(self) -> tuple[bool, str]:
         """
         Check if sending is enabled. Fail-closed logic.
@@ -718,6 +775,29 @@ The YapMate Team
         print(f"  Found {len(leads)} eligible leads")
 
         if not leads:
+            # Check for TEST_EMAIL fallback
+            test_email = os.getenv("TEST_EMAIL", "").strip()
+            if test_email and not effective_dry_run:
+                print(f"\n  No eligible leads, but TEST_EMAIL is set: {test_email}")
+                print(f"  Sending test email...")
+                try:
+                    test_result = self._send_test_email(test_email)
+                    if test_result:
+                        print(f"  Test email sent successfully!")
+                        return SendBatchResult(
+                            total_attempted=1,
+                            total_sent=1,
+                            total_failed=0,
+                            total_blocked=0,
+                            total_invalid=0,
+                            total_sanitized=0,
+                            results=[],
+                            logs=[],
+                            stopped_reason="No eligible leads (sent test email)"
+                        )
+                except Exception as e:
+                    print(f"  Test email failed: {e}")
+
             return SendBatchResult(
                 total_attempted=0,
                 total_sent=0,
