@@ -404,10 +404,11 @@ The YapMate Team
         """
         try:
             from_header = f"{self.from_name} <{self.from_email}>"
-            print(f"    DEBUG: from_name='{self.from_name}'")
-            print(f"    DEBUG: from_email='{self.from_email}'")
-            print(f"    DEBUG: from_header='{from_header}'")
-            print(f"    DEBUG: to_email='{to_email}'")
+            print(f"    DEBUG: from_name repr={repr(self.from_name)}")
+            print(f"    DEBUG: from_email repr={repr(self.from_email)}")
+            print(f"    DEBUG: from_header repr={repr(from_header)}")
+            print(f"    DEBUG: to_email repr={repr(to_email)}")
+            print(f"    DEBUG: reply_to repr={repr(self.reply_to)}")
 
             params = {
                 "from": from_header,
