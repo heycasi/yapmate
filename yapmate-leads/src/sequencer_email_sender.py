@@ -414,39 +414,13 @@ The YapMate Team
             print(f"    Attempting to send test email...")
             print(f"    Recipient length: {len(clean_to)}")
 
+            # Minimal params - no custom headers
             params = {
                 "from": from_header,
                 "to": [clean_to],
-                "subject": "[YapMate Test] Email Sender Verification",
-                "html": """
-                <html>
-                <body>
-                <h2>YapMate Email Sender Test</h2>
-                <p>This is a test email from the YapMate Lead Engine.</p>
-                <p>If you received this, email sending is working correctly.</p>
-                <p><strong>Timestamp:</strong> """ + datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC') + """</p>
-                <hr>
-                <p><em>This is an automated test email. No action required.</em></p>
-                </body>
-                </html>
-                """,
-                "text": f"""YapMate Email Sender Test
-
-This is a test email from the YapMate Lead Engine.
-If you received this, email sending is working correctly.
-
-Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
-
----
-This is an automated test email. No action required.
-""",
-                "headers": {
-                    "List-Unsubscribe": "<https://www.yapmate.co.uk/unsubscribe>",
-                    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
-                }
+                "subject": "YapMate Test Email",
+                "text": "This is a test email from YapMate Lead Engine."
             }
-
-            # Skip reply_to to simplify test
 
             response = resend.Emails.send(params)
             email_id = response.get("id", "unknown")
