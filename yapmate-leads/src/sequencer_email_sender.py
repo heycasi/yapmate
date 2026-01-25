@@ -411,8 +411,12 @@ The YapMate Team
                 print("    Test email failed: No recipient address")
                 return False
 
+            import resend as resend_module
+            api_key = resend_module.api_key
             print(f"    Attempting to send test email...")
             print(f"    Recipient length: {len(clean_to)}")
+            print(f"    API key length: {len(api_key) if api_key else 0}")
+            print(f"    API key has newline: {chr(10) in api_key if api_key else False}")
 
             # Minimal params - no custom headers
             params = {
