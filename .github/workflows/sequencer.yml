@@ -1,0 +1,153 @@
+name: Lead Sequencer
+
+# DST-robust scheduling for UK times: 09:00, 13:00, 18:00, 21:00
+#
+# GitHub cron uses UTC. UK time shifts between GMT (UTC+0) and BST (UTC+1).
+# We run at both possible UTC times and use a time guard to check actual UK hour.
+#
+# Target UK hours: 9, 13, 18, 21
+# GMT (winter):    09:00, 13:00, 18:00, 21:00 UTC
+# BST (summer):    08:00, 12:00, 17:00, 20:00 UTC
+#
+# Combined cron:   0 8,9,12,13,17,18,20,21 * * *
+# Expected: ~50% of runs will skip (this is normal DST handling)
+
+on:
+  schedule:
+    - cron: '0 8,9,12,13,17,18,20,21 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_time_guard:
+        description: 'Skip UK time check (force run regardless of time)'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: sequencer
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  run-sequencer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      skipped: ${{ steps.time_guard.outputs.skipped }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check UK time window
+        id: time_guard
+        if: github.event.inputs.skip_time_guard != 'true'
+        run: |
+          echo "============================================"
+          echo "TIME GUARD CHECK"
+          echo "============================================"
+          python3 << 'EOF'
+          import os
+          from src.ci_helpers import get_uk_hour
+
+          uk_hour = get_uk_hour()
+          allowed_hours = {9, 13, 18, 21}
+
+          print(f"Current UK hour: {uk_hour}")
+          print(f"Allowed hours:   {sorted(allowed_hours)}")
+
+          if uk_hour in allowed_hours:
+              print(f"PASS: UK hour {uk_hour} is in allowed window")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write("skipped=false\n")
+          else:
+              print(f"SKIP: UK hour {uk_hour} not in allowed window")
+              print("This is expected behavior for DST-robust scheduling.")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write("skipped=true\n")
+          EOF
+          echo "============================================"
+
+      - name: Run sequencer task
+        if: steps.time_guard.outputs.skipped != 'true'
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+        run: |
+          echo "============================================"
+          echo "LEAD SEQUENCER"
+          echo "============================================"
+          echo "Started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+
+          python scripts/run_sequencer.py
+
+          echo ""
+          echo "============================================"
+          echo "SEQUENCER COMPLETED SUCCESSFULLY"
+          echo "============================================"
+
+      - name: Log skip
+        if: steps.time_guard.outputs.skipped == 'true'
+        run: |
+          echo "============================================"
+          echo "RUN SKIPPED (outside UK time window)"
+          echo "============================================"
+          echo "This is normal DST-robust behavior."
+          echo "The sequencer will run at the correct UK time."
+
+  alert-on-failure:
+    runs-on: ubuntu-latest
+    needs: run-sequencer
+    if: failure() && needs.run-sequencer.outputs.skipped != 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install alert dependencies
+        run: pip install requests python-dotenv pytz
+
+      - name: Send failure alert
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_TO_EMAIL: ${{ secrets.ALERT_TO_EMAIL }}
+          ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+        run: |
+          echo "Sending failure alert email..."
+          python3 << 'EOF'
+          from src.ci_helpers import send_failure_alert
+
+          send_failure_alert(
+              workflow_name="Lead Sequencer",
+              job_name="run-sequencer",
+              run_id="${{ github.run_id }}",
+              run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              repo="${{ github.repository }}",
+              branch="${{ github.ref_name }}",
+              commit_sha="${{ github.sha }}",
+              error_summary="The lead sequencer task failed. This may indicate issues with Google Sheets, Apify, or the scraping pipeline. Check the workflow logs for details."
+          )
+          EOF
