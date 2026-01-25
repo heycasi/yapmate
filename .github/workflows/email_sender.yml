@@ -1,13 +1,19 @@
 name: Email Sender
 
-# Runs every 15 minutes to send pending eligible emails.
-# Uses existing warm-up ramp and safety threshold logic.
+# Fully automated email sending - 50 emails/day target
 #
-# No DST handling needed - runs at fixed UTC intervals.
+# Schedule: 5 runs per day at 09:00, 11:00, 13:00, 15:00, 17:00 UK time
+# Volume: 10 emails per run x 5 runs = 50/day
+#
+# DST-robust scheduling:
+# - Summer (BST): 08, 10, 12, 14, 16 UTC
+# - Winter (GMT): 09, 11, 13, 15, 17 UTC
+# Combined: 08,09,10,11,12,13,14,15,16,17 UTC with time guard
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # Run at UK business hours (with DST coverage)
+    - cron: '0 8,9,10,11,12,13,14,15,16,17 * * 1-5'  # Weekdays only
   workflow_dispatch:
     inputs:
       send_limit:
@@ -26,7 +32,10 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.11'
-  SEND_LIMIT_PER_RUN: '3'
+  # Target 50/day: 10 per run x 5 runs
+  SEND_LIMIT_PER_RUN: '10'
+  DAILY_LIMIT: '50'
+  DELAY_BETWEEN_SENDS: '0.6'
 
 defaults:
   run:
@@ -53,7 +62,41 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Check UK time window
+        id: time_guard
+        run: |
+          echo "============================================"
+          echo "TIME GUARD CHECK"
+          echo "============================================"
+          python3 << 'EOF'
+          import os
+          from datetime import datetime
+          import pytz
+
+          uk_tz = pytz.timezone('Europe/London')
+          now_uk = datetime.now(uk_tz)
+          uk_hour = now_uk.hour
+
+          # Target UK hours: 9, 11, 13, 15, 17 (5 runs per weekday)
+          allowed_hours = {9, 11, 13, 15, 17}
+
+          print(f"Current UK hour: {uk_hour}")
+          print(f"Allowed hours:   {sorted(allowed_hours)}")
+
+          if uk_hour in allowed_hours:
+              print(f"PASS: UK hour {uk_hour} is in allowed window")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write("skipped=false\n")
+          else:
+              print(f"SKIP: UK hour {uk_hour} not in allowed window")
+              print("This is expected behavior for DST-robust scheduling.")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write("skipped=true\n")
+          EOF
+          echo "============================================"
+
       - name: Run email sender
+        if: steps.time_guard.outputs.skipped != 'true'
         env:
           # Core credentials
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
@@ -62,15 +105,18 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_FROM_NAME: ${{ secrets.EMAIL_FROM_NAME }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
-          # Pipeline control (from secrets)
+          # Pipeline control (from secrets with defaults)
           PIPELINE_ENABLED: 'true'
           SEND_ENABLED: ${{ secrets.SEND_ENABLED || 'false' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           SAFE_MODE: 'true'
-          SEND_LIMIT_PER_RUN: ${{ env.SEND_LIMIT_PER_RUN }}
+          # Volume control (from secrets with defaults)
+          DAILY_LIMIT: ${{ secrets.DAILY_LIMIT || env.DAILY_LIMIT }}
+          SEND_LIMIT_PER_RUN: ${{ secrets.SEND_LIMIT_PER_RUN || env.SEND_LIMIT_PER_RUN }}
+          DELAY_BETWEEN_SENDS: ${{ env.DELAY_BETWEEN_SENDS }}
         run: |
           echo "========================================"
-          echo "EMAIL SENDER"
+          echo "EMAIL SENDER - AUTOMATED (50/day target)"
           echo "========================================"
           echo "Started: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           echo ""
@@ -78,7 +124,9 @@ jobs:
           echo "  SEND_ENABLED: $SEND_ENABLED"
           echo "  DRY_RUN: $DRY_RUN"
           echo "  SAFE_MODE: $SAFE_MODE"
+          echo "  DAILY_LIMIT: $DAILY_LIMIT"
           echo "  SEND_LIMIT_PER_RUN: $SEND_LIMIT_PER_RUN"
+          echo "  DELAY_BETWEEN_SENDS: $DELAY_BETWEEN_SENDS"
           echo ""
 
           # Determine send limit
@@ -102,6 +150,15 @@ jobs:
           echo "========================================"
           echo "COMPLETED"
           echo "========================================"
+
+      - name: Log skip
+        if: steps.time_guard.outputs.skipped == 'true'
+        run: |
+          echo "============================================"
+          echo "RUN SKIPPED (outside UK time window)"
+          echo "============================================"
+          echo "This is normal DST-robust behavior."
+          echo "The sender will run at the correct UK time."
 
   alert-on-failure:
     runs-on: ubuntu-latest

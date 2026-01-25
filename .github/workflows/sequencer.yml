@@ -103,11 +103,20 @@ jobs:
           SEND_ENABLED: 'false'
           DRY_RUN: 'false'
           SAFE_MODE: 'true'
+          # Auto-approval (hands-off automation)
+          AUTO_APPROVE_ENABLED: ${{ secrets.AUTO_APPROVE_ENABLED || 'false' }}
+          AUTO_APPROVE_MAX_PER_RUN: ${{ secrets.AUTO_APPROVE_MAX_PER_RUN || '25' }}
+          AUTO_APPROVE_ALLOW_FREE_EMAILS: ${{ secrets.AUTO_APPROVE_ALLOW_FREE_EMAILS || 'false' }}
         run: |
           echo "============================================"
-          echo "LEAD SEQUENCER"
+          echo "LEAD SEQUENCER - FULLY AUTOMATED"
           echo "============================================"
           echo "Started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "Configuration:"
+          echo "  AUTO_APPROVE_ENABLED: $AUTO_APPROVE_ENABLED"
+          echo "  AUTO_APPROVE_MAX_PER_RUN: $AUTO_APPROVE_MAX_PER_RUN"
+          echo "  AUTO_APPROVE_ALLOW_FREE_EMAILS: $AUTO_APPROVE_ALLOW_FREE_EMAILS"
           echo ""
 
           python scripts/run_sequencer.py

@@ -684,9 +684,11 @@ The YapMate Team
         print(f"\n  Daily limit: {daily_limit}")
         print(f"  Remaining quota: {remaining_quota}")
 
-        # Get SEND_LIMIT_PER_RUN from env
-        send_limit_per_run = int(os.getenv("SEND_LIMIT_PER_RUN", "3"))
+        # Get sending limits from config
+        send_limit_per_run = config.limits.send_limit_per_run
+        delay_between_sends = config.limits.delay_between_sends
         print(f"  SEND_LIMIT_PER_RUN: {send_limit_per_run}")
+        print(f"  DELAY_BETWEEN_SENDS: {delay_between_sends}s")
 
         if remaining_quota <= 0 and not effective_dry_run:
             print("\n  Daily limit reached. No more emails will be sent today.")
@@ -800,7 +802,7 @@ The YapMate Team
 
                 # Rate limiting (only if actually sending)
                 if result.status == SendStatus.SENT:
-                    time.sleep(self.config.delay_between_sends_seconds)
+                    time.sleep(delay_between_sends)
 
                 # Re-check safety thresholds periodically (every 10 emails)
                 if i % 10 == 0 and send_enabled and not effective_dry_run:

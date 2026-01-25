@@ -34,6 +34,8 @@ from src.apify_client import ApifyLeadScraper
 from src.enricher import LeadEnricher
 from src.website_email_extractor import WebsiteEmailExtractor, BatchDiscoveryStats
 from src.sequencer_alerts import alert_zero_eligible_leads, alert_task_dead
+from src.config import get_config
+from src.auto_approve import auto_approve_leads
 
 
 class TaskRunner:
@@ -601,9 +603,29 @@ class TaskRunner:
                     sheets_manager=self.sheets
                 )
 
-            # Save leads to sheets
+            # Save leads to sheets (as NEW status)
             print(f"\n  Saving {len(unique_leads)} leads...")
             self.sheets.append_leads(unique_leads)
+
+            # Step 6: Auto-approval (if enabled)
+            config = get_config()
+            if config.auto_approve.enabled and eligible_count > 0:
+                print(f"\n[6/6] Auto-approving eligible leads...")
+                # Get only the eligible leads for auto-approval
+                eligible_leads = [l for l in unique_leads if l.send_eligible]
+                approval_stats = auto_approve_leads(
+                    leads=eligible_leads,
+                    sheets_manager=self.sheets,
+                    max_per_run=config.auto_approve.max_per_run,
+                    allow_free_emails=config.auto_approve.allow_free_emails,
+                )
+                log_entry.leads_auto_approved = approval_stats.get('approved', 0)
+                print(f"  Auto-approved: {approval_stats.get('approved', 0)}")
+                print(f"  Auto-rejected: {approval_stats.get('rejected', 0)}")
+            else:
+                if not config.auto_approve.enabled:
+                    print(f"\n[6/6] Auto-approval: DISABLED (set AUTO_APPROVE_ENABLED=true to enable)")
+                log_entry.leads_auto_approved = 0
 
             # Mark task as completed
             self.sheets.update_task_status(

@@ -62,12 +62,18 @@ class LimitsConfig:
     # Enrichment limits
     max_enrich_per_run: int = 50
 
-    # Sending limits
-    max_send_per_day: int = 100
+    # Sending limits (target 50/day)
+    daily_limit: int = 50           # Target 50 emails/day
+    send_limit_per_run: int = 10    # 10 per run x 5 runs = 50/day
     max_send_per_hour: int = 20
     max_per_domain_per_day: int = 5
     max_per_company_per_day: int = 1
-    send_limit_per_run: int = 3
+
+    # Rate limiting
+    delay_between_sends: float = 0.6  # 0.6s between Resend API calls
+
+    # Batch settings
+    batch_update_size: int = 10  # Batch Sheets updates every N sends
 
     # Warmup ramp (days -> daily limit)
     warmup_ramp: Dict[int, int] = field(default_factory=lambda: {
@@ -78,6 +84,22 @@ class LimitsConfig:
     # Cooldowns (seconds)
     domain_cooldown: int = 3600  # 1 hour
     company_cooldown: int = 86400  # 24 hours
+
+
+@dataclass
+class AutoApproveConfig:
+    """Auto-approval settings for hands-off operation."""
+    # Master toggle
+    enabled: bool = False
+
+    # Limits
+    max_per_run: int = 25  # Max leads to auto-approve per run
+
+    # Rules
+    allow_free_emails: bool = False  # Reject gmail, yahoo, etc. by default
+
+    # Domain matching
+    require_domain_match: bool = False  # Soft warning if email != website domain
 
 
 @dataclass
@@ -158,6 +180,7 @@ class Config:
     limits: LimitsConfig = field(default_factory=LimitsConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
     scaling: ScalingConfig = field(default_factory=ScalingConfig)
+    auto_approve: AutoApproveConfig = field(default_factory=AutoApproveConfig)
 
     # Runtime state
     is_ci: bool = False
@@ -185,6 +208,12 @@ class Config:
               f"send={self.pipeline.send_enabled}")
         print(f"[CONFIG] Mode: dry_run={self.pipeline.dry_run}, "
               f"safe_mode={self.pipeline.safe_mode}")
+        print(f"[CONFIG] Limits: daily={self.limits.daily_limit}, "
+              f"per_run={self.limits.send_limit_per_run}, "
+              f"delay={self.limits.delay_between_sends}s")
+        print(f"[CONFIG] Auto-approve: enabled={self.auto_approve.enabled}, "
+              f"max_per_run={self.auto_approve.max_per_run}, "
+              f"allow_free_emails={self.auto_approve.allow_free_emails}")
         if self.scaling.scaling_enabled:
             print(f"[CONFIG] Scaling: enabled, "
                   f"daily_target={self.scaling.daily_target}, "
@@ -225,10 +254,22 @@ def load_config() -> Config:
         config.limits.max_scrape_per_run = int(os.getenv("MAX_SCRAPE_PER_RUN"))
     if os.getenv("MAX_ENRICH_PER_RUN"):
         config.limits.max_enrich_per_run = int(os.getenv("MAX_ENRICH_PER_RUN"))
-    if os.getenv("MAX_SEND_PER_DAY"):
-        config.limits.max_send_per_day = int(os.getenv("MAX_SEND_PER_DAY"))
+
+    # Sending volume config (target 50/day)
+    if os.getenv("DAILY_LIMIT"):
+        config.limits.daily_limit = int(os.getenv("DAILY_LIMIT"))
     if os.getenv("SEND_LIMIT_PER_RUN"):
         config.limits.send_limit_per_run = int(os.getenv("SEND_LIMIT_PER_RUN"))
+    if os.getenv("DELAY_BETWEEN_SENDS"):
+        config.limits.delay_between_sends = float(os.getenv("DELAY_BETWEEN_SENDS"))
+    if os.getenv("BATCH_UPDATE_SIZE"):
+        config.limits.batch_update_size = int(os.getenv("BATCH_UPDATE_SIZE"))
+
+    # Auto-approve config (hands-off automation)
+    config.auto_approve.enabled = os.getenv("AUTO_APPROVE_ENABLED", "false").lower() == "true"
+    if os.getenv("AUTO_APPROVE_MAX_PER_RUN"):
+        config.auto_approve.max_per_run = int(os.getenv("AUTO_APPROVE_MAX_PER_RUN"))
+    config.auto_approve.allow_free_emails = os.getenv("AUTO_APPROVE_ALLOW_FREE_EMAILS", "false").lower() == "true"
 
     # Scaling config (prep for production ramp-up - NOT enabled by default)
     config.scaling.scaling_enabled = os.getenv("SCALING_ENABLED", "false").lower() == "true"

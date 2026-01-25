@@ -488,6 +488,7 @@ class RunLogEntry:
     leads_after_dedupe: int = 0
     leads_enriched: int = 0
     leads_eligible: int = 0
+    leads_auto_approved: int = 0
 
     error_message: Optional[str] = None
     duration_seconds: Optional[float] = None
@@ -507,6 +508,7 @@ class RunLogEntry:
             self.leads_after_dedupe,
             self.leads_enriched,
             self.leads_eligible,
+            self.leads_auto_approved,
             self.error_message or "",
             self.duration_seconds or "",
         ]
@@ -527,6 +529,7 @@ class RunLogEntry:
             "leads_after_dedupe",
             "leads_enriched",
             "leads_eligible",
+            "leads_auto_approved",
             "error_message",
             "duration_seconds",
         ]
