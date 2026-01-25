@@ -30,6 +30,10 @@ concurrency:
 env:
   PYTHON_VERSION: '3.11'
 
+defaults:
+  run:
+    working-directory: yapmate-leads
+
 jobs:
   run-sequencer:
     runs-on: ubuntu-latest
@@ -46,6 +50,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: yapmate-leads/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -117,6 +122,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: run-sequencer
     if: failure() && needs.run-sequencer.outputs.skipped != 'true'
+    defaults:
+      run:
+        working-directory: yapmate-leads
 
     steps:
       - name: Checkout repository
