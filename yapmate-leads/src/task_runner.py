@@ -705,13 +705,18 @@ class TaskRunner:
         Returns:
             RunLogEntry for the executed task, or None if no task found
         """
+        print("[DEBUG] run() entered", flush=True)
+
         # Determine session
+        print("[DEBUG] Calling determine_session...", flush=True)
         session = self.determine_session(manual=manual)
-        print(f"\nSession type: {session.value}")
+        print(f"\nSession type: {session.value}", flush=True)
 
         # Get next task
-        print("Finding next task...")
+        print("Finding next task...", flush=True)
+        print("[DEBUG] Calling get_next_task...", flush=True)
         task = self.get_next_task(session)
+        print(f"[DEBUG] get_next_task returned: {task}", flush=True)
 
         if not task:
             print("No pending tasks in queue.")
