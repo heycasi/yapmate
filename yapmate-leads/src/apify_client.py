@@ -1,16 +1,24 @@
 """Apify API client for scraping Google Maps leads."""
 
+import os
 from apify_client import ApifyClient
-from typing import List
+from typing import List, Optional
 from src.models import Lead
+
+# Default timeout for Apify actor runs (seconds)
+DEFAULT_TIMEOUT_SECONDS = 180
 
 
 class ApifyLeadScraper:
     """Wrapper for Apify Google Maps Scraper"""
 
-    def __init__(self, api_token: str, actor_id: str):
+    def __init__(self, api_token: str, actor_id: str, timeout_seconds: Optional[int] = None):
         self.client = ApifyClient(api_token)
         self.actor_id = actor_id
+        # Get timeout from env or use provided value or default
+        self.timeout_seconds = timeout_seconds or int(
+            os.getenv("APIFY_TIMEOUT_SECONDS", str(DEFAULT_TIMEOUT_SECONDS))
+        )
 
     def scrape_leads(
         self,
@@ -45,9 +53,13 @@ class ApifyLeadScraper:
             "emailsOnly": False  # Get all results - we'll find emails from websites
         }
 
-        # Run actor and wait for results
+        # Run actor and wait for results with timeout
         print(f"🔍 Scraping Google Maps for {trade}s in {city}...")
-        run = self.client.actor(self.actor_id).call(run_input=run_input)
+        print(f"   Timeout: {self.timeout_seconds} seconds")
+        run = self.client.actor(self.actor_id).call(
+            run_input=run_input,
+            timeout_secs=self.timeout_seconds
+        )
 
         # Fetch results
         leads = []
