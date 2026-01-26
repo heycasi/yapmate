@@ -759,6 +759,95 @@ class SequencerSheetsManager:
 
         return False
 
+    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    def batch_update_leads(
+        self,
+        updates: List[Dict[str, Any]],
+    ) -> int:
+        """
+        Batch update multiple leads efficiently.
+
+        Uses range-based updates to minimize API calls.
+        Much more efficient than individual update_cell calls.
+
+        Args:
+            updates: List of dicts with 'lead_id' and fields to update.
+                     e.g., [{'lead_id': 'abc', 'status': 'APPROVED', 'send_eligible': True}]
+
+        Returns:
+            Number of leads updated
+        """
+        if not updates:
+            return 0
+
+        sheet = self.get_leads_tab()
+        all_rows = sheet.get_all_values()
+        headers = all_rows[0]
+
+        # Build index of lead_id -> row number
+        col_lead_id = headers.index("lead_id")
+        lead_id_to_row = {}
+        for row_idx, row in enumerate(all_rows[1:], start=2):
+            if len(row) > col_lead_id:
+                lead_id_to_row[row[col_lead_id]] = row_idx
+
+        # Collect all cell updates
+        cell_updates = []
+        updated_count = 0
+
+        for update in updates:
+            lead_id = update.get("lead_id")
+            if not lead_id or lead_id not in lead_id_to_row:
+                continue
+
+            row_idx = lead_id_to_row[lead_id]
+
+            for field, value in update.items():
+                if field == "lead_id":
+                    continue
+                if field not in headers:
+                    continue
+
+                col_idx = headers.index(field) + 1  # 1-based
+
+                # Convert values for sheets
+                if isinstance(value, bool):
+                    value = "TRUE" if value else "FALSE"
+                elif isinstance(value, datetime):
+                    value = value.isoformat()
+                elif value is None:
+                    value = ""
+
+                cell_updates.append({
+                    "range": f"{self._col_letter(col_idx)}{row_idx}",
+                    "values": [[value]]
+                })
+
+            # Always update updated_at
+            if "updated_at" in headers:
+                col_idx = headers.index("updated_at") + 1
+                cell_updates.append({
+                    "range": f"{self._col_letter(col_idx)}{row_idx}",
+                    "values": [[datetime.utcnow().isoformat()]]
+                })
+
+            updated_count += 1
+
+        # Batch update all cells
+        if cell_updates:
+            sheet.batch_update(cell_updates, value_input_option="USER_ENTERED")
+            _write_stats.record_batch(updated_count)
+
+        return updated_count
+
+    def _col_letter(self, col_num: int) -> str:
+        """Convert column number (1-based) to letter (A, B, ... Z, AA, AB, ...)."""
+        result = ""
+        while col_num > 0:
+            col_num, remainder = divmod(col_num - 1, 26)
+            result = chr(65 + remainder) + result
+        return result
+
     # =========================================================================
     # DEDUPE KEYS OPERATIONS
     # =========================================================================

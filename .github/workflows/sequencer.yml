@@ -27,6 +27,11 @@ on:
         required: false
         default: 'false'
         type: boolean
+      send_enabled:
+        description: 'Enable email sending after discovery'
+        required: false
+        default: 'false'
+        type: boolean
 
 concurrency:
   group: sequencer
@@ -34,8 +39,6 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.11'
-  # Timeout for Apify scraper (seconds)
-  APIFY_TIMEOUT_SECONDS: '180'
 
 defaults:
   run:
@@ -44,7 +47,7 @@ defaults:
 jobs:
   run-sequencer:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     outputs:
       skipped: ${{ steps.time_guard.outputs.skipped }}
 
@@ -73,10 +76,6 @@ jobs:
 
           # Check if we should skip the time guard
           SKIP_TIME_GUARD="${{ github.event.inputs.skip_time_guard }}"
-          IS_MANUAL="${{ github.event_name == 'workflow_dispatch' }}"
-
-          echo "Skip time guard: $SKIP_TIME_GUARD"
-          echo "Is manual trigger: $IS_MANUAL"
 
           if [ "$SKIP_TIME_GUARD" = "true" ]; then
             echo ""
@@ -108,68 +107,100 @@ jobs:
           EOF
           echo "============================================"
 
-      - name: Run sequencer task
+      - name: CI End-to-End Verification
+        id: ci_check
         if: steps.time_guard.outputs.skipped != 'true'
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          echo "============================================"
+          echo "CI END-TO-END VERIFICATION"
+          echo "============================================"
+          python scripts/ci_end_to_end_check.py --skip-wiring
+          echo "============================================"
+
+      - name: Run Pipeline
+        if: steps.time_guard.outputs.skipped != 'true' && steps.ci_check.outcome == 'success'
         env:
           # Core credentials
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          APIFY_API_TOKEN: ${{ secrets.APIFY_API_KEY }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # Pipeline control flags
+
+          # Yield target configuration
+          TARGET_LEADS_TOTAL: ${{ secrets.TARGET_LEADS_TOTAL || '50' }}
+          TARGET_EMAILS_MIN: ${{ secrets.TARGET_EMAILS_MIN || '10' }}
+          TARGET_EMAIL_RATE_MIN: ${{ secrets.TARGET_EMAIL_RATE_MIN || '0.20' }}
+          MAX_ITERATIONS: ${{ secrets.MAX_ITERATIONS || '5' }}
+          MAX_RUNTIME_SECONDS: ${{ secrets.MAX_RUNTIME_SECONDS || '900' }}
+
+          # Pivot strategies
+          ENABLE_DEEP_CRAWL: ${{ secrets.ENABLE_DEEP_CRAWL || 'true' }}
+          ENABLE_QUERY_VARIANTS: ${{ secrets.ENABLE_QUERY_VARIANTS || 'true' }}
+          ENABLE_SOCIAL_FALLBACK: ${{ secrets.ENABLE_SOCIAL_FALLBACK || 'true' }}
+          MAX_PAGES_PER_DOMAIN: ${{ secrets.MAX_PAGES_PER_DOMAIN || '6' }}
+
+          # Pipeline control
           PIPELINE_ENABLED: 'true'
-          SCRAPE_ENABLED: 'true'
-          ENRICH_ENABLED: 'true'
-          SEND_ENABLED: 'false'
+          SEND_ENABLED: ${{ github.event.inputs.send_enabled || secrets.SEND_ENABLED || 'false' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          SAFE_MODE: 'true'
-          # Timeouts
-          APIFY_TIMEOUT_SECONDS: ${{ env.APIFY_TIMEOUT_SECONDS }}
-          # Auto-approval (hands-off automation)
-          AUTO_APPROVE_ENABLED: ${{ secrets.AUTO_APPROVE_ENABLED || 'false' }}
-          AUTO_APPROVE_MAX_PER_RUN: ${{ secrets.AUTO_APPROVE_MAX_PER_RUN || '25' }}
-          AUTO_APPROVE_ALLOW_FREE_EMAILS: ${{ secrets.AUTO_APPROVE_ALLOW_FREE_EMAILS || 'false' }}
+
+          # Sending limits
+          DAILY_LIMIT: ${{ secrets.DAILY_LIMIT || '50' }}
+          SEND_LIMIT_PER_RUN: ${{ secrets.SEND_LIMIT_PER_RUN || '10' }}
+
+          # Warmup configuration
+          WARMUP_ENABLED: ${{ secrets.WARMUP_ENABLED || 'true' }}
+          WARMUP_START_DAILY_LIMIT: ${{ secrets.WARMUP_START_DAILY_LIMIT || '10' }}
+          WARMUP_RAMP_INCREMENT: ${{ secrets.WARMUP_RAMP_INCREMENT || '5' }}
+          WARMUP_MAX_CAP: ${{ secrets.WARMUP_MAX_CAP || '100' }}
+          WARMUP_START_DATE: ${{ secrets.WARMUP_START_DATE || '' }}
+
+          # Auto-approval
+          AUTO_APPROVE_ENABLED: ${{ secrets.AUTO_APPROVE_ENABLED || 'true' }}
+
+          # Leads sheet tab (configurable)
+          LEADS_SHEET_TAB: ${{ secrets.LEADS_SHEET_TAB || 'leads' }}
+
+          # Heartbeat interval
+          HEARTBEAT_INTERVAL_SECONDS: '20'
+
         run: |
           echo "========================================================"
-          echo "LEAD SEQUENCER - FULLY AUTOMATED"
+          echo "END-TO-END LEAD PIPELINE"
           echo "========================================================"
           echo "Started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           echo ""
           echo "Configuration:"
           echo "  DRY_RUN: $DRY_RUN"
-          echo "  APIFY_TIMEOUT_SECONDS: $APIFY_TIMEOUT_SECONDS"
+          echo "  SEND_ENABLED: $SEND_ENABLED"
+          echo "  TARGET_EMAILS_MIN: $TARGET_EMAILS_MIN"
+          echo "  MAX_ITERATIONS: $MAX_ITERATIONS"
+          echo "  MAX_RUNTIME_SECONDS: $MAX_RUNTIME_SECONDS"
           echo "  AUTO_APPROVE_ENABLED: $AUTO_APPROVE_ENABLED"
-          echo "  AUTO_APPROVE_MAX_PER_RUN: $AUTO_APPROVE_MAX_PER_RUN"
-          echo "  AUTO_APPROVE_ALLOW_FREE_EMAILS: $AUTO_APPROVE_ALLOW_FREE_EMAILS"
-          echo ""
-
-          # Check if Apify is configured
-          if [ -z "$APIFY_API_TOKEN" ] || [ -z "$APIFY_ACTOR_ID" ]; then
-            echo "WARNING: Apify not configured (APIFY_API_TOKEN or APIFY_ACTOR_ID missing)"
-            echo "The sequencer will skip scraping tasks."
-          fi
-
-          # Check if OpenAI is configured
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "WARNING: OpenAI not configured (OPENAI_API_KEY missing)"
-            echo "The sequencer will skip AI enrichment."
-          fi
-
           echo ""
           echo "--------------------------------------------------------"
 
-          python scripts/run_sequencer.py
+          python scripts/run_pipeline.py --timeout 2400
           EXIT_CODE=$?
 
           echo "--------------------------------------------------------"
           echo ""
 
           if [ $EXIT_CODE -eq 0 ]; then
-            echo "SEQUENCER COMPLETED SUCCESSFULLY"
+            echo "PIPELINE COMPLETED SUCCESSFULLY"
+          elif [ $EXIT_CODE -eq 2 ]; then
+            echo "PIPELINE COMPLETED (targets not met, but no errors)"
           else
-            echo "SEQUENCER FAILED with exit code: $EXIT_CODE"
+            echo "PIPELINE FAILED with exit code: $EXIT_CODE"
             exit $EXIT_CODE
           fi
           echo "========================================================"
@@ -224,6 +255,6 @@ jobs:
               repo="${{ github.repository }}",
               branch="${{ github.ref_name }}",
               commit_sha="${{ github.sha }}",
-              error_summary="The lead sequencer task failed. This may indicate issues with Google Sheets, Apify, or the scraping pipeline. Check the workflow logs for details."
+              error_summary="The lead pipeline failed. Check the workflow logs for details including iteration stats, yield summary, and failure reasons."
           )
           EOF
