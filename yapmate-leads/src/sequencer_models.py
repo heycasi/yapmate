@@ -461,7 +461,7 @@ class EnhancedLead:
             generic_address=parse_bool(row[17]) if len(row) > 17 else False,
             soft_match=parse_bool(row[18]) if len(row) > 18 else False,
             soft_match_lead_id=str(row[19]) if len(row) > 19 and row[19] else None,
-            status=self._normalize_status(row[20]) if len(row) > 20 and row[20] else "NEW",
+            status=cls._normalize_status(row[20]) if len(row) > 20 and row[20] else "NEW",
             created_at=parse_datetime(row[21]) if len(row) > 21 else datetime.utcnow(),
             updated_at=parse_datetime(row[22]) if len(row) > 22 else datetime.utcnow(),
             campaign_id=str(row[23]) if len(row) > 23 and row[23] else None,
