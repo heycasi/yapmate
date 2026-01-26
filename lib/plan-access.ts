@@ -26,6 +26,7 @@ export interface PlanLimits {
   maxInvoices: number | null // null = unlimited
   canUseVAT: boolean
   canUseCIS: boolean
+  canUseBranding: boolean // Logo upload, custom colours, branded PDFs
 }
 
 // Configurable limits
@@ -37,16 +38,19 @@ const PLAN_LIMITS: Record<PricingPlan, PlanLimits> = {
     maxInvoices: FREE_PLAN_INVOICE_LIMIT,
     canUseVAT: false,
     canUseCIS: false,
+    canUseBranding: false,
   },
   pro: {
     maxInvoices: null, // unlimited
     canUseVAT: true,
     canUseCIS: false,
+    canUseBranding: true,
   },
   trade: {
     maxInvoices: null, // unlimited
     canUseVAT: true,
     canUseCIS: true,
+    canUseBranding: true,
   },
 }
 
@@ -194,6 +198,28 @@ export async function canUseCIS(userId?: string): Promise<boolean> {
   const plan = await getUserPlan(userId)
   const limits = getPlanLimits(plan)
   return limits.canUseCIS
+}
+
+/**
+ * Check if a user can use invoice branding features
+ * (logo upload, custom colours, branded PDF invoices)
+ *
+ * Works for both logged-in and logged-out users (via RevenueCat)
+ * Only Pro and Trade plans have branding access.
+ */
+export async function canUseInvoiceBranding(userId?: string): Promise<boolean> {
+  const plan = await getUserPlan(userId)
+  const limits = getPlanLimits(plan)
+  const canUse = limits.canUseBranding
+
+  // Logging for audit trail
+  if (canUse) {
+    console.log('[PlanAccess] branding_access_granted:', plan)
+  } else {
+    console.log('[PlanAccess] branding_blocked_free_user')
+  }
+
+  return canUse
 }
 
 /**

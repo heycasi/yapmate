@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
-import { getUserPlan, canUseVAT, canUseCIS, type PricingPlan } from '@/lib/plan-access'
+import { getUserPlan, canUseVAT, canUseCIS, canUseInvoiceBranding, type PricingPlan } from '@/lib/plan-access'
+import { BRANDING_PAYWALL_ERROR } from '@/lib/logo-upload'
 import { isIAPAvailable, restorePurchases, getCustomerInfo } from '@/lib/iap'
 import { syncRevenueCatToSupabase } from '@/lib/iap-sync'
 import { isIOS, isWeb, isBillingEnabled, isTradeEnabled } from '@/lib/runtime-config'
@@ -52,6 +53,7 @@ export default function SettingsPage() {
   const [userPlan, setUserPlan] = useState<PricingPlan>('free')
   const [canAccessVAT, setCanAccessVAT] = useState(false)
   const [canAccessCIS, setCanAccessCIS] = useState(false)
+  const [canAccessBranding, setCanAccessBranding] = useState(false)
 
   // Subscription status (iOS only)
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null)
@@ -119,10 +121,12 @@ export default function SettingsPage() {
       const plan = await getUserPlan(session.user.id)
       const vatAccess = await canUseVAT(session.user.id)
       const cisAccess = await canUseCIS(session.user.id)
+      const brandingAccess = await canUseInvoiceBranding(session.user.id)
 
       setUserPlan(plan)
       setCanAccessVAT(vatAccess)
       setCanAccessCIS(cisAccess)
+      setCanAccessBranding(brandingAccess)
 
       // Load subscription status (iOS only)
       await loadSubscriptionStatus()
@@ -189,6 +193,32 @@ export default function SettingsPage() {
           : 'CIS features require Trade plan'
       }
 
+      // Enforce branding access - only save branding if user has access
+      // (Migration safety: existing free users keep their data, just can't update)
+      let finalLogoUrl = invoiceLogoUrl
+      let finalCompanyName = invoiceCompanyName
+
+      if (!canAccessBranding) {
+        // Free users: Don't save new branding values, keep existing
+        console.log('[Settings] branding_save_attempt_blocked: free user cannot save branding')
+        // We don't clear the local state - they can see their existing config
+        // But we won't save changes. Fetch existing values to preserve them.
+        const { data: existingPrefs } = await (supabase
+          .from('user_preferences') as any)
+          .select('invoice_logo_url, invoice_company_name')
+          .eq('user_id', user.id)
+          .single()
+
+        finalLogoUrl = existingPrefs?.invoice_logo_url ?? null
+        finalCompanyName = existingPrefs?.invoice_company_name ?? null
+
+        if (invoiceLogoUrl !== finalLogoUrl || invoiceCompanyName !== (finalCompanyName || '')) {
+          warningMessage = warningMessage
+            ? warningMessage + '. Invoice branding requires Pro plan'
+            : 'Invoice branding requires Pro plan'
+        }
+      }
+
       const preferences: UserPreferences = {
         default_labour_rate: parseFloat(labourRate),
         default_vat_enabled: finalVatEnabled,
@@ -197,8 +227,8 @@ export default function SettingsPage() {
         bank_sort_code: bankSortCode || null,
         bank_account_number: bankAccountNumber || null,
         payment_reference: paymentReference || null,
-        invoice_logo_url: invoiceLogoUrl,
-        invoice_company_name: invoiceCompanyName || null,
+        invoice_logo_url: finalLogoUrl,
+        invoice_company_name: finalCompanyName || null,
       }
 
       // Upsert preferences
@@ -291,6 +321,13 @@ export default function SettingsPage() {
     // Clear previous errors
     setLogoError(null)
 
+    // Client-side paywall check (prevents unnecessary API calls)
+    if (!canAccessBranding) {
+      setLogoError(BRANDING_PAYWALL_ERROR)
+      e.target.value = ''
+      return
+    }
+
     // Validate file first
     const validation = validateLogoFile(file)
     if (!validation.valid) {
@@ -321,6 +358,7 @@ export default function SettingsPage() {
           onConflict: 'user_id'
         })
 
+      console.log('[Settings] branding_rendered_paid_user: logo uploaded')
       setSuccess(true)
       setTimeout(() => setSuccess(false), 2000)
     } catch (err) {
@@ -502,15 +540,38 @@ export default function SettingsPage() {
 
           {/* Invoice Branding */}
           <div className="border-b border-yapmate-slate-700 pb-6">
-            <h2 className="text-yapmate-white text-sm font-mono uppercase tracking-wide mb-4">
-              Invoice Branding
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-yapmate-white text-sm font-mono uppercase tracking-wide">
+                Invoice Branding
+              </h2>
+              {!canAccessBranding && (
+                <span className="text-xs font-mono uppercase px-2 py-1 border border-yapmate-amber text-yapmate-amber">
+                  Pro Feature
+                </span>
+              )}
+            </div>
+
+            {/* Paywall Banner for Free Users */}
+            {!canAccessBranding && (
+              <div className="mb-4 p-4 border-2 border-yapmate-amber/50 bg-yapmate-amber/5">
+                <p className="text-yapmate-amber text-sm font-mono mb-3">
+                  Upgrade to Pro to add your logo and company name to invoices
+                </p>
+                <button
+                  onClick={() => router.push('/pricing')}
+                  className="w-full h-10 border-2 border-yapmate-amber text-yapmate-amber font-mono font-bold uppercase tracking-wide bg-transparent transition-colors duration-snap active:bg-yapmate-amber active:text-yapmate-black"
+                >
+                  Upgrade to Pro
+                </button>
+              </div>
+            )}
+
             <p className="text-xs text-yapmate-slate-400 font-mono mb-4">
               Add your logo or company name to appear on invoice PDFs
             </p>
 
-            {/* Logo Upload */}
-            <div className="mb-4">
+            {/* Logo Upload - Locked for free users */}
+            <div className={`mb-4 ${!canAccessBranding ? 'opacity-50 pointer-events-none' : ''}`}>
               <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
                 Company Logo
               </label>
@@ -528,22 +589,22 @@ export default function SettingsPage() {
                   <div className="flex-1">
                     <button
                       onClick={handleLogoRemove}
-                      disabled={isUploadingLogo}
+                      disabled={isUploadingLogo || !canAccessBranding}
                       className="text-yapmate-status-red text-xs font-mono uppercase hover:underline disabled:opacity-50"
                     >
                       {isUploadingLogo ? 'Removing...' : 'Remove Logo'}
                     </button>
                     <p className="text-xs text-yapmate-slate-400 font-mono mt-1">
-                      Logo will appear on invoice header
+                      {canAccessBranding ? 'Logo will appear on invoice header' : 'Upgrade to edit'}
                     </p>
                   </div>
                 </div>
               ) : (
                 <div>
-                  <label className="block">
-                    <div className="w-full px-4 py-4 border-2 border-dashed border-yapmate-slate-700 text-center cursor-pointer hover:border-yapmate-amber transition-colors duration-snap">
+                  <label className={`block ${!canAccessBranding ? 'cursor-not-allowed' : ''}`}>
+                    <div className={`w-full px-4 py-4 border-2 border-dashed border-yapmate-slate-700 text-center ${canAccessBranding ? 'cursor-pointer hover:border-yapmate-amber' : 'cursor-not-allowed'} transition-colors duration-snap`}>
                       <span className="text-yapmate-slate-300 text-sm font-mono">
-                        {isUploadingLogo ? 'Uploading...' : 'Tap to upload logo'}
+                        {isUploadingLogo ? 'Uploading...' : canAccessBranding ? 'Tap to upload logo' : 'Locked - Upgrade to Pro'}
                       </span>
                       <p className="text-xs text-yapmate-slate-500 font-mono mt-1">
                         PNG, JPG or WebP (max 2MB)
@@ -553,7 +614,7 @@ export default function SettingsPage() {
                       type="file"
                       accept="image/png,image/jpeg,image/jpg,image/webp"
                       onChange={handleLogoUpload}
-                      disabled={isUploadingLogo}
+                      disabled={isUploadingLogo || !canAccessBranding}
                       className="hidden"
                     />
                   </label>
@@ -567,8 +628,8 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {/* Company Name */}
-            <div>
+            {/* Company Name - Locked for free users */}
+            <div className={!canAccessBranding ? 'opacity-50' : ''}>
               <label className="block text-yapmate-slate-300 text-xs font-mono uppercase mb-2">
                 Company/Trading Name
               </label>
@@ -576,13 +637,14 @@ export default function SettingsPage() {
                 type="text"
                 value={invoiceCompanyName}
                 onChange={(e) => setInvoiceCompanyName(e.target.value)}
-                className="w-full px-4 py-3 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
-                placeholder="Your Business Name"
+                disabled={!canAccessBranding}
+                className="w-full px-4 py-3 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap disabled:cursor-not-allowed"
+                placeholder={canAccessBranding ? 'Your Business Name' : 'Upgrade to Pro to add'}
               />
               <p className="text-xs text-yapmate-slate-400 font-mono mt-1">
-                {invoiceLogoUrl
-                  ? 'Shown alongside your logo'
-                  : 'Shown as header if no logo uploaded'}
+                {canAccessBranding
+                  ? (invoiceLogoUrl ? 'Shown alongside your logo' : 'Shown as header if no logo uploaded')
+                  : 'Upgrade to Pro to customize'}
               </p>
             </div>
           </div>

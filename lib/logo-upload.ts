@@ -3,19 +3,27 @@
  *
  * Handles uploading, validating, and managing user invoice logos
  * via Supabase Storage.
+ *
+ * NOTE: Logo upload is a paid feature (Pro/Trade only).
+ * Plan access must be checked before calling uploadLogo/deleteLogo.
  */
 
 import { supabase } from '@/lib/supabase'
+import { canUseInvoiceBranding } from '@/lib/plan-access'
 
 const BUCKET_NAME = 'invoice-logos'
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
 const MAX_DIMENSION = 1024 // Max width/height in pixels
 
+// Error message for free users attempting branding
+export const BRANDING_PAYWALL_ERROR = 'Invoice branding is available on Pro and Trade plans'
+
 export interface UploadResult {
   success: boolean
   url?: string
   error?: string
+  blocked?: boolean // True if blocked by paywall
 }
 
 /**
@@ -111,8 +119,21 @@ async function resizeImage(file: File): Promise<Blob> {
  * @param file - The image file to upload
  * @param userId - The user's ID (used as folder name)
  * @returns Upload result with URL or error
+ *
+ * NOTE: This function enforces paywall - free users cannot upload logos.
  */
 export async function uploadLogo(file: File, userId: string): Promise<UploadResult> {
+  // Check plan access first (server-side enforcement)
+  const canBrand = await canUseInvoiceBranding(userId)
+  if (!canBrand) {
+    console.log('[LogoUpload] branding_save_attempt_blocked: free user', userId.slice(0, 8))
+    return {
+      success: false,
+      error: BRANDING_PAYWALL_ERROR,
+      blocked: true,
+    }
+  }
+
   // Validate file
   const validation = validateLogoFile(file)
   if (!validation.valid) {
@@ -175,6 +196,9 @@ export async function uploadLogo(file: File, userId: string): Promise<UploadResu
 /**
  * Deletes a user's logo from storage
  * @param userId - The user's ID
+ *
+ * NOTE: We allow deletion even for free users (they may have had Pro before).
+ * This is intentional - we don't want to trap users with branding they can't remove.
  */
 export async function deleteLogo(userId: string): Promise<{ success: boolean; error?: string }> {
   try {

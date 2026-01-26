@@ -8,7 +8,7 @@ import { calculateInvoiceTotals, formatCurrency } from '@/lib/tax'
 import { pdf } from '@react-pdf/renderer'
 import InvoicePDF from '@/components/InvoicePDF'
 import { ensureCustomer } from '@/lib/customer-helpers'
-import { canUseVAT, canUseCIS } from '@/lib/plan-access'
+import { canUseVAT, canUseCIS, canUseInvoiceBranding } from '@/lib/plan-access'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { VoiceInputButton } from '@/components/VoiceInputButton'
 
@@ -231,12 +231,20 @@ function InvoiceEditContent() {
           }
         }
 
-        // Extract branding info
-        if (data && (data.invoice_logo_url || data.invoice_company_name)) {
+        // Check branding access before including in PDF (server-side enforcement)
+        const canBrand = await canUseInvoiceBranding(session.user.id)
+
+        // Extract branding info ONLY if user has access (paid plans)
+        if (canBrand && data && (data.invoice_logo_url || data.invoice_company_name)) {
           branding = {
             logoUrl: data.invoice_logo_url || null,
             companyName: data.invoice_company_name || null,
           }
+          console.log('[Invoice] branding_rendered_paid_user')
+        } else if (!canBrand && data && (data.invoice_logo_url || data.invoice_company_name)) {
+          // Free user has branding config but no access - ignore at render time
+          console.log('[Invoice] branding_blocked_free_user: branding config exists but not rendered')
+          branding = null
         }
       }
 
