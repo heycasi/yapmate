@@ -30,7 +30,7 @@ from src.sequencer_models import (
     EnhancedLead, DedupeKey, RunLogEntry, DedupeMatchType
 )
 from src.sequencer_sheets import SequencerSheetsManager
-from src.apify_client import ApifyLeadScraper
+from src.apify_client import ApifyLeadScraper, ApifyTimeoutError
 from src.enricher import LeadEnricher
 from src.website_email_extractor import WebsiteEmailExtractor, BatchDiscoveryStats
 from src.sequencer_alerts import alert_zero_eligible_leads, alert_task_dead
@@ -396,8 +396,6 @@ class TaskRunner:
         Returns:
             RunLogEntry with execution results
         """
-        print("[DEBUG] run_task() entered", flush=True)
-
         run_id = str(uuid.uuid4())
         started_at = datetime.utcnow()
 
@@ -411,7 +409,6 @@ class TaskRunner:
             started_at=started_at,
             status="running"
         )
-        print("[DEBUG] RunLogEntry created", flush=True)
 
         print(f"\n{'=' * 60}", flush=True)
         print(f"TASK: {task.trade} in {task.city} ({task.session.value})", flush=True)
@@ -420,9 +417,7 @@ class TaskRunner:
         print(f"{'=' * 60}", flush=True)
 
         # Mark task as in progress
-        print("[DEBUG] Updating task status to IN_PROGRESS...", flush=True)
         self.sheets.update_task_status(task.task_id, TaskStatus.IN_PROGRESS)
-        print("[DEBUG] Task status updated", flush=True)
 
         try:
             # Step 1: Scrape leads
@@ -443,13 +438,11 @@ class TaskRunner:
                 self.sheets.append_run_log(log_entry)
                 return log_entry
 
-            print("[DEBUG] Calling scraper.scrape_leads()...", flush=True)
             raw_leads = self.scraper.scrape_leads(
                 trade=task.trade,
                 city=task.city,
                 max_results=self.queue_config.leads_per_task
             )
-            print("[DEBUG] scrape_leads() returned", flush=True)
             log_entry.leads_found = len(raw_leads)
             print(f"  Found {len(raw_leads)} raw leads", flush=True)
 
@@ -712,21 +705,16 @@ class TaskRunner:
         Returns:
             RunLogEntry for the executed task, or None if no task found
         """
-        print("[DEBUG] run() entered", flush=True)
-
         # Determine session
-        print("[DEBUG] Calling determine_session...", flush=True)
         session = self.determine_session(manual=manual)
         print(f"\nSession type: {session.value}", flush=True)
 
         # Get next task
         print("Finding next task...", flush=True)
-        print("[DEBUG] Calling get_next_task...", flush=True)
         task = self.get_next_task(session)
-        print(f"[DEBUG] get_next_task returned: {task}", flush=True)
 
         if not task:
-            print("No pending tasks in queue.")
+            print("No pending tasks in queue.", flush=True)
             return None
 
         # Run the task

@@ -13,16 +13,12 @@ Usage:
     python scripts/run_sequencer.py --health-check   # Verify all systems
 """
 
-print("[DEBUG] Script starting...", flush=True)
-
 import argparse
 import os
 import sys
 import signal
 from pathlib import Path
 from datetime import datetime
-
-print("[DEBUG] Standard imports done", flush=True)
 
 # =============================================================================
 # PATH SETUP
@@ -32,21 +28,14 @@ project_dir = script_dir.parent
 sys.path.insert(0, str(project_dir))
 os.chdir(project_dir)
 
-print("[DEBUG] Path setup done", flush=True)
-
 # =============================================================================
 # IMPORTS (after path setup)
 # =============================================================================
 from dotenv import load_dotenv
 load_dotenv()
 
-print("[DEBUG] dotenv loaded", flush=True)
-
 from src.config import get_config, reload_config
-print("[DEBUG] config imported", flush=True)
-
 from src.reliability import safe_execute, StageResult
-print("[DEBUG] All imports done", flush=True)
 
 # =============================================================================
 # CI TIMEOUT GUARD
@@ -211,36 +200,29 @@ def show_status():
 # =============================================================================
 def run_scrape(manual: bool = False) -> StageResult:
     """Run the next scraping task with full reliability."""
-    print("[DEBUG] run_scrape() starting", flush=True)
-
     from src.sequencer_sheets import SequencerSheetsManager
-    print("[DEBUG] SequencerSheetsManager imported", flush=True)
-
     from src.task_runner import TaskRunner
-    print("[DEBUG] TaskRunner imported", flush=True)
+    from src.apify_client import ApifyTimeoutError
 
-    print("\n" + "=" * 70)
-    print("RUNNING SCRAPE TASK")
-    print("=" * 70)
-    sys.stdout.flush()
+    print("\n" + "=" * 70, flush=True)
+    print("RUNNING SCRAPE TASK", flush=True)
+    print("=" * 70, flush=True)
 
     config = get_config()
-    print(f"[DEBUG] Config loaded, scrape_enabled={config.pipeline.scrape_enabled}", flush=True)
 
     # Check if scraping is enabled
     if not config.pipeline.scrape_enabled:
-        print("[SCRAPE] Scraping is disabled in config")
+        print("[SCRAPE] Scraping is disabled in config", flush=True)
         return StageResult(stage="SCRAPE", success=True, data=None)
 
     # Connect to sheets
-    print("[DEBUG] Connecting to Google Sheets...", flush=True)
+    print("Connecting to Google Sheets...", flush=True)
     try:
         sheets = SequencerSheetsManager()
-        print("[DEBUG] SequencerSheetsManager created", flush=True)
         sheets.ensure_all_tabs()
-        print("[DEBUG] All tabs ensured", flush=True)
+        print("Connected to Google Sheets.", flush=True)
     except Exception as e:
-        print(f"[ERROR] Failed to connect to Sheets: {e}")
+        print(f"[ERROR] Failed to connect to Sheets: {e}", flush=True)
         return StageResult(
             stage="SCRAPE",
             success=False,
@@ -248,25 +230,27 @@ def run_scrape(manual: bool = False) -> StageResult:
         )
 
     # Run task
-    print("[DEBUG] Creating TaskRunner...", flush=True)
     try:
         runner = TaskRunner(sheets)
-        print("[DEBUG] TaskRunner created, running task...", flush=True)
         result = runner.run(manual=manual)
 
         if result:
-            print(f"\nTask completed: {result.status}")
-            print(f"  Leads found: {result.leads_found}")
-            print(f"  After dedupe: {result.leads_after_dedupe}")
-            print(f"  Enriched: {result.leads_enriched}")
-            print(f"  Eligible: {result.leads_eligible}")
+            print(f"\nTask completed: {result.status}", flush=True)
+            print(f"  Leads found: {result.leads_found}", flush=True)
+            print(f"  After dedupe: {result.leads_after_dedupe}", flush=True)
+            print(f"  Enriched: {result.leads_enriched}", flush=True)
+            print(f"  Eligible: {result.leads_eligible}", flush=True)
             return StageResult(stage="SCRAPE", success=True, data=result)
         else:
-            print("\nNo tasks to run.")
+            print("\nNo tasks to run.", flush=True)
             return StageResult(stage="SCRAPE", success=True, data=None)
 
+    except ApifyTimeoutError as e:
+        print(f"\n[TIMEOUT ERROR] {e}", flush=True)
+        return StageResult(stage="SCRAPE", success=False, error=e)
+
     except Exception as e:
-        print(f"[ERROR] Scrape task failed: {e}")
+        print(f"[ERROR] Scrape task failed: {e}", flush=True)
         return StageResult(stage="SCRAPE", success=False, error=e)
 
 
