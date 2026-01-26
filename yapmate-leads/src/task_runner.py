@@ -582,50 +582,51 @@ class TaskRunner:
             print(f"  No email: {leads_with_no_email}")
             print(f"  Discovery rate: {discovery_rate:.1f}%")
 
-            # Step 4: Enrich with AI
+            # Step 4: Enrich with AI (MANDATORY - no fallback)
             print(f"\n[4/6] Enriching with AI...")
-            if self.enricher:
-                enriched_count = 0
-                enrichment_disabled = False
-                from src.enricher import OpenAIKeyError
 
-                for lead in unique_leads:
-                    if enrichment_disabled:
-                        # Skip remaining leads if auth failed
-                        break
+            # HARD FAIL if enricher not available - no silent fallback
+            if not self.enricher:
+                raise RuntimeError(
+                    "HARD FAILURE: Enricher not initialized. "
+                    "Cannot continue without AI enrichment. "
+                    "Check OpenAI API key configuration."
+                )
 
-                    try:
-                        # Convert to old Lead format for enricher
-                        from src.models import Lead
-                        old_lead = Lead(
-                            business_name=lead.business_name,
-                            email=lead.email,
-                            phone=lead.phone,
-                            website=lead.website,
-                            trade=lead.trade,
-                            city=lead.city,
-                            lead_source=lead.lead_source,
-                            raw_data=lead.raw_data
-                        )
-                        enriched = self.enricher.enrich_lead(old_lead)
-                        lead.ai_hook = enriched.ai_hook
-                        lead.enriched_at = datetime.utcnow()
-                        enriched_count += 1
-                    except OpenAIKeyError as e:
-                        # Auth error - disable enrichment for rest of run
-                        print(f"  [OPENAI] Auth error: enrichment disabled for this run")
-                        enrichment_disabled = True
-                        # Set enricher to None so future tasks don't try
-                        self.enricher = None
-                    except Exception as e:
-                        print(f"  Warning: Failed to enrich {lead.business_name}: {e}")
+            enriched_count = 0
+            from src.enricher import OpenAIKeyError
 
-                log_entry.leads_enriched = enriched_count
-                print(f"  Enriched {enriched_count} leads")
-                if enrichment_disabled:
-                    print(f"  (Enrichment disabled due to API key error)")
-            else:
-                print("  Skipping enrichment (not configured)")
+            for lead in unique_leads:
+                try:
+                    # Convert to old Lead format for enricher
+                    from src.models import Lead
+                    old_lead = Lead(
+                        business_name=lead.business_name,
+                        email=lead.email,
+                        phone=lead.phone,
+                        website=lead.website,
+                        trade=lead.trade,
+                        city=lead.city,
+                        lead_source=lead.lead_source,
+                        raw_data=lead.raw_data
+                    )
+                    enriched = self.enricher.enrich_lead(old_lead)
+                    lead.ai_hook = enriched.ai_hook
+                    lead.enriched_at = datetime.utcnow()
+                    enriched_count += 1
+                except OpenAIKeyError as e:
+                    # HARD FAIL - do not continue without enrichment
+                    # No silent fallback. No degraded mode.
+                    raise RuntimeError(
+                        f"HARD FAILURE: OpenAI authentication failed during enrichment. "
+                        f"Task cannot continue without AI enrichment. Error: {e}"
+                    )
+                except Exception as e:
+                    # Non-auth errors: log but continue with this lead
+                    print(f"  Warning: Failed to enrich {lead.business_name}: {e}")
+
+            log_entry.leads_enriched = enriched_count
+            print(f"  Enriched {enriched_count} leads")
 
             # Step 5: Evaluate email eligibility
             print(f"\n[5/6] Evaluating email eligibility...")

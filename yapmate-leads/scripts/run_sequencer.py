@@ -79,8 +79,8 @@ def health_check() -> bool:
 
     checks = [
         ("Google Sheets", status["sheets"], "Required"),
-        ("OpenAI", status["openai"], "Optional (enrichment)"),
-        ("Apify", status["apify"], "Optional (scraping)"),
+        ("OpenAI", status["openai"], "Required (enrichment)"),
+        ("Apify", status["apify"], "Required (scraping)"),
         ("Resend", status["resend"], "Optional (sending)"),
     ]
 

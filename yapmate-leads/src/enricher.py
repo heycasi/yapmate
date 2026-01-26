@@ -137,7 +137,6 @@ class LeadEnricher:
         """
         enriched = []
         total = len(leads)
-        skipped_auth_error = 0
 
         print(f"Enriching {total} leads with AI hooks...")
 
@@ -147,11 +146,12 @@ class LeadEnricher:
                 enriched.append(enriched_lead)
                 print(f"  [{i}/{total}] OK: {lead.business_name}")
             except OpenAIKeyError as e:
-                # Auth error - stop enriching any more leads
+                # Auth error - FAIL HARD, do not continue with partial results
                 print(f"  [{i}/{total}] AUTH ERROR: {lead.business_name}")
-                print(f"    OpenAI enrichment disabled: invalid key")
-                skipped_auth_error = total - i + 1  # Count this and remaining leads
-                break
+                print(f"    [HARD FAILURE] OpenAI authentication failed - cannot continue")
+                print(f"    Pipeline requires AI enrichment. Fix API key and re-run.")
+                # Re-raise to propagate failure up the stack
+                raise
             except Exception as e:
                 print(f"  [{i}/{total}] FAILED: {lead.business_name}: {str(e)}")
                 # Skip failed enrichments but continue
@@ -159,8 +159,6 @@ class LeadEnricher:
 
         # Summary
         print(f"Successfully enriched {len(enriched)}/{total} leads")
-        if skipped_auth_error > 0:
-            print(f"  Skipped {skipped_auth_error} leads due to auth error (enrichment disabled)")
 
         return enriched
 
