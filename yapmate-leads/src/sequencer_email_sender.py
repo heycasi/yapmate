@@ -616,6 +616,10 @@ From: {self.from_email}
             html_body = self.generate_html_body(lead)
             text_body = self.generate_text_body(lead)
 
+            # Log CTA link URL for deliverability verification
+            from src.templates import APP_STORE_URL
+            print(f"  → CTA Link URL: {APP_STORE_URL}")
+
             # Prepare send parameters (use sanitized email)
             params = {
                 "from": f"{self.from_name} <{self.from_email}>",
