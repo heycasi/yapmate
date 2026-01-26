@@ -220,23 +220,32 @@ class Config:
                   f"today_limit={self.scaling.get_todays_limit()}")
 
 
+def _strip_secret(value: Optional[str]) -> Optional[str]:
+    """Strip whitespace and newlines from secret values."""
+    if value is None:
+        return None
+    return value.strip() if isinstance(value, str) else value
+
+
 def load_config() -> Config:
     """Load configuration from environment variables."""
     config = Config()
 
-    # API credentials
-    config.api.openai_api_key = os.getenv("OPENAI_API_KEY")
+    # API credentials (strip all secrets)
+    config.api.openai_api_key = _strip_secret(os.getenv("OPENAI_API_KEY"))
     config.api.openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
 
-    config.api.apify_api_token = os.getenv("APIFY_API_TOKEN")
-    config.api.apify_actor_id = os.getenv("APIFY_ACTOR_ID")
+    config.api.apify_api_token = _strip_secret(os.getenv("APIFY_API_TOKEN"))
+    config.api.apify_actor_id = _strip_secret(os.getenv("APIFY_ACTOR_ID"))
 
-    config.api.google_sheet_id = os.getenv("GOOGLE_SHEET_ID")
-    config.api.google_credentials_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+    config.api.google_sheet_id = _strip_secret(os.getenv("GOOGLE_SHEET_ID"))
+    config.api.google_credentials_json = _strip_secret(os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON"))
 
-    config.api.resend_api_key = os.getenv("RESEND_API_KEY")
-    config.api.email_from = os.getenv("EMAIL_FROM", config.api.email_from)
-    config.api.email_reply_to = os.getenv("EMAIL_REPLY_TO", config.api.email_reply_to)
+    config.api.resend_api_key = _strip_secret(os.getenv("RESEND_API_KEY"))
+    email_from = _strip_secret(os.getenv("EMAIL_FROM"))
+    config.api.email_from = email_from if email_from else config.api.email_from
+    email_reply_to = _strip_secret(os.getenv("EMAIL_REPLY_TO"))
+    config.api.email_reply_to = email_reply_to if email_reply_to else config.api.email_reply_to
 
     config.api.alert_to_email = os.getenv("ALERT_TO_EMAIL", config.api.alert_to_email)
     config.api.alert_from_email = os.getenv("ALERT_FROM_EMAIL", config.api.alert_from_email)

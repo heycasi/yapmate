@@ -675,6 +675,121 @@ From: {self.from_email}
                 email_sanitized=clean_email,
             ), log)
 
+    def _log_eligibility_breakdown(self) -> Dict[str, Any]:
+        """
+        Compute and log eligibility breakdown (counts only, no PII).
+
+        Returns:
+            Dictionary with breakdown statistics
+        """
+        print("\n" + "=" * 70)
+        print("ELIGIBILITY BREAKDOWN")
+        print("=" * 70)
+
+        # Get all leads
+        all_leads = self.sheets.get_all_leads(limit=10000)
+        total_leads = len(all_leads)
+
+        print(f"  Total leads: {total_leads}")
+
+        # Count by status
+        status_counts = {}
+        approved_count = 0
+        approved_not_sent_count = 0
+        has_email_count = 0
+        valid_email_count = 0
+        domain_allowed_count = 0
+        final_eligible_count = 0
+
+        # Reasons for ineligibility (for top reasons)
+        reason_counts = {
+            "No email address": 0,
+            "Already sent": 0,
+            "Invalid email": 0,
+            "Not approved": 0,
+            "Not eligible (other)": 0,
+        }
+
+        for lead in all_leads:
+            # Count by status
+            status = (lead.status or "UNKNOWN").upper()
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+            # Approved count
+            if status == "APPROVED":
+                approved_count += 1
+                if status != "SENT":
+                    approved_not_sent_count += 1
+
+            # Email checks
+            has_email = bool(lead.email and lead.email.strip())
+            if has_email:
+                has_email_count += 1
+
+                # Sanitize and validate
+                sanitization = sanitize_email(lead.email)
+                if sanitization.valid:
+                    valid_email_count += 1
+                    # Domain allowed check (basic - no free email filtering by default)
+                    domain_allowed_count += 1
+
+            # Eligibility check
+            if status in ("NEW", "APPROVED") and has_email:
+                sanitization = sanitize_email(lead.email)
+                if sanitization.valid:
+                    # Check send_eligible flag if available
+                    if getattr(lead, 'send_eligible', True):
+                        final_eligible_count += 1
+
+            # Track reasons for ineligibility
+            if status == "SENT":
+                reason_counts["Already sent"] += 1
+            elif not has_email:
+                reason_counts["No email address"] += 1
+            elif status not in ("NEW", "APPROVED"):
+                reason_counts["Not approved"] += 1
+            elif has_email:
+                sanitization = sanitize_email(lead.email)
+                if not sanitization.valid:
+                    reason_counts["Invalid email"] += 1
+                else:
+                    if not getattr(lead, 'send_eligible', True):
+                        reason_counts["Not eligible (other)"] += 1
+
+        # Log breakdown
+        print(f"\n  By status:")
+        for status in sorted(status_counts.keys()):
+            print(f"    {status}: {status_counts[status]}")
+
+        print(f"\n  Approved: {approved_count}")
+        print(f"  Approved + not sent: {approved_not_sent_count}")
+        print(f"  Has email: {has_email_count}")
+        print(f"  Valid email (sanitized): {valid_email_count}")
+        print(f"  Domain allowed: {domain_allowed_count}")
+        print(f"  Final eligible: {final_eligible_count}")
+
+        # If 0 eligible, show top reasons
+        if final_eligible_count == 0:
+            print(f"\n  TOP REASONS (counts only, no PII):")
+            sorted_reasons = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)
+            for i, (reason, count) in enumerate(sorted_reasons[:3], 1):
+                if count > 0:
+                    print(f"    {i}. {reason}: {count}")
+
+        print("=" * 70)
+
+        return {
+            "total_leads": total_leads,
+            "status_counts": status_counts,
+            "approved_count": approved_count,
+            "approved_not_sent_count": approved_not_sent_count,
+            "has_email_count": has_email_count,
+            "valid_email_count": valid_email_count,
+            "domain_allowed_count": domain_allowed_count,
+            "final_eligible_count": final_eligible_count,
+            "reason_counts": reason_counts,
+        }
+
     def send_batch(self, limit: int = None, dry_run: bool = False) -> SendBatchResult:
         """
         Send emails to eligible leads up to the daily limit.
@@ -706,19 +821,21 @@ From: {self.from_email}
         send_enabled, enable_reason = self._check_send_enabled()
         effective_dry_run = dry_run or config.pipeline.dry_run or not send_enabled
 
-        print(f"\n  SEND_ENABLED: {send_enabled} ({enable_reason})")
-        print(f"  DRY_RUN: {config.pipeline.dry_run}")
-        print(f"  SAFE_MODE: {config.pipeline.safe_mode}")
-        print(f"  EFFECTIVE MODE: {'DRY RUN' if effective_dry_run else 'LIVE SEND'}")
+        print(f"\n  GATE CHECKS:")
+        print(f"    SEND_ENABLED: {send_enabled} ({enable_reason})")
+        print(f"    DRY_RUN: {config.pipeline.dry_run}")
+        print(f"    SAFE_MODE: {config.pipeline.safe_mode}")
+        print(f"    EFFECTIVE MODE: {'DRY RUN' if effective_dry_run else 'LIVE SEND'}")
 
         if not send_enabled:
-            print(f"\n  ⚠️  SEND_ENABLED gate is CLOSED - all sends will be BLOCKED")
+            print(f"\n  ⚠️  BLOCKED: SEND_ENABLED gate is CLOSED")
             print(f"      Pipeline will run for validation/logging only")
 
         # Check if sending is paused
         state = self.sheets.get_runner_state()
         if state.sending_paused:
-            print(f"\nSending is PAUSED: {state.pause_reason}")
+            print(f"\n  ⚠️  BLOCKED: Sending is PAUSED")
+            print(f"      Reason: {state.pause_reason}")
             return SendBatchResult(
                 total_attempted=0,
                 total_sent=0,
@@ -735,6 +852,8 @@ From: {self.from_email}
         if send_enabled and not effective_dry_run:
             is_safe, pause_reason = self.check_safety_thresholds()
             if not is_safe:
+                print(f"\n  ⚠️  BLOCKED: Safety threshold exceeded")
+                print(f"      {pause_reason}")
                 self.pause_sending(pause_reason)
                 return SendBatchResult(
                     total_attempted=0,
@@ -762,7 +881,8 @@ From: {self.from_email}
         print(f"  DELAY_BETWEEN_SENDS: {delay_between_sends}s")
 
         if remaining_quota <= 0 and not effective_dry_run:
-            print("\n  Daily limit reached. No more emails will be sent today.")
+            print("\n  ⚠️  BLOCKED: Daily limit reached")
+            print(f"      Daily limit: {daily_limit}, Sent today: {state.emails_sent_today}")
             return SendBatchResult(
                 total_attempted=0,
                 total_sent=0,
@@ -783,12 +903,22 @@ From: {self.from_email}
 
         print(f"  Will process up to: {send_limit}")
 
+        # Log eligibility breakdown BEFORE fetching
+        breakdown = self._log_eligibility_breakdown()
+
         # Get eligible leads
         print(f"\n  Fetching eligible leads...")
         leads = self.sheets.get_eligible_leads(limit=send_limit)
         print(f"  Found {len(leads)} eligible leads")
 
         if not leads:
+            # Log why no eligible leads (breakdown already shown above)
+            print(f"\n  ⚠️  NO ELIGIBLE LEADS")
+            print(f"      Breakdown shown above. Top reasons:")
+            sorted_reasons = sorted(breakdown["reason_counts"].items(), key=lambda x: x[1], reverse=True)
+            for i, (reason, count) in enumerate(sorted_reasons[:3], 1):
+                if count > 0:
+                    print(f"        {i}. {reason}: {count}")
             # Check for TEST_EMAIL fallback
             test_email = os.getenv("TEST_EMAIL", "").strip()
             if test_email and not effective_dry_run:

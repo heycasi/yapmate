@@ -438,13 +438,30 @@ class TaskRunner:
                 self.sheets.append_run_log(log_entry)
                 return log_entry
 
-            raw_leads = self.scraper.scrape_leads(
-                trade=task.trade,
-                city=task.city,
-                max_results=self.queue_config.leads_per_task
-            )
-            log_entry.leads_found = len(raw_leads)
-            print(f"  Found {len(raw_leads)} raw leads", flush=True)
+            try:
+                raw_leads = self.scraper.scrape_leads(
+                    trade=task.trade,
+                    city=task.city,
+                    max_results=self.queue_config.leads_per_task
+                )
+                log_entry.leads_found = len(raw_leads)
+                print(f"  Found {len(raw_leads)} raw leads", flush=True)
+            except ApifyTimeoutError as e:
+                # Apify timeout - mark task as failed and exit cleanly
+                error_msg = f"Apify scraping timeout: {str(e)}"
+                print(f"\n  ❌ {error_msg}", flush=True)
+                self.sheets.update_task_status(
+                    task.task_id, TaskStatus.FAILED,
+                    leads_found=0, leads_after_dedupe=0,
+                    error_message=error_msg
+                )
+                log_entry.status = "failed"
+                log_entry.error_message = error_msg
+                log_entry.leads_found = 0
+                log_entry.completed_at = datetime.utcnow()
+                log_entry.duration_seconds = (log_entry.completed_at - started_at).total_seconds()
+                self.sheets.append_run_log(log_entry)
+                return log_entry
 
             if not raw_leads:
                 # No leads found - mark as completed with 0

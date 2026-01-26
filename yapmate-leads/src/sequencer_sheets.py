@@ -377,6 +377,34 @@ class SequencerSheetsManager:
         sheet.append_rows(rows, value_input_option="USER_ENTERED")
         return len(rows)
 
+    def get_all_leads(self, limit: int = 10000) -> List[EnhancedLead]:
+        """
+        Get all leads (for analysis/breakdown).
+
+        Args:
+            limit: Maximum number to return
+
+        Returns:
+            List of EnhancedLead objects
+        """
+        sheet = self.get_leads_tab()
+        all_rows = sheet.get_all_values()
+
+        if len(all_rows) < 2:
+            return []
+
+        leads = []
+        for row in all_rows[1:]:
+            try:
+                leads.append(EnhancedLead.from_sheets_row(row))
+            except Exception as e:
+                print(f"  Warning: Could not parse lead row: {e}")
+
+            if len(leads) >= limit:
+                break
+
+        return leads
+
     def get_leads_by_status(self, status: str, limit: int = 100) -> List[EnhancedLead]:
         """
         Get leads with a specific status.

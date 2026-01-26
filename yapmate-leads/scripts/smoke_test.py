@@ -96,11 +96,38 @@ def main():
         print(f"   Lead counts: FAILED - {e}")
     print()
 
-    # Get eligible leads count
+    # Get eligible leads count with breakdown
     print("5. Eligible leads (ready to send)...")
     try:
         eligible = sheets.get_eligible_leads(limit=1000)
         print(f"   Eligible leads: {len(eligible)}")
+
+        # Show breakdown if 0 eligible
+        if len(eligible) == 0:
+            print("\n   Eligibility breakdown:")
+            try:
+                all_leads = sheets.get_all_leads(limit=1000)
+                status_counts = {}
+                has_email_count = 0
+                valid_email_count = 0
+
+                from src.email_sanitizer import sanitize_email
+                for lead in all_leads:
+                    status = (lead.status or "UNKNOWN").upper()
+                    status_counts[status] = status_counts.get(status, 0) + 1
+                    if lead.email and lead.email.strip():
+                        has_email_count += 1
+                        if sanitize_email(lead.email).valid:
+                            valid_email_count += 1
+
+                print(f"     Total leads checked: {len(all_leads)}")
+                print(f"     By status:")
+                for status in sorted(status_counts.keys()):
+                    print(f"       {status}: {status_counts[status]}")
+                print(f"     Has email: {has_email_count}")
+                print(f"     Valid email: {valid_email_count}")
+            except Exception as e:
+                print(f"     Breakdown failed: {e}")
     except Exception as e:
         print(f"   Eligible check: FAILED - {e}")
     print()
