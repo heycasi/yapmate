@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Pre-flight OpenAI key validation script.
 
-Validates OpenAI API key without exposing sensitive data.
-Prints only: configured status, key length, last 4 chars (optional).
+Uses centralized secrets module for validation.
+Prints only: configured status, key length, prefix/suffix (safe).
 
 Usage:
     python scripts/preflight_openai.py
-    python scripts/preflight_openai.py --show-last4
+    python scripts/preflight_openai.py --verbose
 
 Exit codes:
     0 = Valid key
@@ -25,7 +25,7 @@ sys.path.insert(0, str(project_dir))
 from dotenv import load_dotenv
 load_dotenv()
 
-from src.api_key_utils import validate_openai_key
+from src.secrets import get_openai_api_key, SecretValidationError, print_safe_diagnostics
 
 
 def main():
@@ -34,56 +34,51 @@ def main():
 
     parser = argparse.ArgumentParser(description="Validate OpenAI API key")
     parser.add_argument(
-        "--show-last4",
+        "--verbose", "-v",
         action="store_true",
-        help="Show last 4 characters of key (for debugging)"
+        help="Show detailed diagnostics for all secrets"
     )
     args = parser.parse_args()
 
-    print("=" * 50)
-    print("OpenAI Pre-flight Validation")
-    print("=" * 50)
+    print("=" * 60)
+    print("OpenAI Pre-flight Validation (Centralized)")
+    print("=" * 60)
 
+    if args.verbose:
+        print_safe_diagnostics()
+
+    # Check raw presence first
     raw_key = os.getenv("OPENAI_API_KEY")
+    print(f"\nRaw key present: {raw_key is not None}")
+    if raw_key:
+        print(f"Raw key length: {len(raw_key)}")
+        has_quotes = raw_key.startswith('"') or raw_key.startswith("'")
+        print(f"Has quotes: {has_quotes}")
+        has_newlines = chr(10) in raw_key or chr(13) in raw_key
+        print(f"Has newlines: {has_newlines}")
 
-    # Basic presence check
-    if raw_key is None:
-        print("OpenAI configured: no")
-        print("Reason: OPENAI_API_KEY environment variable not set")
-        return 1
-
-    # Check for whitespace/newline issues (diagnostic)
-    has_newlines = '\n' in raw_key or '\r' in raw_key
-    has_leading_trailing = raw_key != raw_key.strip()
-    has_shell_var = raw_key.startswith('$') or '${' in raw_key
-
-    print(f"Raw key present: yes")
-    print(f"Key length (raw): {len(raw_key)}")
-    print(f"Has newlines: {has_newlines}")
-    print(f"Has leading/trailing whitespace: {has_leading_trailing}")
-    print(f"Contains shell variable syntax: {has_shell_var}")
-
-    # Run full validation
-    result = validate_openai_key(raw_key)
-
-    print()
-    if result.is_valid:
-        print(f"OpenAI configured: yes")
-        print(f"Key length (cleaned): {len(result.cleaned_key)}")
-        print(f"Starts with 'sk-': yes")
-
-        if args.show_last4:
-            last4 = result.cleaned_key[-4:]
-            print(f"Key last 4 chars: ...{last4}")
-
+    # Validate using centralized module
+    print("\nValidating with centralized secrets module...")
+    try:
+        secret = get_openai_api_key(required=True)
+        print(f"\nOpenAI configured: YES")
+        print(f"Key length: {secret.length}")
+        print(f"Prefix: {secret.prefix}")
+        print(f"Suffix: {secret.suffix}")
+        print(f"Format: {'sk-proj-' if secret.prefix.startswith('sk-p') else 'sk-'}")
         print()
-        print("Status: VALID")
+        print("=" * 60)
+        print("STATUS: VALID")
+        print("=" * 60)
         return 0
-    else:
-        print(f"OpenAI configured: no")
-        print(f"Reason: {result.error_message}")
+
+    except SecretValidationError as e:
+        print(f"\nOpenAI configured: NO")
+        print(f"Error: {e}")
         print()
-        print("Status: INVALID")
+        print("=" * 60)
+        print("STATUS: INVALID")
+        print("=" * 60)
         return 1
 
 

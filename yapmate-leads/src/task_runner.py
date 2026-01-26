@@ -36,7 +36,7 @@ from src.website_email_extractor import WebsiteEmailExtractor, BatchDiscoverySta
 from src.sequencer_alerts import alert_zero_eligible_leads, alert_task_dead
 from src.config import get_config
 from src.auto_approve import auto_approve_leads
-from src.api_key_utils import run_preflight_checks, strip_and_validate_key
+from src.secrets import run_mandatory_preflight, SecretValidationError
 
 
 class TaskRunner:
@@ -48,38 +48,41 @@ class TaskRunner:
 
         Args:
             sheets: Sheets manager instance
+
+        Raises:
+            SecretValidationError: If any required credentials are invalid.
+                                   NO SILENT FALLBACKS - pipeline must have valid credentials.
         """
         self.sheets = sheets
         self.session_config = DEFAULT_SESSION_CONFIG
         self.queue_config = DEFAULT_QUEUE_CONFIG
         self.email_config = DEFAULT_EMAIL_ELIGIBILITY_CONFIG
 
-        # Load environment
+        # Load environment (for non-secret config only)
         load_dotenv()
 
-        # Run pre-flight API checks (validates and strips keys)
-        preflight = run_preflight_checks()
+        # Run MANDATORY pre-flight checks - FAILS HARD if invalid
+        # No silent fallbacks. No degraded mode. All credentials must be valid.
+        preflight = run_mandatory_preflight(
+            require_openai=True,
+            require_apify=True,
+            require_resend=False,  # Not needed for sequencer
+            require_sheets=True
+        )
 
-        # Initialize Apify scraper (using validated/stripped credentials)
-        if preflight['apify_valid']:
-            self.scraper = ApifyLeadScraper(
-                preflight['apify_token'],
-                preflight['apify_actor']
-            )
-        else:
-            self.scraper = None
-            print("Warning: Apify scraper disabled (credentials invalid or missing)")
+        # Initialize Apify scraper with validated credentials
+        self.scraper = ApifyLeadScraper(
+            preflight.apify_token,
+            preflight.apify_actor
+        )
 
-        # Initialize AI enricher (using validated/stripped key)
-        if preflight['openai_valid']:
-            self.enricher = LeadEnricher(
-                api_key=preflight['openai_key'],
-                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.8"))
-            )
-        else:
-            self.enricher = None
-            print("Warning: AI enrichment disabled (OpenAI key invalid or missing)")
+        # Initialize AI enricher with validated key
+        # MANDATORY - no enricher = no pipeline
+        self.enricher = LeadEnricher(
+            api_key=preflight.openai_key,
+            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+            temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.8"))
+        )
 
         # Initialize website email extractor
         self.email_extractor = WebsiteEmailExtractor(

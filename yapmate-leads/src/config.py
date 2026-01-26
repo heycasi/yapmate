@@ -283,10 +283,18 @@ def _strip_secret(value: Optional[str]) -> Optional[str]:
 
 
 def load_config() -> Config:
-    """Load configuration from environment variables."""
+    """
+    Load configuration from environment variables.
+
+    NOTE: This function loads config values but does NOT validate secrets.
+    For production use, secrets should be validated through src.secrets module
+    BEFORE using this config. The preflight checks in task_runner.py and main.py
+    ensure secrets are valid before the pipeline runs.
+    """
     config = Config()
 
-    # API credentials (strip all secrets)
+    # API credentials (strip only - validation happens in secrets.py)
+    # These are stored for reference but should be accessed via secrets.py in production
     config.api.openai_api_key = _strip_secret(os.getenv("OPENAI_API_KEY"))
     config.api.openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
 

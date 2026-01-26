@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Quick validation script for API key pre-flight checks.
 
-Run this locally to verify:
+Uses centralized secrets module to validate:
 1. OpenAI key is valid and properly formatted
 2. Apify credentials are set
-3. Keys don't have whitespace/newline issues
+3. Keys don't have whitespace/newline/quote issues
 
 Usage:
     python scripts/validate_api_keys.py
@@ -21,51 +21,44 @@ sys.path.insert(0, str(project_dir))
 from dotenv import load_dotenv
 load_dotenv()
 
-from src.api_key_utils import run_preflight_checks, validate_openai_key
-import os
+from src.secrets import (
+    run_mandatory_preflight, SecretValidationError, print_safe_diagnostics
+)
 
 
 def main():
     print("=" * 60)
-    print("API Key Validation Script")
+    print("API Key Validation Script (Centralized)")
     print("=" * 60)
 
-    # Run all pre-flight checks
-    results = run_preflight_checks()
+    # Show safe diagnostics first
+    print_safe_diagnostics()
 
-    # Summary
+    # Run mandatory pre-flight checks
     print("\n" + "=" * 60)
-    print("SUMMARY")
+    print("RUNNING MANDATORY PREFLIGHT")
     print("=" * 60)
 
-    if results['openai_valid']:
-        print(f"✅ OpenAI: VALID (key length: {len(results['openai_key'])})")
-    else:
-        print("❌ OpenAI: INVALID or MISSING")
-        # Show debug info
-        raw_key = os.getenv("OPENAI_API_KEY")
-        if raw_key:
-            print(f"   Raw key length: {len(raw_key)}")
-            has_newlines = '\n' in raw_key or '\r' in raw_key
-            has_whitespace = raw_key != raw_key.strip()
-            print(f"   Has newlines: {has_newlines}")
-            print(f"   Has leading/trailing whitespace: {has_whitespace}")
-            print(f"   First 10 chars: {raw_key[:10]}...")
-        else:
-            print("   Key not set in environment")
+    try:
+        result = run_mandatory_preflight(
+            require_openai=True,
+            require_apify=True,
+            require_resend=False,  # Optional
+            require_sheets=False   # Not testing sheets here
+        )
 
-    if results['apify_valid']:
-        print(f"✅ Apify: VALID")
-    else:
-        print("❌ Apify: INVALID or MISSING")
-
-    print()
-
-    if results['all_valid']:
-        print("✅ All pre-flight checks passed!")
+        print("\n" + "=" * 60)
+        print("RESULT: ALL CHECKS PASSED")
+        print("=" * 60)
+        print(f"  OpenAI key length: {len(result.openai_key)}")
+        print(f"  Apify actor: {result.apify_actor}")
         return 0
-    else:
-        print("⚠️  Some checks failed - see details above")
+
+    except SecretValidationError as e:
+        print("\n" + "=" * 60)
+        print("RESULT: VALIDATION FAILED")
+        print("=" * 60)
+        print(f"Error: {e}")
         return 1
 
 

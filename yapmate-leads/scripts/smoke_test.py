@@ -34,41 +34,65 @@ def main():
     print(f"Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print()
 
-    # Check environment variables
-    print("1. Checking environment variables...")
-    env_checks = {
-        "GOOGLE_SHEETS_CREDENTIALS_JSON": bool(os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")),
-        "GOOGLE_SHEET_ID": bool(os.getenv("GOOGLE_SHEET_ID")),
-        "RESEND_API_KEY": bool(os.getenv("RESEND_API_KEY")),
-        "APIFY_API_TOKEN": bool(os.getenv("APIFY_API_TOKEN")),
-        "APIFY_ACTOR_ID": bool(os.getenv("APIFY_ACTOR_ID")),
-        "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
-    }
+    # Check environment variables (presence only)
+    print("1. Checking environment variables (presence)...")
+    env_vars = [
+        "GOOGLE_SHEETS_CREDENTIALS_JSON",
+        "GOOGLE_SHEET_ID",
+        "RESEND_API_KEY",
+        "APIFY_API_TOKEN",
+        "APIFY_ACTOR_ID",
+        "OPENAI_API_KEY",
+    ]
 
-    for var, present in env_checks.items():
-        status = "OK" if present else "MISSING"
+    for var in env_vars:
+        present = bool(os.getenv(var))
+        status = "PRESENT" if present else "MISSING"
         print(f"   {var}: {status}")
-
-    missing = [k for k, v in env_checks.items() if not v]
-    if missing:
-        print(f"\n   WARNING: {len(missing)} environment variable(s) missing")
     print()
 
-    # Run API key pre-flight validation
-    print("1b. Validating API keys (pre-flight)...")
+    # Run API key validation using centralized secrets module
+    print("1b. Validating API keys (centralized validation)...")
     try:
-        from src.api_key_utils import run_preflight_checks
-        preflight = run_preflight_checks()
-        if preflight['openai_valid']:
-            print(f"   OpenAI: VALID (key length: {len(preflight['openai_key'])})")
-        else:
-            print("   OpenAI: INVALID or MISSING (enrichment disabled)")
-        if preflight['apify_valid']:
-            print("   Apify: VALID")
-        else:
-            print("   Apify: INVALID or MISSING (scraping disabled)")
+        from src.secrets import (
+            get_openai_api_key, get_apify_token, get_apify_actor_id,
+            get_resend_api_key, SecretValidationError
+        )
+
+        # OpenAI
+        try:
+            openai = get_openai_api_key(required=False)
+            if openai:
+                print(f"   OpenAI: VALID ({openai.prefix}...{openai.suffix}, {openai.length} chars)")
+            else:
+                print("   OpenAI: NOT SET")
+        except SecretValidationError as e:
+            print(f"   OpenAI: INVALID - {e}")
+
+        # Apify
+        try:
+            apify = get_apify_token(required=False)
+            actor = get_apify_actor_id(required=False)
+            if apify and actor:
+                print(f"   Apify Token: VALID ({apify.prefix}...{apify.suffix})")
+                print(f"   Apify Actor: {actor}")
+            else:
+                print("   Apify: NOT SET")
+        except SecretValidationError as e:
+            print(f"   Apify: INVALID - {e}")
+
+        # Resend
+        try:
+            resend = get_resend_api_key(required=False)
+            if resend:
+                print(f"   Resend: VALID ({resend.prefix}...{resend.suffix})")
+            else:
+                print("   Resend: NOT SET")
+        except SecretValidationError as e:
+            print(f"   Resend: INVALID - {e}")
+
     except Exception as e:
-        print(f"   Pre-flight check failed: {e}")
+        print(f"   Validation failed: {e}")
     print()
 
     # Connect to Google Sheets

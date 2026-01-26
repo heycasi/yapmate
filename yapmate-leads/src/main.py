@@ -9,10 +9,11 @@ from src.sheets_manager import SheetsManager
 from src.deduplicator import LeadDeduplicator
 from src.email_finder import EmailFinder
 from src.notifications import notify_new_leads
+from src.secrets import run_mandatory_preflight, SecretValidationError
 
 
 def main():
-    # Load environment variables
+    # Load environment variables (for non-secret config)
     load_dotenv()
 
     # Parse CLI arguments
@@ -29,14 +30,22 @@ def main():
     print(f"   Max Leads: {args.max}")
     print(f"   Dry Run: {args.dry_run}\n")
 
-    # Initialize components
+    # Run mandatory preflight checks - FAILS HARD if invalid
+    preflight = run_mandatory_preflight(
+        require_openai=True,
+        require_apify=True,
+        require_resend=False,
+        require_sheets=not args.dry_run
+    )
+
+    # Initialize components with validated credentials
     scraper = ApifyLeadScraper(
-        api_token=os.getenv("APIFY_API_TOKEN"),
-        actor_id=os.getenv("APIFY_ACTOR_ID")
+        api_token=preflight.apify_token,
+        actor_id=preflight.apify_actor
     )
 
     enricher = LeadEnricher(
-        api_key=os.getenv("OPENAI_API_KEY"),
+        api_key=preflight.openai_key,
         model=os.getenv("OPENAI_MODEL", "gpt-4o"),
         temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.8"))
     )

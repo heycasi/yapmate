@@ -39,7 +39,7 @@ from src.apify_client import ApifyLeadScraper, ApifyTimeoutError
 from src.website_email_extractor import WebsiteEmailExtractor
 from src.yield_target_runner import YieldTargetRunner, PivotAction, run_yield_target_discovery
 from src.sequencer_models import EnhancedLead, TaskStatus
-from src.api_key_utils import run_preflight_checks
+from src.secrets import get_apify_token, get_apify_actor_id, SecretValidationError
 import uuid
 from datetime import datetime
 
@@ -173,14 +173,22 @@ def main():
         print("\nDRY RUN - would execute with above settings")
         return 0
 
-    # Pre-flight checks
-    print("\nRunning pre-flight checks...")
-    preflight = run_preflight_checks()
-
-    if not preflight['apify_valid'] and not args.skip_scrape:
-        print("ERROR: Apify credentials invalid or missing")
-        print("Use --skip-scrape to test with fake data")
-        return 1
+    # Validate Apify credentials (if needed)
+    apify_token = None
+    apify_actor = None
+    if not args.skip_scrape:
+        print("\nValidating Apify credentials...")
+        try:
+            token = get_apify_token(required=True)
+            actor = get_apify_actor_id(required=True)
+            apify_token = token.value
+            apify_actor = actor
+            print(f"  Apify: VALID ({token.prefix}...{token.suffix})")
+            print(f"  Actor: {actor}")
+        except SecretValidationError as e:
+            print(f"ERROR: {e}")
+            print("Use --skip-scrape to test with fake data")
+            return 1
 
     # Generate task ID
     task_id = str(uuid.uuid4())
@@ -211,8 +219,8 @@ def main():
     else:
         # Real Apify scrape
         scraper = ApifyLeadScraper(
-            preflight['apify_token'],
-            preflight['apify_actor']
+            apify_token,
+            apify_actor
         )
 
         try:

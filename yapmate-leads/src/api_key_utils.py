@@ -1,13 +1,23 @@
 """API Key validation utilities.
 
-Provides pre-flight validation for API keys to catch configuration issues
-early and fail gracefully rather than mid-pipeline.
+DEPRECATED: This module is kept for backward compatibility only.
+All new code should use src.secrets module directly.
+
+The functions in this module now delegate to the centralized
+secrets module for validation.
 """
 
-import os
-import re
+import warnings
 from typing import Optional, Tuple
 from dataclasses import dataclass
+
+from src.secrets import (
+    get_openai_api_key,
+    get_apify_token,
+    get_apify_actor_id,
+    SecretValidationError,
+    _clean_secret
+)
 
 
 @dataclass
@@ -18,23 +28,11 @@ class KeyValidationResult:
     error_message: Optional[str] = None
 
 
-def _safe_key_preview(key: str) -> str:
-    """Return safe preview of key for debugging (first 3, last 4 chars)."""
-    if len(key) < 10:
-        return f"[too short: {len(key)} chars]"
-    return f"{key[:3]}...{key[-4:]} ({len(key)} chars)"
-
-
 def strip_and_validate_key(key: Optional[str], key_name: str = "API key") -> KeyValidationResult:
     """
     Strip whitespace/newlines from key and validate basic format.
 
-    Args:
-        key: Raw key value (may contain whitespace/newlines)
-        key_name: Name for logging purposes
-
-    Returns:
-        KeyValidationResult with cleaned key if valid
+    DEPRECATED: Use src.secrets module directly.
     """
     if key is None:
         return KeyValidationResult(
@@ -43,13 +41,7 @@ def strip_and_validate_key(key: Optional[str], key_name: str = "API key") -> Key
             error_message=f"{key_name} not set"
         )
 
-    # Strip whitespace, newlines, and any shell artifacts
-    cleaned = key.strip().replace('\n', '').replace('\r', '')
-
-    # Strip surrounding quotes (common copy-paste error)
-    if (cleaned.startswith('"') and cleaned.endswith('"')) or \
-       (cleaned.startswith("'") and cleaned.endswith("'")):
-        cleaned = cleaned[1:-1]
+    cleaned = _clean_secret(key)
 
     if not cleaned:
         return KeyValidationResult(
@@ -58,7 +50,6 @@ def strip_and_validate_key(key: Optional[str], key_name: str = "API key") -> Key
             error_message=f"{key_name} is empty after stripping whitespace"
         )
 
-    # Check for common shell interpolation issues
     if cleaned.startswith('$') or '${' in cleaned:
         return KeyValidationResult(
             is_valid=False,
@@ -77,44 +68,34 @@ def validate_openai_key(key: Optional[str], verbose: bool = False) -> KeyValidat
     """
     Validate OpenAI API key format.
 
-    OpenAI keys typically start with 'sk-' and are 40-60+ characters.
-
-    Args:
-        key: Raw OpenAI API key
-        verbose: If True, print diagnostic info (safe - no secrets exposed)
-
-    Returns:
-        KeyValidationResult with cleaned key if valid
+    DEPRECATED: Use src.secrets.get_openai_api_key() directly.
     """
-    result = strip_and_validate_key(key, "OPENAI_API_KEY")
-
-    if not result.is_valid:
-        if verbose and key is not None:
-            # Log diagnostics for non-None keys that failed basic validation
-            print(f"  [DEBUG] Key raw length: {len(key)}")
-            print(f"  [DEBUG] Key preview: {_safe_key_preview(key)}")
-        return result
-
-    cleaned = result.cleaned_key
-
-    if verbose:
-        print(f"  [DEBUG] Key after cleaning: {_safe_key_preview(cleaned)}")
-        print(f"  [DEBUG] Starts with 'sk-': {cleaned.startswith('sk-')}")
-
-    # OpenAI keys start with sk- (or sk-proj- for project keys)
-    if not cleaned.startswith('sk-'):
+    if key is None:
         return KeyValidationResult(
             is_valid=False,
             cleaned_key=None,
-            error_message=f"OPENAI_API_KEY does not start with 'sk-' (invalid format). Got prefix: '{cleaned[:6] if len(cleaned) >= 6 else cleaned}...'"
+            error_message="OPENAI_API_KEY not set"
         )
 
-    # Keys should be reasonably long (at least 30 chars)
-    if len(cleaned) < 30:
+    cleaned = _clean_secret(key)
+
+    if not cleaned:
         return KeyValidationResult(
             is_valid=False,
             cleaned_key=None,
-            error_message=f"OPENAI_API_KEY too short ({len(cleaned)} chars, expected 30+)"
+            error_message="OPENAI_API_KEY is empty after stripping"
+        )
+
+    # Use same validation pattern as secrets module
+    import re
+    pattern = re.compile(r'^sk-(?:proj-)?[A-Za-z0-9_-]{30,200}$')
+
+    if not pattern.match(cleaned):
+        prefix = cleaned[:6] if len(cleaned) >= 6 else cleaned
+        return KeyValidationResult(
+            is_valid=False,
+            cleaned_key=None,
+            error_message=f"OPENAI_API_KEY invalid format. Got prefix: '{prefix}...'"
         )
 
     return KeyValidationResult(
@@ -128,26 +109,18 @@ def preflight_check_openai(verbose: bool = None) -> Tuple[bool, Optional[str]]:
     """
     Pre-flight check for OpenAI API key.
 
-    Reads from environment, validates, and returns cleaned key.
-    Logs status without exposing key contents.
-
-    Args:
-        verbose: Enable debug logging. If None, uses DEBUG_API_KEYS env var.
-
-    Returns:
-        Tuple of (success, cleaned_key or None)
+    DEPRECATED: Use src.secrets.get_openai_api_key() directly.
     """
-    if verbose is None:
-        verbose = os.getenv("DEBUG_API_KEYS", "").lower() in ("true", "1", "yes")
-
-    raw_key = os.getenv("OPENAI_API_KEY")
-    result = validate_openai_key(raw_key, verbose=verbose)
-
-    if result.is_valid:
-        print(f"  ✓ OpenAI configured: yes (key length: {len(result.cleaned_key)})")
-        return True, result.cleaned_key
-    else:
-        print(f"  ✗ OpenAI configured: no - {result.error_message}")
+    try:
+        secret = get_openai_api_key(required=False)
+        if secret:
+            print(f"  [PASS] OpenAI: {secret.prefix}...{secret.suffix} ({secret.length} chars)")
+            return True, secret.value
+        else:
+            print("  [FAIL] OpenAI: not set")
+            return False, None
+    except SecretValidationError as e:
+        print(f"  [FAIL] OpenAI: {e}")
         return False, None
 
 
@@ -155,39 +128,37 @@ def preflight_check_apify() -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Pre-flight check for Apify credentials.
 
-    Returns:
-        Tuple of (success, cleaned_token, actor_id)
+    DEPRECATED: Use src.secrets.get_apify_token() and get_apify_actor_id() directly.
     """
-    raw_token = os.getenv("APIFY_API_TOKEN")
-    actor_id = os.getenv("APIFY_ACTOR_ID")
+    try:
+        token = get_apify_token(required=False)
+        actor = get_apify_actor_id(required=False)
 
-    token_result = strip_and_validate_key(raw_token, "APIFY_API_TOKEN")
-
-    if not token_result.is_valid:
-        print(f"  ✗ Apify configured: no - {token_result.error_message}")
+        if token and actor:
+            print(f"  [PASS] Apify: token={token.prefix}..., actor={actor[:15]}...")
+            return True, token.value, actor
+        else:
+            print("  [FAIL] Apify: credentials not set")
+            return False, None, None
+    except SecretValidationError as e:
+        print(f"  [FAIL] Apify: {e}")
         return False, None, None
-
-    if not actor_id or not actor_id.strip():
-        print("  ✗ Apify configured: no - APIFY_ACTOR_ID not set")
-        return False, None, None
-
-    print(f"  ✓ Apify configured: yes (actor: {actor_id.strip()[:20]}...)")
-    return True, token_result.cleaned_key, actor_id.strip()
 
 
 def run_preflight_checks() -> dict:
     """
     Run all pre-flight checks and return status dict.
 
-    Returns:
-        Dict with keys: openai_key, apify_token, apify_actor, all_valid
+    DEPRECATED: Use src.secrets.run_mandatory_preflight() for production code.
+    This function returns a dict for backward compatibility but new code should
+    use the centralized module directly.
     """
-    print("\n--- Pre-flight API Checks ---")
+    print("\n--- Pre-flight API Checks (Legacy) ---")
 
     openai_ok, openai_key = preflight_check_openai()
     apify_ok, apify_token, apify_actor = preflight_check_apify()
 
-    print("-----------------------------\n")
+    print("--------------------------------------\n")
 
     return {
         'openai_key': openai_key,

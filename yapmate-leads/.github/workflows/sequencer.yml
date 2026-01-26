@@ -85,24 +85,52 @@ jobs:
           EOF
           echo "============================================"
 
-      - name: Diagnose API keys
+      - name: Mandatory preflight checks
+        id: preflight
         if: steps.time_guard.outputs.skipped != 'true'
         env:
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "============================================"
-          echo "API KEY DIAGNOSTICS"
+          echo "MANDATORY PREFLIGHT CHECKS"
           echo "============================================"
-          python scripts/diagnose_api_keys.py || true
+          echo "This step validates ALL required secrets."
+          echo "If ANY secret is invalid, the workflow FAILS."
+          echo "No silent fallbacks. No degraded mode."
+          echo "============================================"
+
+          python3 << 'EOF'
+          import sys
+          sys.path.insert(0, '.')
+          from src.secrets import run_mandatory_preflight, SecretValidationError
+
+          try:
+              result = run_mandatory_preflight(
+                  require_openai=True,
+                  require_apify=True,
+                  require_resend=False,
+                  require_sheets=True
+              )
+              print("\nPREFLIGHT PASSED - All secrets valid")
+              print(f"  OpenAI key: {len(result.openai_key)} chars")
+              print(f"  Apify actor: {result.apify_actor}")
+              print(f"  Sheet ID: {result.sheet_id[:20]}...")
+              sys.exit(0)
+          except SecretValidationError as e:
+              print(f"\nPREFLIGHT FAILED: {e}")
+              print("\nThis is a HARD FAILURE. Cannot continue.")
+              print("Fix the secret configuration before retrying.")
+              sys.exit(1)
+          EOF
+
           echo "============================================"
 
       - name: Run sequencer task
-        if: steps.time_guard.outputs.skipped != 'true'
+        if: steps.time_guard.outputs.skipped != 'true' && steps.preflight.outcome == 'success'
         env:
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
@@ -110,8 +138,6 @@ jobs:
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
-          DEBUG_API_KEYS: 'true'
         run: |
           echo "============================================"
           echo "LEAD SEQUENCER"
