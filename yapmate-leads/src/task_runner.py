@@ -396,6 +396,8 @@ class TaskRunner:
         Returns:
             RunLogEntry with execution results
         """
+        print("[DEBUG] run_task() entered", flush=True)
+
         run_id = str(uuid.uuid4())
         started_at = datetime.utcnow()
 
@@ -409,22 +411,25 @@ class TaskRunner:
             started_at=started_at,
             status="running"
         )
+        print("[DEBUG] RunLogEntry created", flush=True)
 
-        print(f"\n{'=' * 60}")
-        print(f"TASK: {task.trade} in {task.city} ({task.session.value})")
-        print(f"Task ID: {task.task_id}")
-        print(f"Run ID: {run_id}")
-        print(f"{'=' * 60}")
+        print(f"\n{'=' * 60}", flush=True)
+        print(f"TASK: {task.trade} in {task.city} ({task.session.value})", flush=True)
+        print(f"Task ID: {task.task_id}", flush=True)
+        print(f"Run ID: {run_id}", flush=True)
+        print(f"{'=' * 60}", flush=True)
 
         # Mark task as in progress
+        print("[DEBUG] Updating task status to IN_PROGRESS...", flush=True)
         self.sheets.update_task_status(task.task_id, TaskStatus.IN_PROGRESS)
+        print("[DEBUG] Task status updated", flush=True)
 
         try:
             # Step 1: Scrape leads
-            print(f"\n[1/6] Scraping leads...")
+            print(f"\n[1/6] Scraping leads...", flush=True)
             if not self.scraper:
-                print("  WARNING: Apify scraper not configured - skipping scraping")
-                print("  Set APIFY_API_TOKEN and APIFY_ACTOR_ID to enable scraping")
+                print("  WARNING: Apify scraper not configured - skipping scraping", flush=True)
+                print("  Set APIFY_API_TOKEN and APIFY_ACTOR_ID to enable scraping", flush=True)
                 # Complete task as skipped (no leads)
                 self.sheets.update_task_status(
                     task.task_id, TaskStatus.COMPLETED,
@@ -438,13 +443,15 @@ class TaskRunner:
                 self.sheets.append_run_log(log_entry)
                 return log_entry
 
+            print("[DEBUG] Calling scraper.scrape_leads()...", flush=True)
             raw_leads = self.scraper.scrape_leads(
                 trade=task.trade,
                 city=task.city,
                 max_results=self.queue_config.leads_per_task
             )
+            print("[DEBUG] scrape_leads() returned", flush=True)
             log_entry.leads_found = len(raw_leads)
-            print(f"  Found {len(raw_leads)} raw leads")
+            print(f"  Found {len(raw_leads)} raw leads", flush=True)
 
             if not raw_leads:
                 # No leads found - mark as completed with 0
