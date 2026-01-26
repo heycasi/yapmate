@@ -1,20 +1,25 @@
 name: Lead Sequencer
 
-# DST-robust scheduling for UK times: 09:00, 13:00, 18:00, 21:00
+# Lead discovery - runs 4x/day on weekdays to fill the sheet
 #
-# GitHub cron uses UTC. UK time shifts between GMT (UTC+0) and BST (UTC+1).
-# We run at both possible UTC times and use a time guard to check actual UK hour.
+# Schedule: 08:30, 12:00, 16:30, 20:30 UK time (weekdays only)
+# Purpose: Scrape leads, discover emails, enrich, auto-approve
+# Does NOT send emails - that's handled by email_sender.yml
 #
-# Target UK hours: 9, 13, 18, 21
-# GMT (winter):    09:00, 13:00, 18:00, 21:00 UTC
-# BST (summer):    08:00, 12:00, 17:00, 20:00 UTC
-#
-# Combined cron:   0 8,9,12,13,17,18,20,21 * * *
-# Expected: ~50% of runs will skip (this is normal DST handling)
+# DST-robust scheduling:
+# - Summer (BST): 07:30, 11:00, 15:30, 19:30 UTC
+# - Winter (GMT): 08:30, 12:00, 16:30, 20:30 UTC
+# Combined with time guard to handle DST transitions
 
 on:
   schedule:
-    - cron: '0 8,9,12,13,17,18,20,21 * * *'
+    # Cover both GMT and BST possibilities for target UK times
+    # 08:30 UK = 07:30 or 08:30 UTC
+    # 12:00 UK = 11:00 or 12:00 UTC
+    # 16:30 UK = 15:30 or 16:30 UTC
+    # 20:30 UK = 19:30 or 20:30 UTC
+    - cron: '30 7,8,15,16,19,20 * * 1-5'   # :30 times (weekdays)
+    - cron: '0 11,12 * * 1-5'              # :00 times (weekdays)
   workflow_dispatch:
     inputs:
       skip_time_guard:
@@ -24,11 +29,6 @@ on:
         type: boolean
       dry_run:
         description: 'Dry run mode (no scraping, enrichment, or storage)'
-        required: false
-        default: 'false'
-        type: boolean
-      send_enabled:
-        description: 'Enable email sending after discovery'
         required: false
         default: 'false'
         type: boolean
@@ -87,20 +87,41 @@ jobs:
 
           python3 << 'EOF'
           import os
-          from src.ci_helpers import get_uk_hour
+          from datetime import datetime
+          import pytz
 
-          uk_hour = get_uk_hour()
-          allowed_hours = {9, 13, 18, 21}
+          uk_tz = pytz.timezone('Europe/London')
+          now_uk = datetime.now(uk_tz)
+          uk_hour = now_uk.hour
+          uk_minute = now_uk.minute
 
-          print(f"Current UK hour: {uk_hour}")
-          print(f"Allowed hours:   {sorted(allowed_hours)}")
+          # Target UK times: 08:30, 12:00, 16:30, 20:30
+          # Allow 15-minute window around each target
+          allowed_windows = [
+              (8, 15, 8, 45),   # 08:30 window
+              (11, 45, 12, 15), # 12:00 window
+              (16, 15, 16, 45), # 16:30 window
+              (20, 15, 20, 45), # 20:30 window
+          ]
 
-          if uk_hour in allowed_hours:
-              print(f"PASS: UK hour {uk_hour} is in allowed window")
+          def in_window(hour, minute, windows):
+              for start_h, start_m, end_h, end_m in windows:
+                  start = start_h * 60 + start_m
+                  end = end_h * 60 + end_m
+                  current = hour * 60 + minute
+                  if start <= current <= end:
+                      return True
+              return False
+
+          print(f"Current UK time: {now_uk.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+          print(f"Target windows: 08:30, 12:00, 16:30, 20:30 (±15 min)")
+
+          if in_window(uk_hour, uk_minute, allowed_windows):
+              print(f"PASS: UK time {uk_hour}:{uk_minute:02d} is in allowed window")
               with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                   f.write("skipped=false\n")
           else:
-              print(f"SKIP: UK hour {uk_hour} not in allowed window")
+              print(f"SKIP: UK time {uk_hour}:{uk_minute:02d} not in allowed window")
               print("This is expected behavior for DST-robust scheduling.")
               with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                   f.write("skipped=true\n")
@@ -124,20 +145,19 @@ jobs:
           python scripts/ci_end_to_end_check.py --skip-wiring
           echo "============================================"
 
-      - name: Run Pipeline
+      - name: Run Lead Discovery
         if: steps.time_guard.outputs.skipped != 'true' && steps.ci_check.outcome == 'success'
         env:
           # Core credentials
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_KEY }}
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
           # Yield target configuration
           TARGET_LEADS_TOTAL: ${{ secrets.TARGET_LEADS_TOTAL || '50' }}
-          TARGET_EMAILS_MIN: ${{ secrets.TARGET_EMAILS_MIN || '10' }}
+          TARGET_EMAILS_MIN: ${{ secrets.TARGET_EMAILS_MIN || '15' }}
           TARGET_EMAIL_RATE_MIN: ${{ secrets.TARGET_EMAIL_RATE_MIN || '0.20' }}
           MAX_ITERATIONS: ${{ secrets.MAX_ITERATIONS || '5' }}
           MAX_RUNTIME_SECONDS: ${{ secrets.MAX_RUNTIME_SECONDS || '900' }}
@@ -148,23 +168,12 @@ jobs:
           ENABLE_SOCIAL_FALLBACK: ${{ secrets.ENABLE_SOCIAL_FALLBACK || 'true' }}
           MAX_PAGES_PER_DOMAIN: ${{ secrets.MAX_PAGES_PER_DOMAIN || '6' }}
 
-          # Pipeline control
+          # Pipeline control - DISCOVERY ONLY, no sending
           PIPELINE_ENABLED: 'true'
-          SEND_ENABLED: ${{ github.event.inputs.send_enabled || secrets.SEND_ENABLED || 'false' }}
+          SEND_ENABLED: 'false'
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
 
-          # Sending limits
-          DAILY_LIMIT: ${{ secrets.DAILY_LIMIT || '50' }}
-          SEND_LIMIT_PER_RUN: ${{ secrets.SEND_LIMIT_PER_RUN || '10' }}
-
-          # Warmup configuration
-          WARMUP_ENABLED: ${{ secrets.WARMUP_ENABLED || 'true' }}
-          WARMUP_START_DAILY_LIMIT: ${{ secrets.WARMUP_START_DAILY_LIMIT || '10' }}
-          WARMUP_RAMP_INCREMENT: ${{ secrets.WARMUP_RAMP_INCREMENT || '5' }}
-          WARMUP_MAX_CAP: ${{ secrets.WARMUP_MAX_CAP || '100' }}
-          WARMUP_START_DATE: ${{ secrets.WARMUP_START_DATE || '' }}
-
-          # Auto-approval
+          # Auto-approval (fills sheet with approved leads for sender)
           AUTO_APPROVE_ENABLED: ${{ secrets.AUTO_APPROVE_ENABLED || 'true' }}
 
           # Leads sheet tab (configurable)
@@ -175,13 +184,15 @@ jobs:
 
         run: |
           echo "========================================================"
-          echo "END-TO-END LEAD PIPELINE"
+          echo "LEAD DISCOVERY PIPELINE"
           echo "========================================================"
           echo "Started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           echo ""
+          echo "Purpose: Scrape leads, discover emails, enrich, auto-approve"
+          echo "Note: This job does NOT send emails (handled by email_sender.yml)"
+          echo ""
           echo "Configuration:"
           echo "  DRY_RUN: $DRY_RUN"
-          echo "  SEND_ENABLED: $SEND_ENABLED"
           echo "  TARGET_EMAILS_MIN: $TARGET_EMAILS_MIN"
           echo "  MAX_ITERATIONS: $MAX_ITERATIONS"
           echo "  MAX_RUNTIME_SECONDS: $MAX_RUNTIME_SECONDS"
@@ -189,18 +200,18 @@ jobs:
           echo ""
           echo "--------------------------------------------------------"
 
-          python scripts/run_pipeline.py --timeout 2400
+          python scripts/run_pipeline.py --discovery-only --timeout 2400
           EXIT_CODE=$?
 
           echo "--------------------------------------------------------"
           echo ""
 
           if [ $EXIT_CODE -eq 0 ]; then
-            echo "PIPELINE COMPLETED SUCCESSFULLY"
+            echo "DISCOVERY COMPLETED SUCCESSFULLY"
           elif [ $EXIT_CODE -eq 2 ]; then
-            echo "PIPELINE COMPLETED (targets not met, but no errors)"
+            echo "DISCOVERY COMPLETED (targets not met, but no errors)"
           else
-            echo "PIPELINE FAILED with exit code: $EXIT_CODE"
+            echo "DISCOVERY FAILED with exit code: $EXIT_CODE"
             exit $EXIT_CODE
           fi
           echo "========================================================"
@@ -255,6 +266,6 @@ jobs:
               repo="${{ github.repository }}",
               branch="${{ github.ref_name }}",
               commit_sha="${{ github.sha }}",
-              error_summary="The lead pipeline failed. Check the workflow logs for details including iteration stats, yield summary, and failure reasons."
+              error_summary="The lead discovery pipeline failed. Check the workflow logs for details."
           )
           EOF
