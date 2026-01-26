@@ -13,11 +13,52 @@ This module provides multi-tab support for the sequencing system:
 import os
 import json
 import tempfile
+import time
+import functools
 from typing import List, Dict, Set, Optional, Any, Tuple
 from datetime import datetime
 
 import gspread
 from google.oauth2.service_account import Credentials
+from gspread.exceptions import APIError
+
+
+def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 2.0):
+    """
+    Decorator to retry operations on Google Sheets rate limit errors (429).
+
+    Uses exponential backoff: delay = base_delay * 2^attempt
+
+    Args:
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds (doubles each retry)
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except APIError as e:
+                    # Check if it's a rate limit error (429)
+                    if hasattr(e, 'response') and e.response.status_code == 429:
+                        last_exception = e
+                        if attempt < max_retries:
+                            delay = base_delay * (2 ** attempt)
+                            print(f"  [Sheets] Rate limit hit, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})...")
+                            time.sleep(delay)
+                            continue
+                        else:
+                            print(f"  [Sheets] Rate limit exceeded after {max_retries} retries")
+                    raise
+                except Exception:
+                    raise
+            # If we exhausted retries, raise the last exception
+            if last_exception:
+                raise last_exception
+        return wrapper
+    return decorator
 
 from src.sequencer_config import SHEETS_TABS
 from src.sequencer_models import (
@@ -211,6 +252,7 @@ class SequencerSheetsManager:
         """Get the queue worksheet."""
         return self.get_or_create_tab(SHEETS_TABS["queue"], QueueTask.headers())
 
+    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
     def append_queue_tasks(self, tasks: List[QueueTask]) -> int:
         """
         Append tasks to the queue.
@@ -273,6 +315,7 @@ class SequencerSheetsManager:
         filtered = [t for t in all_pending if t.trade == trade]
         return filtered[:limit]
 
+    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
     def update_task_status(
         self,
         task_id: str,
@@ -429,6 +472,7 @@ class SequencerSheetsManager:
             })
         return tabs_info
 
+    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
     def append_leads(self, leads: List[EnhancedLead]) -> int:
         """
         Append leads to the leads tab.
@@ -585,6 +629,7 @@ class SequencerSheetsManager:
 
         return leads
 
+    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
     def update_lead_status(self, lead_id: str, status: str, send_eligible: bool = None, **kwargs):
         """
         Update a lead's status and optional fields.
@@ -677,6 +722,7 @@ class SequencerSheetsManager:
         """Get the dedupe_keys worksheet."""
         return self.get_or_create_tab(SHEETS_TABS["dedupe_keys"], DedupeKey.headers())
 
+    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
     def append_dedupe_keys(self, keys: List[DedupeKey]) -> int:
         """
         Append dedupe keys to the lookup table.
@@ -780,11 +826,13 @@ class SequencerSheetsManager:
         """Get the run_log worksheet."""
         return self.get_or_create_tab(SHEETS_TABS["run_log"], RunLogEntry.headers())
 
+    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
     def append_run_log(self, entry: RunLogEntry):
         """Append an entry to the run log."""
         sheet = self.get_run_log_tab()
         sheet.append_rows([entry.to_sheets_row()], value_input_option="USER_ENTERED")
 
+    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
     def update_run_log(self, run_id: str, **kwargs):
         """Update a run log entry."""
         sheet = self.get_run_log_tab()

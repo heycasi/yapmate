@@ -36,6 +36,7 @@ from src.website_email_extractor import WebsiteEmailExtractor, BatchDiscoverySta
 from src.sequencer_alerts import alert_zero_eligible_leads, alert_task_dead
 from src.config import get_config
 from src.auto_approve import auto_approve_leads
+from src.api_key_utils import run_preflight_checks, strip_and_validate_key
 
 
 class TaskRunner:
@@ -56,26 +57,29 @@ class TaskRunner:
         # Load environment
         load_dotenv()
 
-        # Initialize Apify scraper
-        apify_token = os.getenv("APIFY_API_TOKEN")
-        apify_actor = os.getenv("APIFY_ACTOR_ID")
-        if apify_token and apify_actor:
-            self.scraper = ApifyLeadScraper(apify_token, apify_actor)
+        # Run pre-flight API checks (validates and strips keys)
+        preflight = run_preflight_checks()
+
+        # Initialize Apify scraper (using validated/stripped credentials)
+        if preflight['apify_valid']:
+            self.scraper = ApifyLeadScraper(
+                preflight['apify_token'],
+                preflight['apify_actor']
+            )
         else:
             self.scraper = None
-            print("Warning: APIFY credentials not configured")
+            print("Warning: Apify scraper disabled (credentials invalid or missing)")
 
-        # Initialize AI enricher
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
+        # Initialize AI enricher (using validated/stripped key)
+        if preflight['openai_valid']:
             self.enricher = LeadEnricher(
-                api_key=openai_key,
+                api_key=preflight['openai_key'],
                 model=os.getenv("OPENAI_MODEL", "gpt-4o"),
                 temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.8"))
             )
         else:
             self.enricher = None
-            print("Warning: OPENAI credentials not configured")
+            print("Warning: AI enrichment disabled (OpenAI key invalid or missing)")
 
         # Initialize website email extractor
         self.email_extractor = WebsiteEmailExtractor(
