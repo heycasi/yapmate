@@ -388,8 +388,8 @@ def auto_approve_leads(
     print(f"  Max per run: {max_per_run}")
     print(f"  Allow free emails: {allow_free_emails}")
 
-    # Collect updates for batch write
-    approved_updates = []
+    # Collect ALL updates for true batch write (approved + rejected)
+    all_updates = []
 
     for i, lead in enumerate(leads[:max_per_run], 1):
         print(f"\n[{i}/{min(len(leads), max_per_run)}] {lead.business_name}")
@@ -421,12 +421,11 @@ def auto_approve_leads(
             })
 
             # Queue for batch update (include send_eligible=True)
-            approved_updates.append({
+            all_updates.append({
                 'lead_id': lead.lead_id,
                 'status': 'APPROVED',
                 'send_eligible': True,  # Ensure send_eligible is set to True
-                'auto_approved': True,
-                'approval_reason': result.reason,
+                'eligibility_reason': result.reason,
             })
 
             print(f"  -> AUTO-APPROVED")
@@ -440,25 +439,39 @@ def auto_approve_leads(
                 'checks_failed': result.checks_failed,
             })
 
-            # Update rejection reason (keep as NEW)
-            sheets_manager.update_lead_status(
-                lead.lead_id,
-                'NEW',  # Keep as NEW
-                eligibility_reason=f"Auto-reject: {result.reason}"
-            )
+            # Queue rejection for batch update (keep as NEW)
+            all_updates.append({
+                'lead_id': lead.lead_id,
+                'status': 'NEW',  # Keep as NEW
+                'eligibility_reason': f"Auto-reject: {result.reason}",
+            })
 
             print(f"  -> REJECTED: {result.reason}")
 
-    # Batch update approved leads
-    if approved_updates:
-        print(f"\n  Batch updating {len(approved_updates)} approved leads...")
-        for update in approved_updates:
-            sheets_manager.update_lead_status(
-                update['lead_id'],
-                update['status'],
-                send_eligible=update.get('send_eligible', True),  # Set send_eligible=True
-                eligibility_reason=update['approval_reason'],
-            )
+    # TRUE batch update - single API call for all leads
+    if all_updates:
+        print(f"\n  Batch updating {len(all_updates)} leads (single API call)...")
+        try:
+            updated_count = sheets_manager.batch_update_leads(all_updates)
+            print(f"  Updated {updated_count} leads successfully")
+        except Exception as e:
+            print(f"  WARNING: Batch update failed: {e}")
+            print(f"  Falling back to individual updates with delays...")
+            # Fallback with rate limiting
+            import time
+            for i, update in enumerate(all_updates):
+                try:
+                    sheets_manager.update_lead_status(
+                        update['lead_id'],
+                        update['status'],
+                        send_eligible=update.get('send_eligible'),
+                        eligibility_reason=update.get('eligibility_reason'),
+                    )
+                    # Rate limit: max 50 writes/minute, so wait 1.5s between writes
+                    if i < len(all_updates) - 1:
+                        time.sleep(1.5)
+                except Exception as inner_e:
+                    print(f"  WARNING: Failed to update lead {update['lead_id']}: {inner_e}")
 
     # Summary
     print(f"\n" + "=" * 70)

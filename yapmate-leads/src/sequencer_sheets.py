@@ -57,16 +57,17 @@ def get_write_stats() -> SheetsWriteStats:
     return _write_stats
 
 
-def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 2.0):
+def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 10.0, max_delay: float = 65.0):
     """
     Decorator to retry operations on Google Sheets rate limit errors (429).
 
-    Uses exponential backoff: delay = base_delay * 2^attempt
-    Tracks retry count in global stats.
+    Uses exponential backoff with a minimum delay of base_delay and maximum of max_delay.
+    The per-minute quota limit requires waiting ~60s, so max_delay defaults to 65s.
 
     Args:
         max_retries: Maximum number of retry attempts
-        base_delay: Initial delay in seconds (doubles each retry)
+        base_delay: Initial delay in seconds (10s is safer for rate limits)
+        max_delay: Maximum delay per retry (65s to cover per-minute quota reset)
     """
     def decorator(func):
         @functools.wraps(func)
@@ -86,12 +87,14 @@ def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 2.0):
                         last_exception = e
                         retry_count += 1
                         if attempt < max_retries:
-                            delay = base_delay * (2 ** attempt)
-                            print(f"  [Sheets] Rate limit hit, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})...")
+                            # Use exponential backoff but cap at max_delay
+                            # For 429, we often need to wait for the per-minute quota to reset
+                            delay = min(base_delay * (2 ** attempt), max_delay)
+                            print(f"  [Sheets] Rate limit hit (429), waiting {delay:.0f}s for quota reset (attempt {attempt + 1}/{max_retries})...")
                             time.sleep(delay)
                             continue
                         else:
-                            print(f"  [Sheets] Rate limit exceeded after {max_retries} retries")
+                            print(f"  [Sheets] Rate limit exceeded after {max_retries} retries, giving up")
                     raise
                 except Exception:
                     raise
@@ -293,7 +296,7 @@ class SequencerSheetsManager:
         """Get the queue worksheet."""
         return self.get_or_create_tab(SHEETS_TABS["queue"], QueueTask.headers())
 
-    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def append_queue_tasks(self, tasks: List[QueueTask]) -> int:
         """
         Append tasks to the queue.
@@ -356,7 +359,7 @@ class SequencerSheetsManager:
         filtered = [t for t in all_pending if t.trade == trade]
         return filtered[:limit]
 
-    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def update_task_status(
         self,
         task_id: str,
@@ -513,7 +516,7 @@ class SequencerSheetsManager:
             })
         return tabs_info
 
-    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def append_leads(self, leads: List[EnhancedLead]) -> int:
         """
         Append leads to the leads tab.
@@ -674,7 +677,7 @@ class SequencerSheetsManager:
 
         return leads
 
-    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def update_lead_status(self, lead_id: str, status: str, send_eligible: bool = None, **kwargs):
         """
         Update a lead's status and optional fields.
@@ -759,7 +762,7 @@ class SequencerSheetsManager:
 
         return False
 
-    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def batch_update_leads(
         self,
         updates: List[Dict[str, Any]],
@@ -856,7 +859,7 @@ class SequencerSheetsManager:
         """Get the dedupe_keys worksheet."""
         return self.get_or_create_tab(SHEETS_TABS["dedupe_keys"], DedupeKey.headers())
 
-    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def append_dedupe_keys(self, keys: List[DedupeKey]) -> int:
         """
         Append dedupe keys to the lookup table.
@@ -960,13 +963,13 @@ class SequencerSheetsManager:
         """Get the run_log worksheet."""
         return self.get_or_create_tab(SHEETS_TABS["run_log"], RunLogEntry.headers())
 
-    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def append_run_log(self, entry: RunLogEntry):
         """Append an entry to the run log."""
         sheet = self.get_run_log_tab()
         sheet.append_rows([entry.to_sheets_row()], value_input_option="USER_ENTERED")
 
-    @retry_on_rate_limit(max_retries=3, base_delay=2.0)
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def update_run_log(self, run_id: str, **kwargs):
         """Update a run log entry."""
         sheet = self.get_run_log_tab()

@@ -489,22 +489,43 @@ class PipelineOrchestrator:
 
     def _batch_update_eligibility(self, leads: List[EnhancedLead]):
         """Batch update eligibility to sheets with retry."""
-        # This will be done through the sheets manager batch update
-        # For now, use existing update_lead_status with retry
-        updated = 0
+        # Collect all updates for true batch write
+        updates = []
         for lead in leads:
             if lead.send_eligible and lead.lead_id:
+                updates.append({
+                    'lead_id': lead.lead_id,
+                    'status': lead.status,
+                    'send_eligible': True,
+                })
+
+        if not updates:
+            print("[ELIGIBILITY] No leads to update", flush=True)
+            return
+
+        # Use true batch update - single API call
+        try:
+            updated = self.sheets.batch_update_leads(updates)
+            print(f"[ELIGIBILITY] Batch updated {updated} leads to sheets (single API call)", flush=True)
+        except Exception as e:
+            print(f"[ELIGIBILITY] Batch update failed: {e}", flush=True)
+            print("[ELIGIBILITY] Falling back to individual updates with rate limiting...", flush=True)
+            # Fallback with rate limiting
+            updated = 0
+            for i, update in enumerate(updates):
                 try:
                     self.sheets.update_lead_status(
-                        lead.lead_id,
-                        status=lead.status,
+                        update['lead_id'],
+                        status=update['status'],
                         send_eligible=True,
                     )
                     updated += 1
-                except Exception as e:
-                    print(f"  [WARN] Failed to update lead: {e}", flush=True)
-
-        print(f"[ELIGIBILITY] Batch updated {updated} leads to sheets", flush=True)
+                    # Rate limit: max 50 writes/minute, so wait 1.5s between writes
+                    if i < len(updates) - 1:
+                        time.sleep(1.5)
+                except Exception as inner_e:
+                    print(f"  [WARN] Failed to update lead: {inner_e}", flush=True)
+            print(f"[ELIGIBILITY] Fallback updated {updated} leads", flush=True)
 
     def run_sending(self) -> bool:
         """

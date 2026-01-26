@@ -279,12 +279,17 @@ class TaskRunner:
 
         return (False, None, None)
 
-    def add_dedupe_keys_for_lead(self, lead: EnhancedLead):
+    def add_dedupe_keys_for_lead(self, lead: EnhancedLead, write_to_sheets: bool = True) -> List[DedupeKey]:
         """
-        Add dedupe keys for a new lead (to in-memory cache and sheets).
+        Add dedupe keys for a new lead to in-memory cache.
 
         Args:
             lead: Lead to add keys for
+            write_to_sheets: If True, write keys to sheets immediately.
+                            If False, just return the keys for batch writing later.
+
+        Returns:
+            List of DedupeKey objects created for this lead
         """
         keys = []
 
@@ -317,9 +322,11 @@ class TaskRunner:
         keys.append(key)
         self._dedupe_keys.setdefault("name_city", {})[name_city] = lead.lead_id
 
-        # Write to sheets
-        if keys:
+        # Write to sheets if requested (for backwards compatibility)
+        if write_to_sheets and keys:
             self.sheets.append_dedupe_keys(keys)
+
+        return keys
 
     # =========================================================================
     # EMAIL ELIGIBILITY
@@ -631,16 +638,23 @@ class TaskRunner:
             # Step 5: Evaluate email eligibility
             print(f"\n[5/6] Evaluating email eligibility...")
             eligible_count = 0
+            all_dedupe_keys = []  # Collect for batch write
             for lead in unique_leads:
                 lead = self.evaluate_email_eligibility(lead)
                 if lead.send_eligible:
                     eligible_count += 1
 
-                # Add dedupe keys
-                self.add_dedupe_keys_for_lead(lead)
+                # Collect dedupe keys (don't write to sheets yet)
+                keys = self.add_dedupe_keys_for_lead(lead, write_to_sheets=False)
+                all_dedupe_keys.extend(keys)
 
             log_entry.leads_eligible = eligible_count
             print(f"  {eligible_count} leads are send-eligible")
+
+            # Batch write all dedupe keys in one API call
+            if all_dedupe_keys:
+                print(f"  Writing {len(all_dedupe_keys)} dedupe keys (batch)...")
+                self.sheets.append_dedupe_keys(all_dedupe_keys)
 
             # Alert if zero send-eligible leads
             if eligible_count == 0 and log_entry.leads_found > 0:
