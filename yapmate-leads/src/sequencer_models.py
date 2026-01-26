@@ -204,6 +204,13 @@ class RunnerState:
             except:
                 return None
 
+        # Strict boolean parsing for sending_paused (no truthy coercion)
+        def parse_bool_strict(val):
+            if not val:
+                return False
+            val_str = str(val).strip().lower()
+            return val_str in ("true", "1", "yes")
+        
         return cls(
             focus_trade_id=str(row[0]) if row[0] else None,
             focus_trade_date=str(row[1]) if row[1] else None,
@@ -214,7 +221,7 @@ class RunnerState:
             bounces_last_7_days=int(row[6]) if row[6] else 0,
             complaints_last_7_days=int(row[7]) if row[7] else 0,
             total_sent_last_7_days=int(row[8]) if row[8] else 0,
-            sending_paused=bool(row[9]) if row[9] else False,
+            sending_paused=parse_bool_strict(row[9]) if len(row) > 9 and row[9] else False,
             pause_reason=str(row[10]) if len(row) > 10 and row[10] else None,
             last_alert_key=str(row[11]) if len(row) > 11 and row[11] else None,
             last_alert_at=parse_datetime(row[12]) if len(row) > 12 else None,

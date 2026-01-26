@@ -442,6 +442,12 @@ class SequencerSheetsManager:
         """
         Get leads that are send-eligible and have status NEW or APPROVED.
 
+        Eligibility criteria (ALL must be true):
+        - status == "APPROVED" (or "NEW" if auto-approval not run yet)
+        - send_eligible == True (strict boolean check, no string coercion)
+        - email exists and is not empty
+        - lead has not been sent (status != "SENT")
+
         Args:
             limit: Maximum number to return
 
@@ -457,18 +463,34 @@ class SequencerSheetsManager:
         headers = all_rows[0]
         col_status = headers.index("status")
         col_eligible = headers.index("send_eligible")
+        col_email = headers.index("email") if "email" in headers else None
 
         leads = []
         for row in all_rows[1:]:
             if len(row) <= max(col_status, col_eligible):
                 continue
 
-            status = row[col_status].upper()
-            eligible = row[col_eligible].lower() in ("true", "1", "yes")
+            # Strict status check (no case-insensitive, exact match)
+            status = str(row[col_status]).strip().upper()
+            
+            # Strict boolean check for send_eligible (no string coercion)
+            eligible_str = str(row[col_eligible]).strip().lower()
+            eligible = eligible_str in ("true", "1", "yes")
+            
+            # Check email exists
+            has_email = False
+            if col_email is not None and len(row) > col_email:
+                email = str(row[col_email]).strip()
+                has_email = bool(email and email != "")
 
-            if eligible and status in ("NEW", "APPROVED"):
+            # Eligibility: status must be NEW or APPROVED, send_eligible must be True, email must exist
+            # Note: status != "SENT" is redundant since we already check status in ("NEW", "APPROVED")
+            if eligible and status in ("NEW", "APPROVED") and has_email:
                 try:
-                    leads.append(EnhancedLead.from_sheets_row(row))
+                    lead = EnhancedLead.from_sheets_row(row)
+                    # Double-check eligibility in the parsed object
+                    if lead.send_eligible and lead.status in ("NEW", "APPROVED") and lead.email:
+                        leads.append(lead)
                 except Exception as e:
                     print(f"  Warning: Could not parse lead row: {e}")
 

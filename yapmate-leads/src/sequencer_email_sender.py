@@ -635,6 +635,9 @@ From: {self.from_email}
             # Send via Resend
             response = resend.Emails.send(params)
             email_id = response.get("id", "unknown")
+            
+            # Log Resend email ID for verification
+            print(f"  ✓ Resend email ID: {email_id}")
 
             # Update lead status
             self.sheets.update_lead_status(
@@ -644,7 +647,7 @@ From: {self.from_email}
             )
 
             log.status = SendStatus.SENT
-            log.reason = f"Email sent successfully (ID: {email_id})"
+            log.reason = f"Email sent successfully (Resend ID: {email_id})"
 
             return (SendResult(
                 lead_id=lead.lead_id,
@@ -698,7 +701,7 @@ From: {self.from_email}
         approved_not_sent_count = 0
         has_email_count = 0
         valid_email_count = 0
-        domain_allowed_count = 0
+        send_eligible_count = 0
         final_eligible_count = 0
 
         # Reasons for ineligibility (for top reasons)
@@ -706,7 +709,8 @@ From: {self.from_email}
             "No email address": 0,
             "Already sent": 0,
             "Invalid email": 0,
-            "Not approved": 0,
+            "Not approved (status)": 0,
+            "send_eligible = False": 0,
             "Not eligible (other)": 0,
         }
 
@@ -730,31 +734,40 @@ From: {self.from_email}
                 sanitization = sanitize_email(lead.email)
                 if sanitization.valid:
                     valid_email_count += 1
-                    # Domain allowed check (basic - no free email filtering by default)
-                    domain_allowed_count += 1
 
-            # Eligibility check
-            if status in ("NEW", "APPROVED") and has_email:
-                sanitization = sanitize_email(lead.email)
-                if sanitization.valid:
-                    # Check send_eligible flag if available
-                    if getattr(lead, 'send_eligible', True):
+            # Send eligible check
+            if getattr(lead, 'send_eligible', False):
+                send_eligible_count += 1
+
+            # Final eligibility check (all criteria must pass)
+            is_eligible = (
+                status in ("NEW", "APPROVED") and
+                has_email and
+                getattr(lead, 'send_eligible', False)
+            )
+            
+            if is_eligible:
+                # Double-check email is valid
+                if has_email:
+                    sanitization = sanitize_email(lead.email)
+                    if sanitization.valid:
                         final_eligible_count += 1
-
-            # Track reasons for ineligibility
-            if status == "SENT":
-                reason_counts["Already sent"] += 1
-            elif not has_email:
-                reason_counts["No email address"] += 1
-            elif status not in ("NEW", "APPROVED"):
-                reason_counts["Not approved"] += 1
-            elif has_email:
-                sanitization = sanitize_email(lead.email)
-                if not sanitization.valid:
-                    reason_counts["Invalid email"] += 1
+                    else:
+                        reason_counts["Invalid email"] += 1
                 else:
-                    if not getattr(lead, 'send_eligible', True):
-                        reason_counts["Not eligible (other)"] += 1
+                    reason_counts["No email address"] += 1
+            else:
+                # Track reasons for ineligibility
+                if status == "SENT":
+                    reason_counts["Already sent"] += 1
+                elif not has_email:
+                    reason_counts["No email address"] += 1
+                elif status not in ("NEW", "APPROVED"):
+                    reason_counts["Not approved (status)"] += 1
+                elif not getattr(lead, 'send_eligible', False):
+                    reason_counts["send_eligible = False"] += 1
+                else:
+                    reason_counts["Not eligible (other)"] += 1
 
         # Log breakdown
         print(f"\n  By status:")
@@ -765,8 +778,8 @@ From: {self.from_email}
         print(f"  Approved + not sent: {approved_not_sent_count}")
         print(f"  Has email: {has_email_count}")
         print(f"  Valid email (sanitized): {valid_email_count}")
-        print(f"  Domain allowed: {domain_allowed_count}")
-        print(f"  Final eligible: {final_eligible_count}")
+        print(f"  send_eligible = True: {send_eligible_count}")
+        print(f"  Final eligible (status=APPROVED + has_email + send_eligible=True + valid_email): {final_eligible_count}")
 
         # If 0 eligible, show top reasons
         if final_eligible_count == 0:
@@ -785,12 +798,12 @@ From: {self.from_email}
             "approved_not_sent_count": approved_not_sent_count,
             "has_email_count": has_email_count,
             "valid_email_count": valid_email_count,
-            "domain_allowed_count": domain_allowed_count,
+            "send_eligible_count": send_eligible_count,
             "final_eligible_count": final_eligible_count,
             "reason_counts": reason_counts,
         }
 
-    def send_batch(self, limit: int = None, dry_run: bool = False) -> SendBatchResult:
+    def send_batch(self, limit: int = None, dry_run: bool = False, force_run: bool = False) -> SendBatchResult:
         """
         Send emails to eligible leads up to the daily limit.
 
@@ -806,6 +819,7 @@ From: {self.from_email}
         Args:
             limit: Maximum emails to send (defaults to remaining daily quota)
             dry_run: If True, validate but don't actually send
+            force_run: If True, bypass pause flags (for manual overrides)
 
         Returns:
             SendBatchResult with outcomes and structured logs
@@ -817,25 +831,70 @@ From: {self.from_email}
         print("=" * 70)
         print(f"  Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-        # Check SEND_ENABLED gate (fail-closed)
+        # =====================================================================
+        # GATE CHAIN - DETERMINISTIC LOGIC
+        # =====================================================================
+        
+        # Gate 1: SEND_ENABLED (fail-closed)
         send_enabled, enable_reason = self._check_send_enabled()
+        
+        # Gate 2: GLOBAL_PAUSE (environment override)
+        global_pause = os.getenv("GLOBAL_PAUSE", "false").lower() == "true"
+        
+        # Gate 3: EMERGENCY_STOP (environment override)
+        emergency_stop = os.getenv("EMERGENCY_STOP", "false").lower() == "true"
+        
+        # Gate 4: Sheet-based pause flag
+        state = self.sheets.get_runner_state()
+        sheet_paused = state.sending_paused if state.sending_paused else False
+        
+        # Gate 5: Force run override
+        force_run_env = os.getenv("FORCE_RUN", "false").lower() == "true"
+        force_run = force_run or force_run_env
+        
+        # Calculate effective dry run
         effective_dry_run = dry_run or config.pipeline.dry_run or not send_enabled
-
+        
+        # Deterministic send allowed logic
+        # SEND_ALLOWED = SEND_ENABLED == true AND GLOBAL_PAUSE != true AND EMERGENCY_STOP != true AND (force_run == true OR sending_paused != true)
+        send_allowed = (
+            send_enabled and
+            not global_pause and
+            not emergency_stop and
+            (force_run or not sheet_paused)
+        )
+        
+        # Single explicit block reason
+        block_reason = None
+        if not send_enabled:
+            block_reason = f"SEND_ENABLED is not 'true' - sending blocked"
+        elif global_pause:
+            block_reason = f"GLOBAL_PAUSE is 'true' - sending blocked"
+        elif emergency_stop:
+            block_reason = f"EMERGENCY_STOP is 'true' - sending blocked"
+        elif sheet_paused and not force_run:
+            block_reason = f"Sending is PAUSED in Google Sheet (reason: {state.pause_reason or 'No reason provided'})"
+        
+        # Print full gate chain
         print(f"\n  GATE CHECKS:")
         print(f"    SEND_ENABLED: {send_enabled} ({enable_reason})")
+        print(f"    GLOBAL_PAUSE: {global_pause}")
+        print(f"    EMERGENCY_STOP: {emergency_stop}")
+        print(f"    Sheet paused: {sheet_paused}")
+        if state.pause_reason:
+            print(f"      Pause reason: {state.pause_reason}")
+        print(f"    FORCE_RUN: {force_run}")
         print(f"    DRY_RUN: {config.pipeline.dry_run}")
         print(f"    SAFE_MODE: {config.pipeline.safe_mode}")
         print(f"    EFFECTIVE MODE: {'DRY RUN' if effective_dry_run else 'LIVE SEND'}")
-
-        if not send_enabled:
-            print(f"\n  ⚠️  BLOCKED: SEND_ENABLED gate is CLOSED")
-            print(f"      Pipeline will run for validation/logging only")
-
-        # Check if sending is paused
-        state = self.sheets.get_runner_state()
-        if state.sending_paused:
-            print(f"\n  ⚠️  BLOCKED: Sending is PAUSED")
-            print(f"      Reason: {state.pause_reason}")
+        print(f"    SEND_ALLOWED: {send_allowed}")
+        
+        if block_reason:
+            print(f"\n  ⚠️  BLOCKED: {block_reason}")
+            if not send_enabled:
+                print(f"      Pipeline will run for validation/logging only")
+            elif force_run:
+                print(f"      Note: FORCE_RUN would bypass this, but other gates are blocking")
             return SendBatchResult(
                 total_attempted=0,
                 total_sent=0,
@@ -845,15 +904,15 @@ From: {self.from_email}
                 total_sanitized=0,
                 results=[],
                 logs=[],
-                stopped_reason=f"Sending paused: {state.pause_reason}"
+                stopped_reason=block_reason
             )
 
-        # Check safety thresholds (only matters if actually sending)
-        if send_enabled and not effective_dry_run:
+        # Check safety thresholds (only matters if actually sending and not force_run)
+        if send_allowed and not effective_dry_run and not force_run:
             is_safe, pause_reason = self.check_safety_thresholds()
             if not is_safe:
-                print(f"\n  ⚠️  BLOCKED: Safety threshold exceeded")
-                print(f"      {pause_reason}")
+                block_reason = f"Safety threshold exceeded: {pause_reason}"
+                print(f"\n  ⚠️  BLOCKED: {block_reason}")
                 self.pause_sending(pause_reason)
                 return SendBatchResult(
                     total_attempted=0,
@@ -864,7 +923,7 @@ From: {self.from_email}
                     total_sanitized=0,
                     results=[],
                     logs=[],
-                    stopped_reason=pause_reason
+                    stopped_reason=block_reason
                 )
 
         # Calculate how many to send

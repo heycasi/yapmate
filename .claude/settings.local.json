@@ -23,7 +23,18 @@
       "Bash(python:*)",
       "Bash(npm i:*)",
       "Bash(npm run test:iap-sync:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git push:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh secret list:*)",
+      "Bash(gh secret set:*)",
+      "Bash(grep:*)",
+      "Bash(gh api:*)",
+      "Bash(gh run cancel:*)",
+      "Bash(gh workflow view:*)",
+      "Bash(gh workflow list:*)"
     ]
   }
 }

@@ -4,22 +4,34 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+// Analytics tracking - using console for now (Vercel Analytics auto-tracks page views)
+// Custom events can be added later if needed
+const track = (event: string, props?: Record<string, any>) => {
+  if (typeof window !== 'undefined') {
+    console.log(`[Analytics] ${event}`, props || '')
+    // Future: Add Vercel Analytics custom event tracking here
+    // track(event, props)
+  }
+}
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [needsConfirmation, setNeedsConfirmation] = useState(false)
+  const [isReadyToLogin, setIsReadyToLogin] = useState(false)
   const router = useRouter()
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
+    setNeedsConfirmation(false)
+    setIsReadyToLogin(false)
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -29,15 +41,65 @@ export default function SignupPage() {
 
       if (error) throw error
 
-      setSuccess(true)
+      // Check if user can log in immediately (session exists) or needs confirmation
+      if (data.session) {
+        // User is logged in immediately - redirect to dashboard
+        track('signup_success_ready_to_login')
+        setIsReadyToLogin(true)
+        // Auto-redirect after a brief delay to show success message
+        setTimeout(() => {
+          router.push('/dashboard')
+        }, 1500)
+      } else if (data.user) {
+        // User created but needs email confirmation
+        track('signup_success_needs_confirmation')
+        setNeedsConfirmation(true)
+      } else {
+        // Fallback: treat as ready to login (when confirmation is disabled)
+        track('signup_success_ready_to_login')
+        setIsReadyToLogin(true)
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign up')
+      // Handle "User already registered" error
+      if (err.message?.includes('already registered') || err.message?.includes('already exists')) {
+        setError('An account with this email already exists. Please log in instead.')
+        track('signup_error_already_exists')
+      } else {
+        setError(err.message || 'Failed to sign up')
+        track('signup_error', { error: err.message })
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  if (success) {
+  // Success state: Ready to login (confirmation disabled)
+  if (isReadyToLogin) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
+        <div className="w-full max-w-md">
+          <div className="border-2 border-yapmate-status-green bg-yapmate-status-green/10 p-8 text-center">
+            <div className="text-6xl mb-4 text-yapmate-status-green">✓</div>
+            <h1 className="font-mono text-xl font-bold text-yapmate-white mb-4 uppercase">
+              Account Created
+            </h1>
+            <p className="text-yapmate-slate-300 text-sm mb-6 leading-relaxed">
+              Your account has been created. You can log in now.
+            </p>
+            <Link
+              href="/login"
+              className="inline-block w-full h-12 flex items-center justify-center bg-yapmate-amber text-yapmate-black font-mono font-bold uppercase tracking-wide transition-colors duration-snap active:bg-yapmate-status-yellow"
+            >
+              Go to Login
+            </Link>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  // Success state: Needs email confirmation
+  if (needsConfirmation) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
         <div className="w-full max-w-md">
@@ -47,7 +109,7 @@ export default function SignupPage() {
               Check Your Email
             </h1>
             <p className="text-yapmate-slate-300 text-sm mb-6 leading-relaxed">
-              We&apos;ve sent you a confirmation link. Check your email to verify your account.
+              We&apos;ve sent you a confirmation link. Check your email to verify your account, then log in.
             </p>
             <Link
               href="/login"

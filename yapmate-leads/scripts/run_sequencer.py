@@ -257,7 +257,7 @@ def run_scrape(manual: bool = False) -> StageResult:
 # =============================================================================
 # SEND EMAILS
 # =============================================================================
-def run_send(limit: int = None) -> StageResult:
+def run_send(limit: int = None, force_run: bool = False, dry_run: bool = False) -> StageResult:
     """Run the email sender with full reliability."""
     from src.sequencer_sheets import SequencerSheetsManager
     from src.sequencer_email_sender import SequencerEmailSender
@@ -274,8 +274,13 @@ def run_send(limit: int = None) -> StageResult:
         return StageResult(stage="SEND", success=True, data=None)
 
     # Dry run mode
-    if config.pipeline.dry_run:
+    effective_dry_run = dry_run or config.pipeline.dry_run
+    if effective_dry_run:
         print("[SEND] Dry run mode - no emails will be sent")
+
+    # Force run mode
+    if force_run:
+        print("[SEND] Force run mode - will bypass pause flags")
 
     # Connect to sheets
     try:
@@ -287,7 +292,7 @@ def run_send(limit: int = None) -> StageResult:
     # Run sender
     try:
         sender = SequencerEmailSender(sheets)
-        result = sender.send_batch(limit=limit)
+        result = sender.send_batch(limit=limit, dry_run=effective_dry_run, force_run=force_run)
 
         if result.stopped_reason:
             print(f"\nSending stopped: {result.stopped_reason}")
@@ -297,8 +302,8 @@ def run_send(limit: int = None) -> StageResult:
             success=True,
             data=result,
             metrics={
-                "sent": result.sent_count if hasattr(result, 'sent_count') else 0,
-                "failed": result.failed_count if hasattr(result, 'failed_count') else 0,
+                "sent": result.total_sent if hasattr(result, 'total_sent') else 0,
+                "failed": result.total_failed if hasattr(result, 'total_failed') else 0,
             },
         )
 
@@ -410,6 +415,7 @@ def main():
     parser.add_argument("--send-limit", type=int, help="Max emails to send")
     parser.add_argument("--rebuild-queue", action="store_true", help="Rebuild queue")
     parser.add_argument("--dry-run", action="store_true", help="Dry run mode")
+    parser.add_argument("--force-run", action="store_true", help="Force run (bypass pause flags)")
 
     args = parser.parse_args()
 
@@ -436,7 +442,7 @@ def main():
         return
 
     if args.send_only:
-        result = run_send(limit=args.send_limit)
+        result = run_send(limit=args.send_limit, force_run=args.force_run, dry_run=args.dry_run)
         sys.exit(0 if result.success else 1)
 
     # Default: run scrape task
@@ -444,7 +450,7 @@ def main():
 
     if args.send and scrape_result.success:
         print("\n" + "-" * 70)
-        run_send(limit=args.send_limit)
+        run_send(limit=args.send_limit, force_run=args.force_run, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

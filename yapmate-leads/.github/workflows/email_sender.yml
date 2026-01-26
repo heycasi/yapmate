@@ -14,6 +14,16 @@ on:
         description: 'Maximum emails to send (optional, defaults to remaining daily quota)'
         required: false
         type: number
+      force_run:
+        description: 'Force run (bypass pause flags)'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run mode (validate but do not send)'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: email-sender
@@ -54,21 +64,41 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_FROM_NAME: ${{ secrets.EMAIL_FROM_NAME }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          SEND_ENABLED: ${{ secrets.SEND_ENABLED }}
+          FORCE_RUN: ${{ github.event.inputs.force_run == 'true' && 'true' || 'false' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && 'true' || 'false' }}
         run: |
           echo "============================================"
           echo "EMAIL SENDER"
           echo "============================================"
           echo "Started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           echo ""
+          echo "Configuration:"
+          echo "  SEND_ENABLED: ${SEND_ENABLED:-false}"
+          echo "  FORCE_RUN: ${FORCE_RUN:-false}"
+          echo "  DRY_RUN: ${DRY_RUN:-false}"
+          echo ""
 
           # Build command with optional limit
+          cmd_args="--send-only"
           if [ -n "${{ github.event.inputs.send_limit }}" ]; then
             echo "Send limit: ${{ github.event.inputs.send_limit }}"
-            python scripts/run_sequencer.py --send-only --send-limit ${{ github.event.inputs.send_limit }}
+            cmd_args="$cmd_args --send-limit ${{ github.event.inputs.send_limit }}"
           else
             echo "Send limit: (using daily quota)"
-            python scripts/run_sequencer.py --send-only
           fi
+          
+          if [ "${FORCE_RUN}" = "true" ]; then
+            echo "Force run: ENABLED (will bypass pause flags)"
+            cmd_args="$cmd_args --force-run"
+          fi
+          
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "Dry run: ENABLED (will validate but not send)"
+            cmd_args="$cmd_args --dry-run"
+          fi
+
+          python scripts/run_sequencer.py $cmd_args
 
           echo ""
           echo "============================================"
