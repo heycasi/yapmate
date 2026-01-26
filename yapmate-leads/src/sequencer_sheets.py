@@ -153,11 +153,28 @@ class SequencerSheetsManager:
                 missing_headers.append(expected)
         
         if missing_headers:
-            raise ValueError(
-                f"Leads tab '{worksheet.title}' is missing required columns: {', '.join(missing_headers)}\n"
-                f"Expected columns: {', '.join(expected_headers)}\n"
-                f"Actual columns: {', '.join(actual_headers)}"
-            )
+            # User-friendly error message
+            if len(missing_headers) == 1:
+                error_msg = (
+                    f"Leads tab '{worksheet.title}' is missing required column: {missing_headers[0]}\n"
+                    f"\n"
+                    f"To fix this automatically, run:\n"
+                    f"  python scripts/fix_sheet_headers.py\n"
+                    f"\n"
+                    f"Expected columns ({len(expected_headers)}): {', '.join(expected_headers)}\n"
+                    f"Actual columns ({len(actual_headers)}): {', '.join(actual_headers)}"
+                )
+            else:
+                error_msg = (
+                    f"Leads tab '{worksheet.title}' is missing required columns: {', '.join(missing_headers)}\n"
+                    f"\n"
+                    f"To fix this automatically, run:\n"
+                    f"  python scripts/fix_sheet_headers.py\n"
+                    f"\n"
+                    f"Expected columns ({len(expected_headers)}): {', '.join(expected_headers)}\n"
+                    f"Actual columns ({len(actual_headers)}): {', '.join(actual_headers)}"
+                )
+            raise ValueError(error_msg)
 
     def ensure_all_tabs(self):
         """Create all required tabs with headers if they don't exist."""
