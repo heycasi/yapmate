@@ -269,10 +269,17 @@ class Config:
 
 
 def _strip_secret(value: Optional[str]) -> Optional[str]:
-    """Strip whitespace and newlines from secret values."""
+    """Strip whitespace, newlines, and surrounding quotes from secret values."""
     if value is None:
         return None
-    return value.strip() if isinstance(value, str) else value
+    if not isinstance(value, str):
+        return value
+    cleaned = value.strip().replace('\n', '').replace('\r', '')
+    # Strip surrounding quotes (common copy-paste error)
+    if (cleaned.startswith('"') and cleaned.endswith('"')) or \
+       (cleaned.startswith("'") and cleaned.endswith("'")):
+        cleaned = cleaned[1:-1]
+    return cleaned
 
 
 def load_config() -> Config:

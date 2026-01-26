@@ -18,6 +18,13 @@ class KeyValidationResult:
     error_message: Optional[str] = None
 
 
+def _safe_key_preview(key: str) -> str:
+    """Return safe preview of key for debugging (first 3, last 4 chars)."""
+    if len(key) < 10:
+        return f"[too short: {len(key)} chars]"
+    return f"{key[:3]}...{key[-4:]} ({len(key)} chars)"
+
+
 def strip_and_validate_key(key: Optional[str], key_name: str = "API key") -> KeyValidationResult:
     """
     Strip whitespace/newlines from key and validate basic format.
@@ -38,6 +45,11 @@ def strip_and_validate_key(key: Optional[str], key_name: str = "API key") -> Key
 
     # Strip whitespace, newlines, and any shell artifacts
     cleaned = key.strip().replace('\n', '').replace('\r', '')
+
+    # Strip surrounding quotes (common copy-paste error)
+    if (cleaned.startswith('"') and cleaned.endswith('"')) or \
+       (cleaned.startswith("'") and cleaned.endswith("'")):
+        cleaned = cleaned[1:-1]
 
     if not cleaned:
         return KeyValidationResult(
@@ -61,7 +73,7 @@ def strip_and_validate_key(key: Optional[str], key_name: str = "API key") -> Key
     )
 
 
-def validate_openai_key(key: Optional[str]) -> KeyValidationResult:
+def validate_openai_key(key: Optional[str], verbose: bool = False) -> KeyValidationResult:
     """
     Validate OpenAI API key format.
 
@@ -69,6 +81,7 @@ def validate_openai_key(key: Optional[str]) -> KeyValidationResult:
 
     Args:
         key: Raw OpenAI API key
+        verbose: If True, print diagnostic info (safe - no secrets exposed)
 
     Returns:
         KeyValidationResult with cleaned key if valid
@@ -76,16 +89,24 @@ def validate_openai_key(key: Optional[str]) -> KeyValidationResult:
     result = strip_and_validate_key(key, "OPENAI_API_KEY")
 
     if not result.is_valid:
+        if verbose and key is not None:
+            # Log diagnostics for non-None keys that failed basic validation
+            print(f"  [DEBUG] Key raw length: {len(key)}")
+            print(f"  [DEBUG] Key preview: {_safe_key_preview(key)}")
         return result
 
     cleaned = result.cleaned_key
+
+    if verbose:
+        print(f"  [DEBUG] Key after cleaning: {_safe_key_preview(cleaned)}")
+        print(f"  [DEBUG] Starts with 'sk-': {cleaned.startswith('sk-')}")
 
     # OpenAI keys start with sk- (or sk-proj- for project keys)
     if not cleaned.startswith('sk-'):
         return KeyValidationResult(
             is_valid=False,
             cleaned_key=None,
-            error_message="OPENAI_API_KEY does not start with 'sk-' (invalid format)"
+            error_message=f"OPENAI_API_KEY does not start with 'sk-' (invalid format). Got prefix: '{cleaned[:6] if len(cleaned) >= 6 else cleaned}...'"
         )
 
     # Keys should be reasonably long (at least 30 chars)
@@ -103,18 +124,24 @@ def validate_openai_key(key: Optional[str]) -> KeyValidationResult:
     )
 
 
-def preflight_check_openai() -> Tuple[bool, Optional[str]]:
+def preflight_check_openai(verbose: bool = None) -> Tuple[bool, Optional[str]]:
     """
     Pre-flight check for OpenAI API key.
 
     Reads from environment, validates, and returns cleaned key.
     Logs status without exposing key contents.
 
+    Args:
+        verbose: Enable debug logging. If None, uses DEBUG_API_KEYS env var.
+
     Returns:
         Tuple of (success, cleaned_key or None)
     """
+    if verbose is None:
+        verbose = os.getenv("DEBUG_API_KEYS", "").lower() in ("true", "1", "yes")
+
     raw_key = os.getenv("OPENAI_API_KEY")
-    result = validate_openai_key(raw_key)
+    result = validate_openai_key(raw_key, verbose=verbose)
 
     if result.is_valid:
         print(f"  ✓ OpenAI configured: yes (key length: {len(result.cleaned_key)})")

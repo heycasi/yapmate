@@ -85,15 +85,33 @@ jobs:
           EOF
           echo "============================================"
 
+      - name: Diagnose API keys
+        if: steps.time_guard.outputs.skipped != 'true'
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "============================================"
+          echo "API KEY DIAGNOSTICS"
+          echo "============================================"
+          python scripts/diagnose_api_keys.py || true
+          echo "============================================"
+
       - name: Run sequencer task
         if: steps.time_guard.outputs.skipped != 'true'
         env:
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+          DEBUG_API_KEYS: 'true'
         run: |
           echo "============================================"
           echo "LEAD SEQUENCER"
