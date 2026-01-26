@@ -308,11 +308,46 @@ SHEETS_TABS = {
 
 
 # =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def _parse_bool_env(name: str, default: bool) -> bool:
+    """Parse boolean from environment variable."""
+    val = os.getenv(name, "").strip().lower()
+    if not val:
+        return default
+    return val in ("true", "1", "yes", "on")
+
+
+def _parse_int_env(name: str, default: int) -> int:
+    """Parse integer from environment variable."""
+    val = os.getenv(name, "").strip()
+    if not val:
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
+
+# =============================================================================
 # DEFAULT INSTANCES
 # =============================================================================
 
 DEFAULT_QUEUE_CONFIG = QueueConfig()
 DEFAULT_SESSION_CONFIG = SessionConfig()
 DEFAULT_EMAIL_ELIGIBILITY_CONFIG = EmailEligibilityConfig()
-DEFAULT_EMAIL_SENDER_CONFIG = EmailSenderConfig()
+
+# EmailSenderConfig with env var overrides for warmup control
+DEFAULT_EMAIL_SENDER_CONFIG = EmailSenderConfig(
+    # Daily limit from env (used when warmup disabled)
+    daily_limit=_parse_int_env("DAILY_LIMIT", 50),
+    # Warmup settings from env
+    warmup_enabled=_parse_bool_env("WARMUP_ENABLED", True),
+    warmup_start_daily_limit=_parse_int_env("WARMUP_START_DAILY_LIMIT", 10),
+    warmup_increment_per_day=_parse_int_env("WARMUP_RAMP_INCREMENT", 5),
+    warmup_max_daily_limit=_parse_int_env("WARMUP_MAX_CAP", 100),
+    warmup_start_date=os.getenv("WARMUP_START_DATE", "").strip(),
+)
+
 DEFAULT_DEDUPE_CONFIG = DedupeConfig()

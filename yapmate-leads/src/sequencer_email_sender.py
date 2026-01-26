@@ -927,12 +927,27 @@ From: {self.from_email}
                     stopped_reason=block_reason
                 )
 
-        # Calculate how many to send
-        remaining_quota = self.get_remaining_daily_quota()
-        daily_limit = self.calculate_daily_limit()
+        # =====================================================================
+        # WARMUP STATUS & DAILY LIMIT
+        # =====================================================================
+        print(f"\n  WARMUP CONFIGURATION:")
+        print(f"    WARMUP_ENABLED: {self.config.warmup_enabled}")
 
-        print(f"\n  Daily limit: {daily_limit}")
-        print(f"  Remaining quota: {remaining_quota}")
+        if self.config.warmup_enabled:
+            print(f"    WARMUP_START_DAILY_LIMIT: {self.config.warmup_start_daily_limit}")
+            print(f"    WARMUP_RAMP_INCREMENT: {self.config.warmup_increment_per_day}/day")
+            print(f"    WARMUP_MAX_CAP: {self.config.warmup_max_daily_limit}")
+            print(f"    WARMUP_START_DATE: {self.config.warmup_start_date or '(not set - using start limit)'}")
+            daily_limit = self.calculate_daily_limit()
+            print(f"    → Effective daily limit (warmup): {daily_limit}")
+        else:
+            daily_limit = self.config.daily_limit
+            print(f"    → Warmup BYPASSED - using DAILY_LIMIT: {daily_limit}")
+
+        # Calculate remaining quota
+        remaining_quota = self.get_remaining_daily_quota()
+        print(f"    Sent today: {state.emails_sent_today}")
+        print(f"    Remaining quota: {remaining_quota}")
 
         # Get sending limits from config
         send_limit_per_run = config.limits.send_limit_per_run
