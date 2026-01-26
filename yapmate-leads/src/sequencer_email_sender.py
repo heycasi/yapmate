@@ -639,11 +639,12 @@ From: {self.from_email}
             # Log Resend email ID for verification
             print(f"  ✓ Resend email ID: {email_id}")
 
-            # Update lead status
+            # Update lead status with Resend ID
             self.sheets.update_lead_status(
                 lead.lead_id,
                 "SENT",
-                sent_at=datetime.utcnow()
+                sent_at=datetime.utcnow(),
+                resend_id=email_id  # Store Resend email ID for tracking
             )
 
             log.status = SendStatus.SENT
@@ -954,11 +955,17 @@ From: {self.from_email}
                 stopped_reason="Daily limit reached"
             )
 
-        # Use limit if provided, otherwise use SEND_LIMIT_PER_RUN, then remaining quota
-        if limit:
-            send_limit = min(limit, remaining_quota) if not effective_dry_run else limit
+        # Check for LIVE_SEND_TEST_MODE (send exactly 1 email for testing)
+        test_mode = os.getenv("LIVE_SEND_TEST_MODE", "false").lower() == "true"
+        if test_mode:
+            print(f"\n  🧪 LIVE_SEND_TEST_MODE: ENABLED (will send exactly 1 email)")
+            send_limit = 1
         else:
-            send_limit = min(send_limit_per_run, remaining_quota) if not effective_dry_run else send_limit_per_run
+            # Use limit if provided, otherwise use SEND_LIMIT_PER_RUN, then remaining quota
+            if limit:
+                send_limit = min(limit, remaining_quota) if not effective_dry_run else limit
+            else:
+                send_limit = min(send_limit_per_run, remaining_quota) if not effective_dry_run else send_limit_per_run
 
         print(f"  Will process up to: {send_limit}")
 
@@ -1030,6 +1037,9 @@ From: {self.from_email}
         try:
             for i, lead in enumerate(leads, 1):
                 print(f"\n[{i}/{len(leads)}] {lead.business_name}")
+                print(f"  Lead ID: {lead.lead_id[:8]}...")
+                print(f"  Email: {lead.email}")
+                print(f"  Status: {lead.status}")
                 print("-" * 40)
 
                 # Step 1: Claim the lead (compare-and-set from NEW/APPROVED -> QUEUED)

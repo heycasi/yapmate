@@ -420,10 +420,11 @@ def auto_approve_leads(
                 'reason': result.reason,
             })
 
-            # Queue for batch update
+            # Queue for batch update (include send_eligible=True)
             approved_updates.append({
                 'lead_id': lead.lead_id,
                 'status': 'APPROVED',
+                'send_eligible': True,  # Ensure send_eligible is set to True
                 'auto_approved': True,
                 'approval_reason': result.reason,
             })
@@ -455,6 +456,7 @@ def auto_approve_leads(
             sheets_manager.update_lead_status(
                 update['lead_id'],
                 update['status'],
+                send_eligible=update.get('send_eligible', True),  # Set send_eligible=True
                 eligibility_reason=update['approval_reason'],
             )
 

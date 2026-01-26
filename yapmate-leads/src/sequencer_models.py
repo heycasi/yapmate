@@ -286,6 +286,7 @@ class EnhancedLead:
     # Campaign tracking
     campaign_id: Optional[str] = None
     sent_at: Optional[datetime] = None
+    resend_id: Optional[str] = None  # Resend email ID for tracking
     opened_at: Optional[datetime] = None
     clicked_at: Optional[datetime] = None
     replied_at: Optional[datetime] = None
@@ -326,6 +327,7 @@ class EnhancedLead:
             self.updated_at.isoformat() if self.updated_at else "",
             self.campaign_id or "",
             self.sent_at.isoformat() if self.sent_at else "",
+            self.resend_id or "",
             self.opened_at.isoformat() if self.opened_at else "",
             self.clicked_at.isoformat() if self.clicked_at else "",
             self.replied_at.isoformat() if self.replied_at else "",
@@ -363,6 +365,7 @@ class EnhancedLead:
             "updated_at",
             "campaign_id",
             "sent_at",
+            "resend_id",
             "opened_at",
             "clicked_at",
             "replied_at",
@@ -371,14 +374,60 @@ class EnhancedLead:
             "task_id",
         ]
 
+    @staticmethod
+    def _normalize_status(status_val: Any) -> str:
+        """Normalize status value to uppercase standard values."""
+        if not status_val:
+            return "NEW"
+        
+        status_str = str(status_val).strip()
+        
+        # Handle boolean values (legacy data)
+        if isinstance(status_val, bool):
+            return "APPROVED" if status_val else "NEW"
+        
+        # Handle string boolean values
+        status_lower = status_str.lower()
+        if status_lower in ("true", "1", "yes"):
+            return "APPROVED"
+        if status_lower in ("false", "0", "no"):
+            return "NEW"
+        
+        # Normalize to uppercase
+        status_upper = status_str.upper()
+        
+        # Map common variations
+        status_map = {
+            "APPROVED": "APPROVED",
+            "NEW": "NEW",
+            "SENT": "SENT",
+            "QUEUED": "QUEUED",
+            "FAILED": "FAILED",
+            "INVALID": "INVALID",
+            "BOUNCED": "BOUNCED",
+            "REPLIED": "REPLIED",
+        }
+        
+        return status_map.get(status_upper, status_upper)
+    
     @classmethod
     def from_sheets_row(cls, row: List[Any]) -> "EnhancedLead":
         """Create from Google Sheets row."""
         def parse_bool(val) -> bool:
+            """Robust boolean parsing: handles TRUE/FALSE, true/false, Yes/No, 1/0, strips whitespace."""
             if isinstance(val, bool):
                 return val
             if isinstance(val, str):
-                return val.lower() in ("true", "1", "yes")
+                val_clean = val.strip().lower()
+                # Handle various true values
+                if val_clean in ("true", "1", "yes", "y", "t"):
+                    return True
+                # Handle various false values
+                if val_clean in ("false", "0", "no", "n", "f", ""):
+                    return False
+            # For numbers, 0 is False, anything else is True
+            if isinstance(val, (int, float)):
+                return val != 0
             return bool(val)
 
         def parse_datetime(val) -> Optional[datetime]:
@@ -412,17 +461,18 @@ class EnhancedLead:
             generic_address=parse_bool(row[17]) if len(row) > 17 else False,
             soft_match=parse_bool(row[18]) if len(row) > 18 else False,
             soft_match_lead_id=str(row[19]) if len(row) > 19 and row[19] else None,
-            status=str(row[20]) if len(row) > 20 and row[20] else "NEW",
+            status=self._normalize_status(row[20]) if len(row) > 20 and row[20] else "NEW",
             created_at=parse_datetime(row[21]) if len(row) > 21 else datetime.utcnow(),
             updated_at=parse_datetime(row[22]) if len(row) > 22 else datetime.utcnow(),
             campaign_id=str(row[23]) if len(row) > 23 and row[23] else None,
             sent_at=parse_datetime(row[24]) if len(row) > 24 else None,
-            opened_at=parse_datetime(row[25]) if len(row) > 25 else None,
-            clicked_at=parse_datetime(row[26]) if len(row) > 26 else None,
-            replied_at=parse_datetime(row[27]) if len(row) > 27 else None,
-            bounced_at=parse_datetime(row[28]) if len(row) > 28 else None,
-            complained_at=parse_datetime(row[29]) if len(row) > 29 else None,
-            task_id=str(row[30]) if len(row) > 30 and row[30] else None,
+            resend_id=str(row[25]) if len(row) > 25 and row[25] else None,
+            opened_at=parse_datetime(row[26]) if len(row) > 26 else None,
+            clicked_at=parse_datetime(row[27]) if len(row) > 27 else None,
+            replied_at=parse_datetime(row[28]) if len(row) > 28 else None,
+            bounced_at=parse_datetime(row[29]) if len(row) > 29 else None,
+            complained_at=parse_datetime(row[30]) if len(row) > 30 else None,
+            task_id=str(row[31]) if len(row) > 31 and row[31] else None,
         )
 
 

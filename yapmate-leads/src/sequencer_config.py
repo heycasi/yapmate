@@ -9,6 +9,7 @@ This module contains all configuration for the automated lead generation system:
 - Warm-up ramp settings
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Set
 from enum import IntEnum
@@ -291,6 +292,7 @@ class DedupeConfig:
 # GOOGLE SHEETS TAB NAMES
 # =============================================================================
 
+# Default tab names - can be overridden via environment variables
 SHEETS_TABS = {
     "config": "config",           # System configuration
     "cities": "cities",           # City list with boosts
@@ -298,7 +300,7 @@ SHEETS_TABS = {
     "queue": "queue",             # Task queue
     "state": "state",             # Runner state (focus_trade_id, etc.)
     "run_log": "run_log",         # Execution history
-    "leads": "leads",             # All leads (master list)
+    "leads": os.getenv("LEADS_SHEET_TAB", "leads"),  # All leads (master list) - configurable
     "dedupe_keys": "dedupe_keys", # Fast dedupe lookup table
     "campaigns": "campaigns",     # Email campaigns
     "email_blocklist": "email_blocklist",  # Bounced/complained addresses

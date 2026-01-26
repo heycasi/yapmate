@@ -106,6 +106,9 @@ class SequencerSheetsManager:
 
         Returns:
             Worksheet object
+            
+        Raises:
+            ValueError: If tab is missing and headers are required (for critical tabs)
         """
         if tab_name in self._worksheets:
             return self._worksheets[tab_name]
@@ -113,6 +116,14 @@ class SequencerSheetsManager:
         try:
             worksheet = self.spreadsheet.worksheet(tab_name)
         except gspread.exceptions.WorksheetNotFound:
+            # For critical tabs (like leads), fail with helpful error
+            if headers and tab_name == SHEETS_TABS.get("leads", "leads"):
+                # List all available tabs
+                all_tabs = [ws.title for ws in self.spreadsheet.worksheets()]
+                raise ValueError(
+                    f"Required tab '{tab_name}' not found. Available tabs: {', '.join(all_tabs)}\n"
+                    f"Set LEADS_SHEET_TAB environment variable to the correct tab name."
+                )
             print(f"  Creating tab: {tab_name}")
             worksheet = self.spreadsheet.add_worksheet(
                 title=tab_name,
@@ -122,8 +133,31 @@ class SequencerSheetsManager:
             if headers:
                 worksheet.update('A1', [headers])
 
+        # Validate headers for critical tabs
+        if headers and tab_name == SHEETS_TABS.get("leads", "leads"):
+            self._validate_leads_headers(worksheet, headers)
+
         self._worksheets[tab_name] = worksheet
         return worksheet
+    
+    def _validate_leads_headers(self, worksheet: gspread.Worksheet, expected_headers: List[str]):
+        """Validate that leads tab has required headers."""
+        all_rows = worksheet.get_all_values()
+        if len(all_rows) == 0:
+            return  # Empty sheet, will be created with headers
+        
+        actual_headers = [h.strip() for h in all_rows[0]]
+        missing_headers = []
+        for expected in expected_headers:
+            if expected not in actual_headers:
+                missing_headers.append(expected)
+        
+        if missing_headers:
+            raise ValueError(
+                f"Leads tab '{worksheet.title}' is missing required columns: {', '.join(missing_headers)}\n"
+                f"Expected columns: {', '.join(expected_headers)}\n"
+                f"Actual columns: {', '.join(actual_headers)}"
+            )
 
     def ensure_all_tabs(self):
         """Create all required tabs with headers if they don't exist."""
@@ -357,7 +391,26 @@ class SequencerSheetsManager:
 
     def get_leads_tab(self) -> gspread.Worksheet:
         """Get the leads worksheet."""
-        return self.get_or_create_tab(SHEETS_TABS["leads"], EnhancedLead.headers())
+        tab_name = os.getenv("LEADS_SHEET_TAB", SHEETS_TABS["leads"])
+        return self.get_or_create_tab(tab_name, EnhancedLead.headers())
+    
+    def list_all_tabs(self) -> List[Dict[str, Any]]:
+        """
+        List all worksheet tabs with metadata.
+        
+        Returns:
+            List of dicts with title, row_count, col_count, headers
+        """
+        tabs_info = []
+        for ws in self.spreadsheet.worksheets():
+            all_rows = ws.get_all_values()
+            tabs_info.append({
+                "title": ws.title,
+                "row_count": len(all_rows),
+                "col_count": len(all_rows[0]) if all_rows else 0,
+                "headers": all_rows[0] if all_rows else [],
+            })
+        return tabs_info
 
     def append_leads(self, leads: List[EnhancedLead]) -> int:
         """
@@ -483,11 +536,27 @@ class SequencerSheetsManager:
                 email = str(row[col_email]).strip()
                 has_email = bool(email and email != "")
 
-            # Eligibility: status must be NEW or APPROVED, send_eligible must be True, email must exist
-            # Note: status != "SENT" is redundant since we already check status in ("NEW", "APPROVED")
-            if eligible and status in ("NEW", "APPROVED") and has_email:
+            # Eligibility: status must be NEW or APPROVED, email must exist
+            # send_eligible can be True OR computed as eligible if status=APPROVED and email valid
+            is_status_eligible = status in ("NEW", "APPROVED")
+            computed_eligible = False
+            
+            # Computed eligibility fallback: if status=APPROVED and email valid, treat as eligible
+            # even if send_eligible column is False/empty
+            if status == "APPROVED" and has_email:
+                # Sanitize email to check validity
+                from src.email_sanitizer import sanitize_email
+                sanitization = sanitize_email(email)
+                if sanitization.valid:
+                    computed_eligible = True
+            
+            # Lead is eligible if: (send_eligible=True OR computed_eligible=True) AND status eligible AND has email
+            if (eligible or computed_eligible) and is_status_eligible and has_email:
                 try:
                     lead = EnhancedLead.from_sheets_row(row)
+                    # Override send_eligible if computed eligibility says it should be True
+                    if computed_eligible and not lead.send_eligible:
+                        lead.send_eligible = True
                     # Double-check eligibility in the parsed object
                     if lead.send_eligible and lead.status in ("NEW", "APPROVED") and lead.email:
                         leads.append(lead)
@@ -499,13 +568,14 @@ class SequencerSheetsManager:
 
         return leads
 
-    def update_lead_status(self, lead_id: str, status: str, **kwargs):
+    def update_lead_status(self, lead_id: str, status: str, send_eligible: bool = None, **kwargs):
         """
         Update a lead's status and optional fields.
 
         Args:
             lead_id: Lead ID to update
-            status: New status
+            status: New status (will be normalized to uppercase)
+            send_eligible: Optional boolean to set send_eligible field
             **kwargs: Additional fields to update (sent_at, bounced_at, etc.)
         """
         sheet = self.get_leads_tab()
@@ -515,12 +585,21 @@ class SequencerSheetsManager:
         col_lead_id = headers.index("lead_id")
         col_status = headers.index("status")
         col_updated = headers.index("updated_at")
+        
+        # Normalize status to uppercase
+        status_normalized = str(status).strip().upper()
 
         for row_idx, row in enumerate(all_rows[1:], start=2):
             if row[col_lead_id] == lead_id:
-                # Update status
-                sheet.update_cell(row_idx, col_status + 1, status)
+                # Update status (normalized)
+                sheet.update_cell(row_idx, col_status + 1, status_normalized)
                 sheet.update_cell(row_idx, col_updated + 1, datetime.utcnow().isoformat())
+                
+                # Update send_eligible if provided
+                if send_eligible is not None and "send_eligible" in headers:
+                    col_eligible = headers.index("send_eligible")
+                    # Store as string "TRUE" or "FALSE" for Google Sheets
+                    sheet.update_cell(row_idx, col_eligible + 1, "TRUE" if send_eligible else "FALSE")
 
                 # Update additional fields
                 for field, value in kwargs.items():
@@ -528,6 +607,9 @@ class SequencerSheetsManager:
                         col = headers.index(field)
                         if isinstance(value, datetime):
                             value = value.isoformat()
+                        elif isinstance(value, bool):
+                            # Convert boolean to string for Google Sheets
+                            value = "TRUE" if value else "FALSE"
                         sheet.update_cell(row_idx, col + 1, value)
 
                 return
