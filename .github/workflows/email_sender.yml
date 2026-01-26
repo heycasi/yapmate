@@ -148,6 +148,12 @@ jobs:
           DAILY_LIMIT: ${{ secrets.DAILY_LIMIT || env.DAILY_LIMIT }}
           SEND_LIMIT_PER_RUN: ${{ secrets.SEND_LIMIT_PER_RUN || env.SEND_LIMIT_PER_RUN }}
           DELAY_BETWEEN_SENDS: ${{ env.DELAY_BETWEEN_SENDS }}
+          # Warmup control (from secrets with defaults)
+          WARMUP_ENABLED: ${{ secrets.WARMUP_ENABLED || 'true' }}
+          WARMUP_START_DAILY_LIMIT: ${{ secrets.WARMUP_START_DAILY_LIMIT || '10' }}
+          WARMUP_RAMP_INCREMENT: ${{ secrets.WARMUP_RAMP_INCREMENT || '5' }}
+          WARMUP_MAX_CAP: ${{ secrets.WARMUP_MAX_CAP || '100' }}
+          WARMUP_START_DATE: ${{ secrets.WARMUP_START_DATE || '' }}
           # Test email fallback
           TEST_EMAIL: ${{ github.event.inputs.test_email || secrets.TEST_EMAIL || '' }}
         run: |
