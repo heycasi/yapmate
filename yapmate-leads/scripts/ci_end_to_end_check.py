@@ -144,7 +144,7 @@ def check_sheets_schema() -> bool:
         for tab_name in required_tabs:
             actual_name = SHEETS_TABS.get(tab_name, tab_name)
             try:
-                worksheet = sheets._get_worksheet(actual_name)
+                worksheet = sheets.get_or_create_tab(actual_name)
                 headers = worksheet.row_values(1)
                 print(f"  [PASS] Tab '{actual_name}': {len(headers)} columns")
             except Exception as e:
@@ -154,7 +154,7 @@ def check_sheets_schema() -> bool:
         # Validate leads schema
         leads_tab = SHEETS_TABS.get("leads", "leads")
         try:
-            worksheet = sheets._get_worksheet(leads_tab)
+            worksheet = sheets.get_or_create_tab(leads_tab)
             headers = [h.lower() for h in worksheet.row_values(1)]
 
             required_columns = ["lead_id", "email", "status", "send_eligible", "trade", "city"]
