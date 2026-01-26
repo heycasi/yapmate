@@ -23,7 +23,7 @@ from enum import Enum
 from src.config import get_config
 from src.secrets import run_mandatory_preflight, SecretValidationError
 from src.sequencer_sheets import SequencerSheetsManager, get_write_stats
-from src.sequencer_models import EnhancedLead
+from src.sequencer_models import EnhancedLead, SessionType
 from src.task_runner import TaskRunner
 from src.yield_target_runner import YieldTargetRunner, YieldTargetResult, IterationStats, PivotAction
 from src.website_email_extractor import WebsiteEmailExtractor, BatchDiscoveryStats
@@ -390,7 +390,6 @@ class PipelineOrchestrator:
 
         try:
             # Get next task from queue
-            from src.sequencer_config import SessionType
             session = self._task_runner.determine_session(manual=True)
             task = self._task_runner.get_next_task(session)
 
