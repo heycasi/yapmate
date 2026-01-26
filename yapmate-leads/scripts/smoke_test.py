@@ -54,6 +54,23 @@ def main():
         print(f"\n   WARNING: {len(missing)} environment variable(s) missing")
     print()
 
+    # Run API key pre-flight validation
+    print("1b. Validating API keys (pre-flight)...")
+    try:
+        from src.api_key_utils import run_preflight_checks
+        preflight = run_preflight_checks()
+        if preflight['openai_valid']:
+            print(f"   OpenAI: VALID (key length: {len(preflight['openai_key'])})")
+        else:
+            print("   OpenAI: INVALID or MISSING (enrichment disabled)")
+        if preflight['apify_valid']:
+            print("   Apify: VALID")
+        else:
+            print("   Apify: INVALID or MISSING (scraping disabled)")
+    except Exception as e:
+        print(f"   Pre-flight check failed: {e}")
+    print()
+
     # Connect to Google Sheets
     print("2. Connecting to Google Sheets...")
     try:

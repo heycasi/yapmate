@@ -23,11 +23,46 @@ from google.oauth2.service_account import Credentials
 from gspread.exceptions import APIError
 
 
+class SheetsWriteStats:
+    """Tracks sheet write statistics for summary logging."""
+
+    def __init__(self):
+        self.batches = 0
+        self.rows_updated = 0
+        self.retries = 0
+
+    def record_batch(self, rows: int, retries: int = 0):
+        """Record a batch write."""
+        self.batches += 1
+        self.rows_updated += rows
+        self.retries += retries
+
+    def log_summary(self):
+        """Print summary of sheet writes."""
+        print(f"  [Sheets] Write summary: {self.batches} batches, {self.rows_updated} rows, {self.retries} retries")
+
+    def reset(self):
+        """Reset stats for new run."""
+        self.batches = 0
+        self.rows_updated = 0
+        self.retries = 0
+
+
+# Global write stats tracker
+_write_stats = SheetsWriteStats()
+
+
+def get_write_stats() -> SheetsWriteStats:
+    """Get the global write stats tracker."""
+    return _write_stats
+
+
 def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 2.0):
     """
     Decorator to retry operations on Google Sheets rate limit errors (429).
 
     Uses exponential backoff: delay = base_delay * 2^attempt
+    Tracks retry count in global stats.
 
     Args:
         max_retries: Maximum number of retry attempts
@@ -37,13 +72,19 @@ def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 2.0):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             last_exception = None
+            retry_count = 0
             for attempt in range(max_retries + 1):
                 try:
-                    return func(*args, **kwargs)
+                    result = func(*args, **kwargs)
+                    # Track retries in global stats
+                    if retry_count > 0:
+                        _write_stats.retries += retry_count
+                    return result
                 except APIError as e:
                     # Check if it's a rate limit error (429)
                     if hasattr(e, 'response') and e.response.status_code == 429:
                         last_exception = e
+                        retry_count += 1
                         if attempt < max_retries:
                             delay = base_delay * (2 ** attempt)
                             print(f"  [Sheets] Rate limit hit, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})...")
@@ -489,6 +530,10 @@ class SequencerSheetsManager:
         sheet = self.get_leads_tab()
         rows = [lead.to_sheets_row() for lead in leads]
         sheet.append_rows(rows, value_input_option="USER_ENTERED")
+
+        # Track in global stats
+        _write_stats.record_batch(len(rows))
+
         return len(rows)
 
     def get_all_leads(self, limit: int = 10000) -> List[EnhancedLead]:

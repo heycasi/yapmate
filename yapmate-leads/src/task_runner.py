@@ -29,7 +29,7 @@ from src.sequencer_models import (
     QueueTask, TaskStatus, SessionType, RunnerState,
     EnhancedLead, DedupeKey, RunLogEntry, DedupeMatchType
 )
-from src.sequencer_sheets import SequencerSheetsManager
+from src.sequencer_sheets import SequencerSheetsManager, get_write_stats
 from src.apify_client import ApifyLeadScraper, ApifyTimeoutError
 from src.enricher import LeadEnricher
 from src.website_email_extractor import WebsiteEmailExtractor, BatchDiscoveryStats
@@ -583,7 +583,14 @@ class TaskRunner:
             print(f"\n[4/6] Enriching with AI...")
             if self.enricher:
                 enriched_count = 0
+                enrichment_disabled = False
+                from src.enricher import OpenAIKeyError
+
                 for lead in unique_leads:
+                    if enrichment_disabled:
+                        # Skip remaining leads if auth failed
+                        break
+
                     try:
                         # Convert to old Lead format for enricher
                         from src.models import Lead
@@ -601,11 +608,19 @@ class TaskRunner:
                         lead.ai_hook = enriched.ai_hook
                         lead.enriched_at = datetime.utcnow()
                         enriched_count += 1
+                    except OpenAIKeyError as e:
+                        # Auth error - disable enrichment for rest of run
+                        print(f"  [OPENAI] Auth error: enrichment disabled for this run")
+                        enrichment_disabled = True
+                        # Set enricher to None so future tasks don't try
+                        self.enricher = None
                     except Exception as e:
                         print(f"  Warning: Failed to enrich {lead.business_name}: {e}")
 
                 log_entry.leads_enriched = enriched_count
                 print(f"  Enriched {enriched_count} leads")
+                if enrichment_disabled:
+                    print(f"  (Enrichment disabled due to API key error)")
             else:
                 print("  Skipping enrichment (not configured)")
 
@@ -676,6 +691,11 @@ class TaskRunner:
             print(f"TASK COMPLETED")
             print(f"  Leads found: {log_entry.leads_found}")
             print(f"  After dedupe: {log_entry.leads_after_dedupe}")
+            print(f"  Email discovery:")
+            print(f"    From Maps: {leads_with_maps_email}")
+            print(f"    From website: {leads_with_website_email}")
+            print(f"    No email: {leads_with_no_email}")
+            print(f"    Discovery rate: {discovery_rate:.1f}%")
             print(f"  Enriched: {log_entry.leads_enriched}")
             print(f"  Send-eligible: {log_entry.leads_eligible}")
             print(f"  Duration: {log_entry.duration_seconds:.1f}s")
@@ -709,6 +729,10 @@ class TaskRunner:
 
         # Append run log
         self.sheets.append_run_log(log_entry)
+
+        # Log sheet write summary
+        write_stats = get_write_stats()
+        write_stats.log_summary()
 
         return log_entry
 
