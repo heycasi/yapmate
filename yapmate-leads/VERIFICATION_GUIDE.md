@@ -161,3 +161,152 @@ If GitHub schedules aren't reliable, use external cron:
 - See: yapmate-leads/CRON_EXTERNAL_TRIGGER_SETUP.md
 - Uses cron-job.org to trigger workflows via API
 - Requires CRON_TRIGGER_TOKEN secret
+
+---
+
+## Yield Target Test
+
+The yield target system ensures tasks don't complete with 0 emails without trying smart pivots.
+
+### Quick Test (Local)
+
+```bash
+# Basic test with fake data (no Apify required)
+cd yapmate-leads
+python scripts/run_task_until_yield.py "Gas Engineer" "Manchester" --skip-scrape --no-sheets
+
+# Test with real Apify scrape (requires APIFY_* credentials)
+python scripts/run_task_until_yield.py "Plumber" "London" --max-leads 20 --no-sheets
+
+# Test with custom targets
+python scripts/run_task_until_yield.py "Electrician" "Glasgow" \
+    --target-emails 5 \
+    --target-rate 0.15 \
+    --max-iterations 3 \
+    --no-sheets
+
+# Dry run (show config only)
+python scripts/run_task_until_yield.py "Roofer" "Birmingham" --dry-run
+```
+
+### What Success Looks Like
+
+```
+============================================================
+YIELD TARGET TASK RUNNER
+============================================================
+Trade: Gas Engineer
+City: Manchester
+
+Targets:
+  Min emails: 10
+  Min rate: 20%
+  Max leads: 50
+
+Limits:
+  Max iterations: 5
+  Max runtime: 900s
+  Max pages/domain: 6
+
+Features:
+  Deep crawl: True
+  Query variants: True
+  Social fallback: True
+============================================================
+
+[STEP 1] Scraping leads...
+  Found 45 raw leads
+
+[STEP 2] Running yield target discovery loop...
+
+──────────────────────────────────────────────────
+ITERATION 1 SUMMARY
+──────────────────────────────────────────────────
+  leads_found: 45
+  websites_present: 38
+  crawls_attempted: 114
+  domains_scanned: 38
+  emails_found_total: 12
+  emails_by_source:
+    maps: 3
+    website: 9
+    none: 33
+  email_rate: 26.7%
+  send_eligible_count: 12
+  pivot_action_taken: none
+  duration: 45.2s
+──────────────────────────────────────────────────
+
+============================================================
+YIELD TARGET FINAL SUMMARY
+============================================================
+  Success: True
+  Stopped reason: target_met
+  Iterations run: 1
+  Total leads: 45
+  Total emails: 12
+  Email rate: 26.7%
+  Send eligible: 12
+  Pivots attempted: none
+  Runtime: 45.2s
+============================================================
+
+✓ Task completed successfully - targets met
+```
+
+### Low Yield Warning Example
+
+If targets aren't met after all pivots:
+
+```
+============================================================
+YIELD TARGET FINAL SUMMARY
+============================================================
+  Success: False
+  Stopped reason: max_iterations
+  Iterations run: 5
+  Total leads: 50
+  Total emails: 3
+  Email rate: 6.0%
+  Send eligible: 3
+  Pivots attempted: deep_crawl, query_variant, query_variant
+
+  Top failure reasons:
+    no_website: 25
+    no_email_found: 22
+
+============================================================
+
+⚠ Task completed with low yield - max_iterations
+```
+
+### Environment Variables
+
+New yield target variables (with defaults):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| TARGET_LEADS_TOTAL | 50 | Target leads per task |
+| TARGET_EMAILS_MIN | 10 | Minimum emails required |
+| TARGET_EMAIL_RATE_MIN | 0.20 | Minimum 20% email rate |
+| MAX_ITERATIONS | 5 | Max pivot iterations |
+| MAX_RUNTIME_SECONDS | 900 | 15 min max per task |
+| MAX_PAGES_PER_DOMAIN | 6 | Pages to crawl per site |
+| ENABLE_DEEP_CRAWL | true | Enable JSON-LD/microdata |
+| ENABLE_QUERY_VARIANTS | true | Enable trade synonyms |
+| ENABLE_SOCIAL_FALLBACK | true | Try Facebook/Instagram |
+
+### GitHub Secrets Setup
+
+Add these to GitHub Secrets for production:
+
+```
+TARGET_EMAILS_MIN=10
+TARGET_EMAIL_RATE_MIN=0.20
+MAX_ITERATIONS=5
+MAX_RUNTIME_SECONDS=900
+MAX_PAGES_PER_DOMAIN=6
+ENABLE_DEEP_CRAWL=true
+ENABLE_QUERY_VARIANTS=true
+ENABLE_SOCIAL_FALLBACK=true
+```

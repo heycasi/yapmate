@@ -339,3 +339,73 @@ def alert_sender_error(
         },
         sheets_manager=sheets_manager
     )
+
+
+def alert_low_yield_final(
+    run_id: str,
+    task_id: str,
+    trade: str,
+    city: str,
+    iterations_run: int,
+    total_leads: int,
+    total_emails: int,
+    email_rate: float,
+    send_eligible: int,
+    pivots_attempted: list,
+    failure_reasons: dict,
+    stopped_reason: str,
+    sheets_manager=None
+):
+    """
+    Alert when a task completes below yield thresholds after all pivots.
+
+    This is the LOW_YIELD_FINAL warning that indicates the pipeline
+    couldn't find enough emails despite trying smart pivots.
+    """
+    # Format pivots
+    pivots_str = ", ".join(pivots_attempted) if pivots_attempted else "none"
+
+    # Format top 3 failure reasons
+    failure_lines = []
+    sorted_reasons = sorted(failure_reasons.items(), key=lambda x: -x[1])[:3]
+    for reason, count in sorted_reasons:
+        failure_lines.append(f"    {reason}: {count}")
+    failures_str = "\n".join(failure_lines) if failure_lines else "    (none)"
+
+    send_alert(
+        subject=f"LOW_YIELD_FINAL: {trade} in {city}",
+        body=(
+            f"Task completed below yield thresholds after all pivot attempts.\n\n"
+            f"Trade: {trade}\n"
+            f"City: {city}\n\n"
+            f"Results:\n"
+            f"  Iterations run: {iterations_run}\n"
+            f"  Total leads: {total_leads}\n"
+            f"  Total emails: {total_emails}\n"
+            f"  Email rate: {email_rate:.1%}\n"
+            f"  Send eligible: {send_eligible}\n"
+            f"  Stopped reason: {stopped_reason}\n\n"
+            f"Pivots attempted: {pivots_str}\n\n"
+            f"Top failure reasons:\n{failures_str}\n\n"
+            f"Action: Review website email discovery and consider:\n"
+            f"  - Adding more contact page paths\n"
+            f"  - Checking if websites are blocking crawlers\n"
+            f"  - Reviewing email obfuscation patterns\n"
+            f"  - Adding trade synonyms for '{trade}'"
+        ),
+        severity="warning",
+        context={
+            "run_id": run_id,
+            "task_id": task_id,
+            "trade": trade,
+            "city": city,
+            "iterations_run": iterations_run,
+            "total_leads": total_leads,
+            "total_emails": total_emails,
+            "email_rate": f"{email_rate:.1%}",
+            "send_eligible": send_eligible,
+            "pivots_attempted": pivots_str,
+            "stopped_reason": stopped_reason,
+        },
+        sheets_manager=sheets_manager
+    )

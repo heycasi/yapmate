@@ -103,6 +103,53 @@ class AutoApproveConfig:
 
 
 @dataclass
+class YieldTargetConfig:
+    """
+    Yield target configuration for proactive lead discovery.
+
+    The sequencer runs in iterations until it reaches email yield thresholds
+    or hits safety limits.
+    """
+    # Target thresholds (stop early if met)
+    target_leads_total: int = 50          # Target total leads per task
+    target_emails_min: int = 10           # Minimum emails required
+    target_email_rate_min: float = 0.20   # 20% email discovery rate
+
+    # Safety limits
+    max_iterations: int = 5               # Max pivot iterations per task
+    max_runtime_seconds: int = 900        # 15 minutes max per task
+
+    # Website crawling
+    max_pages_per_domain: int = 6         # Pages to crawl per website
+
+    # Pivot strategies
+    enable_deep_crawl: bool = True        # Iteration 2: deeper contact crawl
+    enable_query_variants: bool = True    # Iteration 3: query synonyms/radius
+    enable_social_fallback: bool = True   # Try Facebook/Instagram if no website
+
+    # Logging
+    log_iteration_stats: bool = True      # Log stats after each iteration
+
+
+# Trade synonyms for query variants (UK trades)
+TRADE_SYNONYMS: Dict[str, list] = {
+    "gas engineer": ["heating engineer", "boiler repair", "boiler service", "gas safe engineer"],
+    "plumber": ["plumbing services", "emergency plumber", "plumbing contractor"],
+    "electrician": ["electrical contractor", "electrical services", "sparky"],
+    "roofer": ["roofing contractor", "roof repair", "roofing services"],
+    "builder": ["building contractor", "construction", "general builder"],
+    "carpenter": ["joiner", "woodworker", "cabinet maker"],
+    "painter": ["decorator", "painter and decorator", "painting contractor"],
+    "locksmith": ["lock services", "emergency locksmith", "security locks"],
+    "plasterer": ["plastering services", "rendering", "dry lining"],
+    "tiler": ["tiling services", "floor tiler", "wall tiler"],
+    "landscaper": ["garden services", "gardener", "landscape gardener"],
+    "cleaner": ["cleaning services", "domestic cleaner", "office cleaner"],
+    "handyman": ["property maintenance", "odd jobs", "home repairs"],
+}
+
+
+@dataclass
 class ScalingConfig:
     """
     Scaling configuration for production ramp-up.
@@ -181,6 +228,7 @@ class Config:
     retry: RetryConfig = field(default_factory=RetryConfig)
     scaling: ScalingConfig = field(default_factory=ScalingConfig)
     auto_approve: AutoApproveConfig = field(default_factory=AutoApproveConfig)
+    yield_target: YieldTargetConfig = field(default_factory=YieldTargetConfig)
 
     # Runtime state
     is_ci: bool = False
@@ -292,6 +340,23 @@ def load_config() -> Config:
         config.scaling.max_cap = int(os.getenv("MAX_CAP"))
     if os.getenv("RAMP_START_DATE"):
         config.scaling.ramp_start_date = os.getenv("RAMP_START_DATE")
+
+    # Yield target config (proactive lead discovery)
+    if os.getenv("TARGET_LEADS_TOTAL"):
+        config.yield_target.target_leads_total = int(os.getenv("TARGET_LEADS_TOTAL"))
+    if os.getenv("TARGET_EMAILS_MIN"):
+        config.yield_target.target_emails_min = int(os.getenv("TARGET_EMAILS_MIN"))
+    if os.getenv("TARGET_EMAIL_RATE_MIN"):
+        config.yield_target.target_email_rate_min = float(os.getenv("TARGET_EMAIL_RATE_MIN"))
+    if os.getenv("MAX_ITERATIONS"):
+        config.yield_target.max_iterations = int(os.getenv("MAX_ITERATIONS"))
+    if os.getenv("MAX_RUNTIME_SECONDS"):
+        config.yield_target.max_runtime_seconds = int(os.getenv("MAX_RUNTIME_SECONDS"))
+    if os.getenv("MAX_PAGES_PER_DOMAIN"):
+        config.yield_target.max_pages_per_domain = int(os.getenv("MAX_PAGES_PER_DOMAIN"))
+    config.yield_target.enable_deep_crawl = os.getenv("ENABLE_DEEP_CRAWL", "true").lower() == "true"
+    config.yield_target.enable_query_variants = os.getenv("ENABLE_QUERY_VARIANTS", "true").lower() == "true"
+    config.yield_target.enable_social_fallback = os.getenv("ENABLE_SOCIAL_FALLBACK", "true").lower() == "true"
 
     # Runtime flags
     config.is_ci = bool(os.getenv("CI") or os.getenv("GITHUB_ACTIONS"))
