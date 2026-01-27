@@ -683,6 +683,166 @@ From: {self.from_email}
                 email_sanitized=clean_email,
             ), log)
 
+    def send_email_no_sheet_write(self, lead: EnhancedLead, dry_run: bool = False) -> tuple[SendResult, StructuredLog]:
+        """
+        Send an email to a single lead WITHOUT writing to sheets.
+
+        This is used by send_batch() which collects all updates and
+        writes them in a single batch at the end to avoid rate limits.
+
+        Pipeline: lead.email → sanitize_email() → validate → send
+
+        Args:
+            lead: Lead to send email to
+            dry_run: If True, validate but don't actually send
+
+        Returns:
+            Tuple of (SendResult, StructuredLog)
+        """
+        config = get_config()
+
+        # Step 1: Check if sending is enabled (fail-closed)
+        send_enabled, enable_reason = self._check_send_enabled()
+
+        if not send_enabled and not dry_run:
+            log = StructuredLog(
+                lead_id=lead.lead_id,
+                status=SendStatus.BLOCKED,
+                reason=enable_reason,
+                email_original=lead.email or "",
+                email_sanitized=None,
+                business_name=lead.business_name,
+            )
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=False,
+                status=SendStatus.BLOCKED,
+                error=enable_reason,
+                email_original=lead.email,
+            ), log)
+
+        # Step 2: Check if email exists
+        if not lead.email:
+            log = StructuredLog(
+                lead_id=lead.lead_id,
+                status=SendStatus.INVALID,
+                reason="No email address",
+                email_original="",
+                email_sanitized=None,
+                business_name=lead.business_name,
+            )
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=False,
+                status=SendStatus.INVALID,
+                error="No email address",
+                email_original="",
+            ), log)
+
+        # Step 3: Sanitize and validate email
+        sanitization, log = self.sanitize_and_validate_email(lead)
+
+        if not sanitization.valid:
+            # NO sheet write - caller handles this in batch
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=False,
+                status=SendStatus.INVALID,
+                error=sanitization.reason,
+                email_original=lead.email,
+            ), log)
+
+        # Use sanitized email
+        clean_email = sanitization.sanitized
+
+        # Step 4: Check eligibility
+        if not lead.send_eligible:
+            log.status = SendStatus.BLOCKED
+            log.reason = f"Not eligible: {lead.eligibility_reason}"
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=False,
+                status=SendStatus.BLOCKED,
+                error=f"Not eligible: {lead.eligibility_reason}",
+                email_original=lead.email,
+                email_sanitized=clean_email,
+            ), log)
+
+        # Step 5: Dry run check
+        if dry_run or config.pipeline.dry_run:
+            log.status = SendStatus.BLOCKED
+            log.reason = "Dry run mode - email validated but not sent"
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=True,  # Validation passed
+                status=SendStatus.BLOCKED,
+                email_original=lead.email,
+                email_sanitized=clean_email,
+            ), log)
+
+        # Step 6: Actually send the email
+        try:
+            # Generate email content
+            subject = self.generate_subject(lead)
+            html_body = self.generate_html_body(lead)
+            text_body = self.generate_text_body(lead)
+
+            # Log CTA link URL for deliverability verification
+            from src.templates import APP_STORE_URL
+            print(f"  → CTA Link URL: {APP_STORE_URL}")
+
+            # Prepare send parameters (use sanitized email)
+            params = {
+                "from": f"{self.from_name} <{self.from_email}>",
+                "to": [clean_email],
+                "subject": subject,
+                "html": html_body,
+                "text": text_body,
+                "headers": {
+                    "List-Unsubscribe": "<https://www.yapmate.co.uk/unsubscribe>",
+                    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+                }
+            }
+
+            if self.reply_to:
+                params["reply_to"] = self.reply_to
+
+            # Send via Resend
+            response = resend.Emails.send(params)
+            email_id = response.get("id", "unknown")
+
+            # Log Resend email ID for verification
+            print(f"  ✓ Resend email ID: {email_id}")
+
+            # NO sheet write - caller handles this in batch
+
+            log.status = SendStatus.SENT
+            log.reason = f"Email sent successfully (Resend ID: {email_id})"
+
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=True,
+                status=SendStatus.SENT,
+                email_id=email_id,
+                email_original=lead.email,
+                email_sanitized=clean_email,
+            ), log)
+
+        except Exception as e:
+            # NO sheet write - caller handles this in batch
+
+            log.status = SendStatus.FAILED
+            log.reason = f"Send failed: {str(e)}"
+
+            return (SendResult(
+                lead_id=lead.lead_id,
+                success=False,
+                status=SendStatus.FAILED,
+                error=str(e),
+                email_original=lead.email,
+                email_sanitized=clean_email,
+            ), log)
+
     def _log_eligibility_breakdown(self) -> Dict[str, Any]:
         """
         Compute and log eligibility breakdown (counts only, no PII).
@@ -1040,6 +1200,8 @@ From: {self.from_email}
             )
 
         # Process leads with structured logging
+        # IMPORTANT: We collect ALL status updates and batch them at the end
+        # to avoid hitting Google Sheets 60 writes/minute quota
         results = []
         logs = []
         sent_count = 0
@@ -1048,6 +1210,9 @@ From: {self.from_email}
         invalid_count = 0
         sanitized_count = 0
         skipped_count = 0
+
+        # Collect status updates for batch write at end
+        pending_updates = []
 
         print(f"\n" + "=" * 70)
         print("PROCESSING LEADS")
@@ -1061,24 +1226,8 @@ From: {self.from_email}
                 print(f"  Status: {lead.status}")
                 print("-" * 40)
 
-                # Step 1: Claim the lead (compare-and-set from NEW/APPROVED -> QUEUED)
-                claimed = self.sheets.claim_lead_for_sending(lead.lead_id, lead.status)
-                if not claimed:
-                    skipped_count += 1
-                    log = StructuredLog(
-                        lead_id=lead.lead_id,
-                        status=SendStatus.SKIPPED,
-                        reason="Already claimed by another process",
-                        email_original=lead.email or "",
-                        email_sanitized=None,
-                        business_name=lead.business_name,
-                    )
-                    log.log()
-                    logs.append(log)
-                    continue
-
-                # Step 2: Send the email (includes sanitization)
-                result, log = self.send_email(lead, dry_run=effective_dry_run)
+                # Step 1: Send the email (NO sheet writes during this loop)
+                result, log = self.send_email_no_sheet_write(lead, dry_run=effective_dry_run)
                 results.append(result)
                 logs.append(log)
                 log.log()
@@ -1088,47 +1237,66 @@ From: {self.from_email}
                     if result.email_original.lower().strip() != result.email_sanitized:
                         sanitized_count += 1
 
-                # Update counters
+                # Collect status update for batch write
                 if result.status == SendStatus.SENT:
                     sent_count += 1
+                    pending_updates.append({
+                        'lead_id': lead.lead_id,
+                        'status': 'SENT',
+                        'sent_at': datetime.utcnow().isoformat(),
+                        'resend_id': result.email_id or '',
+                    })
                 elif result.status == SendStatus.BLOCKED:
                     blocked_count += 1
-                    # Revert to original status if blocked (not invalid)
-                    if lead.status in ("NEW", "APPROVED"):
-                        self.sheets.update_lead_status(
-                            lead.lead_id,
-                            lead.status,
-                            eligibility_reason=log.reason
-                        )
+                    # Revert to original status
+                    pending_updates.append({
+                        'lead_id': lead.lead_id,
+                        'status': lead.status,  # Keep original
+                        'eligibility_reason': log.reason,
+                    })
                 elif result.status == SendStatus.INVALID:
                     invalid_count += 1
-                    # Already marked as INVALID in send_email
+                    pending_updates.append({
+                        'lead_id': lead.lead_id,
+                        'status': 'INVALID',
+                        'eligibility_reason': log.reason,
+                    })
                 elif result.status == SendStatus.FAILED:
                     failed_count += 1
-                    # Revert to original status so lead isn't lost
-                    self.sheets.update_lead_status(
-                        lead.lead_id,
-                        lead.status,
-                        eligibility_reason=f"Send failed: {result.error}"
-                    )
+                    pending_updates.append({
+                        'lead_id': lead.lead_id,
+                        'status': lead.status,  # Keep original so lead isn't lost
+                        'eligibility_reason': f"Send failed: {result.error}",
+                    })
+                elif result.status == SendStatus.SKIPPED:
+                    skipped_count += 1
+                    # No update needed for skipped
 
-                # Rate limiting for ALL operations (sheet writes happen for every lead)
-                # Google Sheets quota is 60 writes/minute, each lead can have 2-3 writes
-                # So we limit to ~20 leads/minute = 3 seconds between leads minimum
-                min_delay = 1.5  # Base delay for sheet write rate limiting
+                # Rate limiting for email deliverability only (no sheet writes in loop)
                 if result.status == SendStatus.SENT:
-                    # Sent emails get extra delay for email deliverability
-                    time.sleep(max(delay_between_sends, min_delay))
-                else:
-                    # Non-sent leads still need delay for sheet rate limiting
-                    time.sleep(min_delay)
+                    time.sleep(delay_between_sends)
 
-                # Re-check safety thresholds periodically (every 10 emails)
-                if i % 10 == 0 and send_enabled and not effective_dry_run:
-                    is_safe, pause_reason = self.check_safety_thresholds()
-                    if not is_safe:
-                        self.pause_sending(pause_reason)
-                        break
+            # BATCH UPDATE: Write all status changes in ONE API call
+            if pending_updates:
+                print(f"\n  Batch updating {len(pending_updates)} leads (single API call)...")
+                try:
+                    updated = self.sheets.batch_update_leads(pending_updates)
+                    print(f"  Successfully updated {updated} leads")
+                except Exception as batch_err:
+                    print(f"  WARNING: Batch update failed: {batch_err}")
+                    print(f"  Will retry with delays...")
+                    # Fallback: individual updates with long delays
+                    for j, update in enumerate(pending_updates):
+                        try:
+                            self.sheets.update_lead_status(
+                                update['lead_id'],
+                                update['status'],
+                                **{k: v for k, v in update.items() if k not in ('lead_id', 'status')}
+                            )
+                            if j < len(pending_updates) - 1:
+                                time.sleep(2)  # 2 second delay between writes
+                        except Exception as inner_err:
+                            print(f"  Failed to update {update['lead_id']}: {inner_err}")
 
         except Exception as e:
             # Unexpected error in sender loop - alert and re-raise
