@@ -105,6 +105,14 @@ export default function LoginPage() {
               className="w-full px-4 py-4 bg-yapmate-black border-2 border-yapmate-slate-700 text-yapmate-white font-mono focus:outline-none focus:border-yapmate-amber transition-colors duration-snap"
               placeholder="••••••••"
             />
+            <div className="mt-2 text-right">
+              <Link
+                href="/forgot-password"
+                className="text-yapmate-slate-300 hover:text-yapmate-amber text-xs font-mono transition-colors duration-snap"
+              >
+                Forgot password?
+              </Link>
+            </div>
           </div>
 
           <button
