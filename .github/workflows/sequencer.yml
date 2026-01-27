@@ -34,7 +34,7 @@ on:
         type: boolean
 
 concurrency:
-  group: sequencer
+  group: yapmate-sheets  # Shared with email_sender to prevent simultaneous Sheets writes
   cancel-in-progress: false
 
 env:

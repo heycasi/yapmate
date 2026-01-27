@@ -46,7 +46,7 @@ on:
         type: number
 
 concurrency:
-  group: email-sender
+  group: yapmate-sheets  # Shared with sequencer to prevent simultaneous Sheets writes
   cancel-in-progress: false
 
 env:

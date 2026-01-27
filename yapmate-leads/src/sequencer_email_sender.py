@@ -1112,9 +1112,16 @@ From: {self.from_email}
                         eligibility_reason=f"Send failed: {result.error}"
                     )
 
-                # Rate limiting (only if actually sending)
+                # Rate limiting for ALL operations (sheet writes happen for every lead)
+                # Google Sheets quota is 60 writes/minute, each lead can have 2-3 writes
+                # So we limit to ~20 leads/minute = 3 seconds between leads minimum
+                min_delay = 1.5  # Base delay for sheet write rate limiting
                 if result.status == SendStatus.SENT:
-                    time.sleep(delay_between_sends)
+                    # Sent emails get extra delay for email deliverability
+                    time.sleep(max(delay_between_sends, min_delay))
+                else:
+                    # Non-sent leads still need delay for sheet rate limiting
+                    time.sleep(min_delay)
 
                 # Re-check safety thresholds periodically (every 10 emails)
                 if i % 10 == 0 and send_enabled and not effective_dry_run:
