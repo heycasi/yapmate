@@ -1,32 +1,35 @@
 name: Email Sender
 
-# Automated email sending - runs 5x/day on weekdays to drain eligible leads
+# Automated email sending - runs 4x/day on weekdays to drain eligible leads
 #
-# Schedule: 09:00, 11:30, 14:00, 16:30, 19:00 UK time (weekdays only)
+# Schedule: 09:30, 13:00, 17:00, 20:30 UK time (weekdays only)
 # Purpose: Send emails to approved leads from the sheet
-# Target: 50-100 emails/day (20 per run x 5 runs)
+# Target: 50-100 emails/day (25 per run x 4 runs)
+#
+# TIMING: Email Sender runs ~1 hour AFTER Sequencer (discovery)
+# - Sequencer: 08:30, 12:00, 16:00, 19:30 (runs first)
+# - Email Sender: 09:30, 13:00, 17:00, 20:30 (runs after)
 #
 # Guardrails:
 # - DAILY_LIMIT: 100 emails/day hard cap
-# - SEND_LIMIT_PER_RUN: 20 emails/run
+# - SEND_LIMIT_PER_RUN: 25 emails/run
 # - Warmup controls: gradual ramp-up
 # - Time windows: only UK business hours
 #
 # DST-robust scheduling:
-# - Summer (BST): 08:00, 10:30, 13:00, 15:30, 18:00 UTC
-# - Winter (GMT): 09:00, 11:30, 14:00, 16:30, 19:00 UTC
+# - Summer (BST): 08:30, 12:00, 16:00, 19:30 UTC
+# - Winter (GMT): 09:30, 13:00, 17:00, 20:30 UTC
 # Combined with time guard to handle DST transitions
 
 on:
   schedule:
     # Cover both GMT and BST possibilities for target UK times
-    # 09:00 UK = 08:00 or 09:00 UTC
-    # 11:30 UK = 10:30 or 11:30 UTC
-    # 14:00 UK = 13:00 or 14:00 UTC
-    # 16:30 UK = 15:30 or 16:30 UTC
-    # 19:00 UK = 18:00 or 19:00 UTC
-    - cron: '0 8,9,13,14,18,19 * * 1-5'    # :00 times (weekdays)
-    - cron: '30 10,11,15,16 * * 1-5'       # :30 times (weekdays)
+    # 09:30 UK = 08:30 or 09:30 UTC
+    # 13:00 UK = 12:00 or 13:00 UTC
+    # 17:00 UK = 16:00 or 17:00 UTC
+    # 20:30 UK = 19:30 or 20:30 UTC
+    - cron: '30 8,9,19,20 * * 1-5'         # :30 times (weekdays)
+    - cron: '0 12,13,16,17 * * 1-5'        # :00 times (weekdays)
   workflow_dispatch:
     inputs:
       force_run:
@@ -40,9 +43,9 @@ on:
         default: 'false'
         type: boolean
       send_limit:
-        description: 'Maximum emails to send this run (default: 20)'
+        description: 'Maximum emails to send this run (default: 25)'
         required: false
-        default: '20'
+        default: '25'
         type: number
 
 concurrency:
@@ -51,8 +54,8 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.11'
-  # Target 50-100/day: 20 per run x 5 runs = 100 max
-  SEND_LIMIT_PER_RUN: '20'
+  # Target 50-100/day: 25 per run x 4 runs = 100 max
+  SEND_LIMIT_PER_RUN: '25'
   DAILY_LIMIT: '100'
   DELAY_BETWEEN_SENDS: '0.6'
 
@@ -113,14 +116,13 @@ jobs:
           uk_hour = now_uk.hour
           uk_minute = now_uk.minute
 
-          # Target UK times: 09:00, 11:30, 14:00, 16:30, 19:00
+          # Target UK times: 09:30, 13:00, 17:00, 20:30
           # Allow 15-minute window around each target
           allowed_windows = [
-              (8, 45, 9, 15),   # 09:00 window
-              (11, 15, 11, 45), # 11:30 window
-              (13, 45, 14, 15), # 14:00 window
-              (16, 15, 16, 45), # 16:30 window
-              (18, 45, 19, 15), # 19:00 window
+              (9, 15, 9, 45),   # 09:30 window
+              (12, 45, 13, 15), # 13:00 window
+              (16, 45, 17, 15), # 17:00 window
+              (20, 15, 20, 45), # 20:30 window
           ]
 
           def in_window(hour, minute, windows):
@@ -133,7 +135,7 @@ jobs:
               return False
 
           print(f"Current UK time: {now_uk.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-          print(f"Target windows: 09:00, 11:30, 14:00, 16:30, 19:00 (±15 min)")
+          print(f"Target windows: 09:30, 13:00, 17:00, 20:30 (±15 min)")
 
           if in_window(uk_hour, uk_minute, allowed_windows):
               print(f"PASS: UK time {uk_hour}:{uk_minute:02d} is in allowed window")

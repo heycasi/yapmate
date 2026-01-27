@@ -2,13 +2,17 @@ name: Lead Sequencer
 
 # Lead discovery - runs 4x/day on weekdays to fill the sheet
 #
-# Schedule: 08:30, 12:00, 16:30, 20:30 UK time (weekdays only)
+# Schedule: 08:30, 12:00, 16:00, 19:30 UK time (weekdays only)
 # Purpose: Scrape leads, discover emails, enrich, auto-approve
 # Does NOT send emails - that's handled by email_sender.yml
 #
+# TIMING: Sequencer runs FIRST, Email Sender runs ~1 hour LATER
+# - Sequencer: 08:30, 12:00, 16:00, 19:30
+# - Email Sender: 09:30, 13:00, 17:00, 20:30
+#
 # DST-robust scheduling:
-# - Summer (BST): 07:30, 11:00, 15:30, 19:30 UTC
-# - Winter (GMT): 08:30, 12:00, 16:30, 20:30 UTC
+# - Summer (BST): 07:30, 11:00, 15:00, 18:30 UTC
+# - Winter (GMT): 08:30, 12:00, 16:00, 19:30 UTC
 # Combined with time guard to handle DST transitions
 
 on:
@@ -16,10 +20,10 @@ on:
     # Cover both GMT and BST possibilities for target UK times
     # 08:30 UK = 07:30 or 08:30 UTC
     # 12:00 UK = 11:00 or 12:00 UTC
-    # 16:30 UK = 15:30 or 16:30 UTC
-    # 20:30 UK = 19:30 or 20:30 UTC
-    - cron: '30 7,8,15,16,19,20 * * 1-5'   # :30 times (weekdays)
-    - cron: '0 11,12 * * 1-5'              # :00 times (weekdays)
+    # 16:00 UK = 15:00 or 16:00 UTC
+    # 19:30 UK = 18:30 or 19:30 UTC
+    - cron: '30 7,8,18,19 * * 1-5'         # :30 times (weekdays)
+    - cron: '0 11,12,15,16 * * 1-5'        # :00 times (weekdays)
   workflow_dispatch:
     inputs:
       skip_time_guard:
@@ -95,13 +99,13 @@ jobs:
           uk_hour = now_uk.hour
           uk_minute = now_uk.minute
 
-          # Target UK times: 08:30, 12:00, 16:30, 20:30
+          # Target UK times: 08:30, 12:00, 16:00, 19:30
           # Allow 15-minute window around each target
           allowed_windows = [
               (8, 15, 8, 45),   # 08:30 window
               (11, 45, 12, 15), # 12:00 window
-              (16, 15, 16, 45), # 16:30 window
-              (20, 15, 20, 45), # 20:30 window
+              (15, 45, 16, 15), # 16:00 window
+              (19, 15, 19, 45), # 19:30 window
           ]
 
           def in_window(hour, minute, windows):
@@ -114,7 +118,7 @@ jobs:
               return False
 
           print(f"Current UK time: {now_uk.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-          print(f"Target windows: 08:30, 12:00, 16:30, 20:30 (±15 min)")
+          print(f"Target windows: 08:30, 12:00, 16:00, 19:30 (±15 min)")
 
           if in_window(uk_hour, uk_minute, allowed_windows):
               print(f"PASS: UK time {uk_hour}:{uk_minute:02d} is in allowed window")
