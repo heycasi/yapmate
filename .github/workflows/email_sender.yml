@@ -214,19 +214,25 @@ jobs:
           echo ""
           echo "--------------------------------------------------------"
 
+          # CRITICAL: Disable set -e so we can capture the exit code
+          # GitHub Actions runs bash with -e by default, which exits immediately on non-zero
+          set +e
           $CMD
           EXIT_CODE=$?
+          set -e
 
           echo "--------------------------------------------------------"
+          echo "Python exit code: $EXIT_CODE"
           echo ""
 
           if [ $EXIT_CODE -eq 0 ]; then
             echo "COMPLETED SUCCESSFULLY"
+            echo "========================================================"
           else
             echo "FAILED with exit code: $EXIT_CODE"
+            echo "========================================================"
             exit $EXIT_CODE
           fi
-          echo "========================================================"
 
       - name: Log skip
         if: steps.time_guard.outputs.skipped == 'true'

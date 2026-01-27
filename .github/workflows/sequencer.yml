@@ -200,19 +200,26 @@ jobs:
           echo ""
           echo "--------------------------------------------------------"
 
+          # CRITICAL: Disable set -e so we can capture the exit code
+          # GitHub Actions runs bash with -e by default, which exits immediately on non-zero
+          set +e
           python scripts/run_pipeline.py --discovery-only --timeout 2400
           EXIT_CODE=$?
+          set -e
 
           echo "--------------------------------------------------------"
+          echo "Python exit code: $EXIT_CODE"
           echo ""
 
           if [ $EXIT_CODE -eq 0 ]; then
             echo "DISCOVERY COMPLETED SUCCESSFULLY"
           elif [ $EXIT_CODE -eq 2 ]; then
             echo "DISCOVERY COMPLETED (targets not met, but no errors)"
+            echo "========================================================"
             exit 0  # Exit code 2 is not a failure, explicitly exit 0
           else
             echo "DISCOVERY FAILED with exit code: $EXIT_CODE"
+            echo "========================================================"
             exit $EXIT_CODE
           fi
           echo "========================================================"
