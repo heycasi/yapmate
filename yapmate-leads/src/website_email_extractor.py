@@ -16,6 +16,7 @@ Features:
 - Domain validation (email domain must match website)
 - Prioritizes personal emails over role-based emails
 - Social media fallback (Facebook/Instagram)
+- Hunter.io API fallback for professional email discovery
 - Per-domain caching and throttling
 - Respects robots.txt
 - Timeout and page limits for safety
@@ -56,6 +57,7 @@ class BatchDiscoveryStats:
     leads_with_website_email: int = 0
     leads_with_facebook_email: int = 0
     leads_with_instagram_email: int = 0
+    leads_with_hunter_email: int = 0
     leads_with_no_email: int = 0
     total_pages_crawled: int = 0
     total_domains_scanned: int = 0
@@ -68,7 +70,8 @@ class BatchDiscoveryStats:
         if self.total_leads == 0:
             return 0.0
         with_email = (self.leads_with_maps_email + self.leads_with_website_email +
-                      self.leads_with_facebook_email + self.leads_with_instagram_email)
+                      self.leads_with_facebook_email + self.leads_with_instagram_email +
+                      self.leads_with_hunter_email)
         return (with_email / self.total_leads) * 100
 
     @property
@@ -79,6 +82,7 @@ class BatchDiscoveryStats:
             "website": self.leads_with_website_email,
             "facebook": self.leads_with_facebook_email,
             "instagram": self.leads_with_instagram_email,
+            "hunter": self.leads_with_hunter_email,
             "none": self.leads_with_no_email,
         }
 
@@ -185,6 +189,7 @@ class WebsiteEmailExtractor:
         enable_social_fallback: bool = True,
         enable_json_ld: bool = True,
         enable_obfuscation: bool = True,
+        enable_hunter_fallback: bool = True,
     ):
         """
         Initialize the extractor.
@@ -197,6 +202,7 @@ class WebsiteEmailExtractor:
             enable_social_fallback: Try Facebook/Instagram if no website
             enable_json_ld: Extract emails from JSON-LD and microdata
             enable_obfuscation: Handle email obfuscation patterns
+            enable_hunter_fallback: Try Hunter.io API if website scraping fails
         """
         self.timeout = timeout
         self.max_pages_per_site = max_pages_per_site
@@ -205,6 +211,7 @@ class WebsiteEmailExtractor:
         self.enable_social_fallback = enable_social_fallback
         self.enable_json_ld = enable_json_ld
         self.enable_obfuscation = enable_obfuscation
+        self.enable_hunter_fallback = enable_hunter_fallback
 
         # Session for connection pooling
         self.session = requests.Session()
@@ -226,6 +233,17 @@ class WebsiteEmailExtractor:
 
         # Domain throttle timestamps
         self._domain_last_request: Dict[str, float] = {}
+
+        # Initialize Hunter.io client (if API key is set)
+        self._hunter_client = None
+        if self.enable_hunter_fallback:
+            try:
+                from src.hunter_email_finder import HunterEmailFinder
+                self._hunter_client = HunterEmailFinder()
+                if not self._hunter_client.is_configured:
+                    self._hunter_client = None
+            except ImportError:
+                pass
 
     # =========================================================================
     # ROBOTS.TXT
@@ -701,6 +719,32 @@ class WebsiteEmailExtractor:
         return any(email_lower.startswith(pattern) for pattern in self.INVALID_PATTERNS)
 
     # =========================================================================
+    # HUNTER.IO FALLBACK
+    # =========================================================================
+
+    def _try_hunter_fallback(self, domain: str) -> Optional[str]:
+        """
+        Try to find email using Hunter.io API as a fallback.
+
+        Args:
+            domain: Business domain to search
+
+        Returns:
+            Email address if found, None otherwise
+        """
+        if not self._hunter_client:
+            return None
+
+        try:
+            result = self._hunter_client.find_email_for_domain(domain)
+            if result.email and not result.error:
+                return result.email
+        except Exception:
+            pass
+
+        return None
+
+    # =========================================================================
     # EMAIL EXTRACTION
     # =========================================================================
 
@@ -903,6 +947,14 @@ class WebsiteEmailExtractor:
             result.discovered_email = prioritized[0]
             result.email_source = "website"
 
+        # Fallback to Hunter.io if no email found and API is configured
+        if not result.discovered_email and self.enable_hunter_fallback:
+            hunter_result = self._try_hunter_fallback(website_domain)
+            if hunter_result:
+                result.discovered_email = hunter_result
+                result.email_source = "hunter"
+                result.all_emails_found.append(hunter_result)
+
         # Cache result for this domain
         self._cache_domain_result(website_domain, result)
 
@@ -982,6 +1034,8 @@ class WebsiteEmailExtractor:
                     stats.leads_with_facebook_email += 1
                 elif result.email_source == "instagram":
                     stats.leads_with_instagram_email += 1
+                elif result.email_source == "hunter":
+                    stats.leads_with_hunter_email += 1
 
                 # Update lead with discovered email
                 if hasattr(lead, email_field):
