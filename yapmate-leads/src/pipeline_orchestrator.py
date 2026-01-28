@@ -417,9 +417,9 @@ class PipelineOrchestrator:
 
                 self.result.discovery_time = time.time() - discovery_start
 
-                # Check if targets met
+                # Check if targets met (need BOTH minimum emails AND minimum rate)
                 targets_met = (
-                    self.result.total_emails >= self.config.target_emails_min or
+                    self.result.total_emails >= self.config.target_emails_min and
                     self.result.email_rate >= self.config.target_email_rate_min
                 )
 
