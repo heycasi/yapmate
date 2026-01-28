@@ -475,6 +475,57 @@ From: {self.from_email}
 
         return (True, "SEND_ENABLED is true")
 
+    def _get_emails_sent_today(self) -> set:
+        """
+        Get set of email addresses already sent to today.
+
+        This prevents sending duplicate emails to the same address
+        across multiple runs in the same day.
+
+        Returns:
+            Set of lowercase email addresses
+        """
+        try:
+            # Get all leads with status SENT and sent_at today
+            all_rows = self.sheets.leads_sheet.get_all_values()
+            if not all_rows:
+                return set()
+
+            headers = all_rows[0]
+            col_status = headers.index("status") if "status" in headers else None
+            col_email = headers.index("email") if "email" in headers else None
+            col_sent_at = headers.index("sent_at") if "sent_at" in headers else None
+
+            if col_status is None or col_email is None:
+                return set()
+
+            today = datetime.utcnow().strftime("%Y-%m-%d")
+            emails_sent = set()
+
+            for row in all_rows[1:]:
+                if len(row) <= max(col_status, col_email):
+                    continue
+
+                status = str(row[col_status]).strip().upper()
+                if status != "SENT":
+                    continue
+
+                # Check if sent today
+                if col_sent_at and len(row) > col_sent_at:
+                    sent_at = str(row[col_sent_at]).strip()
+                    if sent_at and not sent_at.startswith(today):
+                        continue
+
+                email = str(row[col_email]).strip().lower()
+                if email:
+                    emails_sent.add(email)
+
+            return emails_sent
+
+        except Exception as e:
+            print(f"  Warning: Could not get emails sent today: {e}")
+            return set()
+
     def sanitize_and_validate_email(self, lead: EnhancedLead) -> tuple[SanitizationResult, StructuredLog]:
         """
         Sanitize and validate lead email.
@@ -1210,9 +1261,18 @@ From: {self.from_email}
         invalid_count = 0
         sanitized_count = 0
         skipped_count = 0
+        duplicate_count = 0
 
         # Collect status updates for batch write at end
         pending_updates = []
+
+        # CRITICAL: Track emails already sent in this batch to prevent duplicates
+        # This catches cases where multiple leads have the same email address
+        emails_sent_this_batch = set()
+
+        # Also get emails already sent today (from previous runs)
+        emails_sent_today = self._get_emails_sent_today()
+        print(f"\n  Emails already sent today: {len(emails_sent_today)}")
 
         print(f"\n" + "=" * 70)
         print("PROCESSING LEADS")
@@ -1225,6 +1285,31 @@ From: {self.from_email}
                 print(f"  Email: {lead.email}")
                 print(f"  Status: {lead.status}")
                 print("-" * 40)
+
+                # DUPLICATE CHECK: Skip if we've already sent to this email
+                email_lower = (lead.email or "").lower().strip()
+                if email_lower in emails_sent_this_batch:
+                    print(f"  ⚠️  SKIPPED: Duplicate email (already sent in this batch)")
+                    duplicate_count += 1
+                    skipped_count += 1
+                    # Mark as skipped so it's not picked up again
+                    pending_updates.append({
+                        'lead_id': lead.lead_id,
+                        'status': 'SKIPPED',
+                        'eligibility_reason': 'Duplicate email - already sent to this address',
+                    })
+                    continue
+
+                if email_lower in emails_sent_today:
+                    print(f"  ⚠️  SKIPPED: Duplicate email (already sent today)")
+                    duplicate_count += 1
+                    skipped_count += 1
+                    pending_updates.append({
+                        'lead_id': lead.lead_id,
+                        'status': 'SKIPPED',
+                        'eligibility_reason': 'Duplicate email - already sent today',
+                    })
+                    continue
 
                 # Step 1: Send the email (NO sheet writes during this loop)
                 result, log = self.send_email_no_sheet_write(lead, dry_run=effective_dry_run)
@@ -1240,6 +1325,8 @@ From: {self.from_email}
                 # Collect status update for batch write
                 if result.status == SendStatus.SENT:
                     sent_count += 1
+                    # Track this email to prevent duplicates within the batch
+                    emails_sent_this_batch.add(email_lower)
                     pending_updates.append({
                         'lead_id': lead.lead_id,
                         'status': 'SENT',
@@ -1318,6 +1405,8 @@ From: {self.from_email}
         print(f"  INVALID:   {invalid_count}")
         print(f"  FAILED:    {failed_count}")
         print(f"  SKIPPED:   {skipped_count}")
+        if duplicate_count > 0:
+            print(f"  DUPLICATES:{duplicate_count} (same email, skipped)")
         print(f"  Sanitized: {sanitized_count}")
         print("=" * 70)
 
