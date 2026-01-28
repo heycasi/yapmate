@@ -378,7 +378,10 @@ class PipelineOrchestrator:
 
     def run_discovery(self) -> Tuple[List[EnhancedLead], bool]:
         """
-        Run yield-target discovery.
+        Run yield-target discovery with multi-iteration support.
+
+        Loops through multiple city+trade tasks until targets are met,
+        max_iterations reached, or max_runtime exceeded.
 
         Returns:
             Tuple of (leads, success)
@@ -388,53 +391,77 @@ class PipelineOrchestrator:
 
         self.heartbeat.start("Running discovery")
 
+        # Accumulate results across iterations
+        total_leads = 0
+        total_emails = 0
+        total_enriched = 0
+        total_eligible = 0
+
         try:
-            # Get next task from queue
             session = self._task_runner.determine_session(manual=True)
-            task = self._task_runner.get_next_task(session)
 
-            if not task:
-                print("[DISCOVERY] No tasks in queue", flush=True)
-                self.result.stopped_reason = "no_tasks"
-                return [], True  # Not a failure, just nothing to do
+            for iteration in range(1, self.config.max_iterations + 1):
+                elapsed = time.time() - discovery_start
+                if elapsed >= self.config.max_runtime_seconds:
+                    print(f"[DISCOVERY] Max runtime ({self.config.max_runtime_seconds}s) reached after {iteration - 1} iterations", flush=True)
+                    break
 
-            print(f"[DISCOVERY] Task: {task.trade} in {task.city}", flush=True)
-            self.heartbeat.update_operation(f"Scraping {task.trade} in {task.city}")
+                print(f"\n{'─' * 50}", flush=True)
+                print(f"[DISCOVERY] Iteration {iteration}/{self.config.max_iterations}", flush=True)
+                print(f"  Elapsed: {elapsed:.0f}s / {self.config.max_runtime_seconds}s", flush=True)
+                print(f"  Running totals: {total_emails} emails from {total_leads} leads", flush=True)
+                print(f"{'─' * 50}", flush=True)
 
-            # Run the task through TaskRunner (which has yield target integration)
-            task_result = self._task_runner.run(manual=True)
+                # Get next task from queue
+                task = self._task_runner.get_next_task(session)
+                if not task:
+                    print("[DISCOVERY] No more tasks in queue", flush=True)
+                    self.result.stopped_reason = "no_tasks"
+                    break
 
-            if task_result:
-                # Extract leads from task result
-                leads = self.sheets.get_leads_by_status("NEW", limit=1000)
+                print(f"[DISCOVERY] Task: {task.trade} in {task.city}", flush=True)
+                self.heartbeat.update_operation(f"Scraping {task.trade} in {task.city} (iter {iteration})")
 
-                self.result.iterations_run = 1  # TaskRunner runs single iteration
-                self.result.total_leads = task_result.leads_found
-                self.result.total_emails = task_result.leads_found - (task_result.leads_found - task_result.leads_eligible)
-                self.result.email_rate = self.result.total_emails / max(1, self.result.total_leads)
-                self.result.send_eligible = task_result.leads_eligible
-                self.result.leads_enriched = task_result.leads_enriched
+                # Run the task
+                task_result = self._task_runner.run_task(task)
 
-                self.result.discovery_time = time.time() - discovery_start
+                if task_result:
+                    total_leads += task_result.leads_found
+                    total_enriched += task_result.leads_enriched
+                    total_eligible += task_result.leads_eligible
+                    # leads_eligible is the count with emails
+                    total_emails += task_result.leads_eligible
 
-                # Check if targets met (need BOTH minimum emails AND minimum rate)
-                targets_met = (
-                    self.result.total_emails >= self.config.target_emails_min and
-                    self.result.email_rate >= self.config.target_email_rate_min
-                )
+                    self.result.iterations_run = iteration
+                    self.result.total_leads = total_leads
+                    self.result.total_emails = total_emails
+                    self.result.email_rate = total_emails / max(1, total_leads)
+                    self.result.send_eligible = total_eligible
+                    self.result.leads_enriched = total_enriched
 
-                if targets_met:
-                    self.result.stopped_reason = "target_met"
-                    print(f"[DISCOVERY] Targets met: {self.result.total_emails} emails, {self.result.email_rate:.1%} rate", flush=True)
+                    print(f"[DISCOVERY] After iteration {iteration}: {total_emails} emails, {self.result.email_rate:.1%} rate", flush=True)
+
+                    # Check if targets met
+                    targets_met = (
+                        self.result.total_emails >= self.config.target_emails_min and
+                        self.result.email_rate >= self.config.target_email_rate_min
+                    )
+
+                    if targets_met:
+                        self.result.stopped_reason = "target_met"
+                        print(f"[DISCOVERY] Targets met: {total_emails} emails, {self.result.email_rate:.1%} rate", flush=True)
+                        break
                 else:
-                    self.result.stopped_reason = "targets_not_met"
-                    print(f"[DISCOVERY] Targets NOT met: {self.result.total_emails} emails, {self.result.email_rate:.1%} rate", flush=True)
+                    print(f"[DISCOVERY] Iteration {iteration} returned no result, continuing...", flush=True)
 
-                return leads, True
-            else:
-                print("[DISCOVERY] No task result (no pending tasks or queue empty)", flush=True)
-                self.result.stopped_reason = "no_tasks"
-                return [], True
+            # Final summary
+            self.result.discovery_time = time.time() - discovery_start
+            if not self.result.stopped_reason or self.result.stopped_reason not in ("target_met", "no_tasks"):
+                self.result.stopped_reason = "targets_not_met"
+                print(f"[DISCOVERY] Targets NOT met after {self.result.iterations_run} iterations: {total_emails} emails, {self.result.email_rate:.1%} rate", flush=True)
+
+            leads = self.sheets.get_leads_by_status("NEW", limit=1000)
+            return leads, True
 
         except OpenAIKeyError as e:
             self.result.error_message = f"OpenAI authentication failed: {e}"
