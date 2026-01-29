@@ -198,19 +198,60 @@ class SequencerEmailSender:
         """
         Get remaining emails that can be sent today.
 
+        Counts actual SENT leads with today's date from the sheet
+        for accurate tracking (not relying on a state counter).
+
         Returns:
             Number of emails remaining in today's quota
         """
-        state = self.sheets.get_runner_state()
         daily_limit = self.calculate_daily_limit()
 
-        # Check if counter is from today
-        today = datetime.now().strftime("%Y-%m-%d")
-        if state.focus_trade_date != today:
-            # Counter is from a different day, reset to full quota
-            return daily_limit
+        # Count actual emails sent today from the leads sheet
+        sent_today = self._count_emails_sent_today()
+        print(f"    Sent today (from sheet): {sent_today}")
 
-        return max(0, daily_limit - state.emails_sent_today)
+        return max(0, daily_limit - sent_today)
+
+    def _count_emails_sent_today(self) -> int:
+        """Count actual SENT leads with today's sent_at date from the sheet."""
+        try:
+            all_rows = self.sheets.get_leads_tab().get_all_values()
+            if not all_rows or len(all_rows) < 2:
+                return 0
+
+            headers = all_rows[0]
+            col_status = headers.index("status") if "status" in headers else None
+            col_sent_at = headers.index("sent_at") if "sent_at" in headers else None
+
+            if col_status is None:
+                return 0
+
+            today = datetime.utcnow().strftime("%Y-%m-%d")
+            count = 0
+
+            for row in all_rows[1:]:
+                if len(row) <= col_status:
+                    continue
+                status = str(row[col_status]).strip().upper()
+                if status != "SENT":
+                    continue
+
+                # Check sent_at date if available
+                if col_sent_at and len(row) > col_sent_at:
+                    sent_at = str(row[col_sent_at]).strip()
+                    if sent_at and sent_at.startswith(today):
+                        count += 1
+                    elif not sent_at:
+                        # No sent_at date, count it conservatively
+                        count += 1
+                else:
+                    # No sent_at column accessible, count it
+                    count += 1
+
+            return count
+        except Exception as e:
+            print(f"    Warning: Could not count sent today: {e}")
+            return 0
 
     def increment_send_counter(self, count: int = 1):
         """
@@ -1159,9 +1200,8 @@ From: {self.from_email}
             daily_limit = self.config.daily_limit
             print(f"    → Warmup BYPASSED - using DAILY_LIMIT: {daily_limit}")
 
-        # Calculate remaining quota
+        # Calculate remaining quota (uses actual sheet count, not state counter)
         remaining_quota = self.get_remaining_daily_quota()
-        print(f"    Sent today: {state.emails_sent_today}")
         print(f"    Remaining quota: {remaining_quota}")
 
         # Get sending limits from config
