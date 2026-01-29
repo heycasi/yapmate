@@ -487,7 +487,7 @@ From: {self.from_email}
         """
         try:
             # Get all leads with status SENT and sent_at today
-            all_rows = self.sheets.leads_sheet.get_all_values()
+            all_rows = self.sheets.get_leads_tab().get_all_values()
             if not all_rows:
                 return set()
 

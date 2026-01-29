@@ -622,55 +622,36 @@ class SequencerSheetsManager:
         if len(all_rows) < 2:
             return []
 
-        headers = all_rows[0]
-        col_status = headers.index("status")
-        col_eligible = headers.index("send_eligible")
-        col_email = headers.index("email") if "email" in headers else None
-
+        # Use from_sheets_row for robust parsing (handles short rows gracefully)
         leads = []
         for row in all_rows[1:]:
-            if len(row) <= max(col_status, col_eligible):
+            try:
+                lead = EnhancedLead.from_sheets_row(row)
+            except Exception:
                 continue
 
-            # Strict status check (no case-insensitive, exact match)
-            status = str(row[col_status]).strip().upper()
-            
-            # Strict boolean check for send_eligible (no string coercion)
-            eligible_str = str(row[col_eligible]).strip().lower()
-            eligible = eligible_str in ("true", "1", "yes")
-            
-            # Check email exists
-            has_email = False
-            if col_email is not None and len(row) > col_email:
-                email = str(row[col_email]).strip()
-                has_email = bool(email and email != "")
+            # Must have email
+            if not lead.email or not lead.email.strip():
+                continue
 
-            # Eligibility: status must be NEW or APPROVED, email must exist
-            # send_eligible can be True OR computed as eligible if status=APPROVED and email valid
-            is_status_eligible = status in ("NEW", "APPROVED")
-            computed_eligible = False
-            
-            # Computed eligibility fallback: if status=APPROVED and email valid, treat as eligible
-            # even if send_eligible column is False/empty
-            if status == "APPROVED" and has_email:
-                # Sanitize email to check validity
-                from src.email_sanitizer import sanitize_email
-                sanitization = sanitize_email(email)
-                if sanitization.valid:
-                    computed_eligible = True
-            
-            # Lead is eligible if: (send_eligible=True OR computed_eligible=True) AND status eligible AND has email
-            if (eligible or computed_eligible) and is_status_eligible and has_email:
-                try:
-                    lead = EnhancedLead.from_sheets_row(row)
-                    # Override send_eligible if computed eligibility says it should be True
-                    if computed_eligible and not lead.send_eligible:
+            # Must be NEW or APPROVED (not SENT, FAILED, etc.)
+            if lead.status not in ("NEW", "APPROVED"):
+                continue
+
+            # Must be send-eligible OR have APPROVED status with valid email
+            if not lead.send_eligible:
+                # Fallback: APPROVED leads with valid email are eligible
+                if lead.status == "APPROVED":
+                    from src.email_sanitizer import sanitize_email
+                    sanitization = sanitize_email(lead.email)
+                    if sanitization.valid:
                         lead.send_eligible = True
-                    # Double-check eligibility in the parsed object
-                    if lead.send_eligible and lead.status in ("NEW", "APPROVED") and lead.email:
-                        leads.append(lead)
-                except Exception as e:
-                    print(f"  Warning: Could not parse lead row: {e}")
+                    else:
+                        continue
+                else:
+                    continue
+
+            leads.append(lead)
 
             if len(leads) >= limit:
                 break
