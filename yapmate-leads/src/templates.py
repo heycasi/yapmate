@@ -6,7 +6,7 @@ import random
 # Constants
 # Use yapmate.co.uk/app redirect for better deliverability (links match sending domain)
 # This redirects to: https://apps.apple.com/gb/app/yapmate/id6756750891
-APP_STORE_URL = "https://yapmate.co.uk/app"
+APP_STORE_URL = "https://www.yapmate.co.uk/app"
 UNSUBSCRIBE_URL = "https://www.yapmate.co.uk/unsubscribe"
 LOGO_URL = "https://www.yapmate.co.uk/email/yapmate-logo.png"
 APPSTORE_BADGE_URL = "https://www.yapmate.co.uk/email/appstore-badge.png"
