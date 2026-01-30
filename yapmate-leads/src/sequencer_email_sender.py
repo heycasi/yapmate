@@ -236,17 +236,11 @@ class SequencerEmailSender:
                 if status != "SENT":
                     continue
 
-                # Check sent_at date if available
-                if col_sent_at and len(row) > col_sent_at:
+                # Only count if sent_at matches today's date
+                if col_sent_at is not None and len(row) > col_sent_at:
                     sent_at = str(row[col_sent_at]).strip()
                     if sent_at and sent_at.startswith(today):
                         count += 1
-                    elif not sent_at:
-                        # No sent_at date, count it conservatively
-                        count += 1
-                else:
-                    # No sent_at column accessible, count it
-                    count += 1
 
             return count
         except Exception as e:
