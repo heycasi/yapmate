@@ -20,7 +20,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'YapMate',
-  description: 'Rugged voice invoicing for trades.',
+  description: 'Talk the job. Invoice done. Voice invoicing for UK trades.',
   appleWebApp: {
     title: 'YapMate',
     statusBarStyle: 'black-translucent',

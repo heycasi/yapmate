@@ -66,7 +66,7 @@ export default function LoginPage() {
             YapMate Login
           </h1>
           <p className="text-yapmate-slate-300 text-sm">
-            Industrial invoicing for UK tradies
+            Voice invoicing for UK trades
           </p>
         </div>
 

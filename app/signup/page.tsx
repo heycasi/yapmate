@@ -142,7 +142,7 @@ export default function SignupPage() {
             YapMate Signup
           </h1>
           <p className="text-yapmate-slate-300 text-sm">
-            Industrial invoicing for UK tradies
+            Voice invoicing for UK trades
           </p>
         </div>
 

@@ -97,14 +97,14 @@ export default function WaitlistPage() {
 
           {/* Headline */}
           <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6">
-            Stop Typing Invoices.
+            Talk the Job.
             <br />
-            <span className="text-[#ffc422]">Start Yapping Them.</span>
+            <span className="text-[#ffc422]">Invoice Done.</span>
           </h1>
 
           {/* Subheadline */}
           <p className="text-xl md:text-2xl text-[#F2F2F2] mb-8 max-w-2xl leading-relaxed">
-            Built for UK tradies who hate paperwork. Speak into your phone → get a clean invoice in seconds.
+            Speak your job details into your phone. YapMate turns it into a proper invoice — fast, simple, and ready to send.
           </p>
 
           {/* Email Form */}
@@ -139,7 +139,7 @@ export default function WaitlistPage() {
 
           {/* Credibility Line */}
           <p className="text-sm text-[#9CA3AF]">
-            Made for sparkies, plumbers, joiners, carpet fitters and every tradie who grafts.
+            Voice invoicing for every trade. No typing. No forms.
           </p>
         </div>
       </section>
@@ -183,7 +183,7 @@ export default function WaitlistPage() {
       {/* Features Grid Section */}
       <section className="px-6 py-16 max-w-4xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
-          Built for <span className="text-[#ffc422]">Real Tradies</span>
+          Built for <span className="text-[#ffc422]">Real Trades</span>
         </h2>
 
         <div className="grid md:grid-cols-2 gap-6">
@@ -211,7 +211,7 @@ export default function WaitlistPage() {
           <div className="bg-[#1A1A1A] p-6 rounded-xl border border-gray-800 border-l-4 border-l-[#ffc422] hover:border-[#ffc422]/50 transition-colors">
             <h3 className="font-bold text-lg mb-2 text-white">Trade-Specific AI</h3>
             <p className="text-gray-400">
-              Built for plumbers, sparkies, joiners, flooring and more.
+              Works for plumbers, sparkies, joiners, roofers, and every other trade.
             </p>
           </div>
 
@@ -234,7 +234,7 @@ export default function WaitlistPage() {
       {/* Social Proof Section */}
       <section className="px-6 py-16 max-w-4xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
-          What Tradies Are <span className="text-[#ffc422]">Saying</span>
+          What Trades Are <span className="text-[#ffc422]">Saying</span>
         </h2>
 
         <div className="grid md:grid-cols-2 gap-6">
@@ -296,7 +296,7 @@ export default function WaitlistPage() {
 
       {/* Footer */}
       <footer className="px-6 py-8 text-center text-gray-500 text-sm border-t border-gray-900">
-        <p>© {new Date().getFullYear()} YapMate. Built for tradies, by tradies.</p>
+        <p>© {new Date().getFullYear()} YapMate. Voice invoicing for UK trades.</p>
       </footer>
     </main>
   )

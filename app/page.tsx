@@ -55,16 +55,16 @@ export default function HomePage() {
           </h1>
 
           <h2 className="text-3xl md:text-4xl font-bold leading-tight mb-8">
-            Stop Typing Invoices.
+            Talk the Job.
             <br />
-            <span className="text-yapmate-amber">Start Yapping Them.</span>
+            <span className="text-yapmate-amber">Invoice Done.</span>
           </h2>
 
           {/* Subheadline */}
           <p className="text-xl md:text-2xl text-yapmate-gray-lightest mb-12 max-w-2xl leading-relaxed">
-            Voice-powered invoice assistant for UK tradespeople.
+            Speak your job details into your phone.
             <br />
-            Just yap your job details, we&apos;ll handle the rest.
+            YapMate turns it into a proper invoice — fast, simple, and ready to send.
           </p>
 
           {/* CTA Section */}
@@ -90,7 +90,7 @@ export default function HomePage() {
 
           {/* Social Proof / Tagline */}
           <p className="mt-12 text-sm text-yapmate-gray-light">
-            Built for sparkies, plumbers, joiners, and every tradie who grafts
+            Voice invoicing for every trade. No typing. No forms.
           </p>
         </div>
       </section>
@@ -103,7 +103,7 @@ export default function HomePage() {
             <div className="text-4xl mb-4">🎤</div>
             <h3 className="text-xl font-bold mb-2 text-yapmate-amber">Just Speak</h3>
             <p className="text-yapmate-gray-lightest">
-              No typing. No forms. Just say the job and we&apos;ll handle it.
+              No typing. No fiddly fields. Just say the job and it&apos;s done.
             </p>
           </div>
 
@@ -121,7 +121,7 @@ export default function HomePage() {
             <div className="text-4xl mb-4">⚡</div>
             <h3 className="text-xl font-bold mb-2 text-yapmate-amber">UK-Focused</h3>
             <p className="text-yapmate-gray-lightest">
-              CIS deductions, VAT rates, and UK trade slang understood.
+              VAT, CIS, and Reverse Charge handled. Built for how UK trades work.
             </p>
           </div>
         </div>
