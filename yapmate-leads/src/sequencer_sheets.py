@@ -59,7 +59,7 @@ def get_write_stats() -> SheetsWriteStats:
 
 def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 10.0, max_delay: float = 65.0):
     """
-    Decorator to retry operations on Google Sheets rate limit errors (429).
+    Decorator to retry operations on Google Sheets API errors (429 rate limit, 500 internal).
 
     Uses exponential backoff with a minimum delay of base_delay and maximum of max_delay.
     The per-minute quota limit requires waiting ~60s, so max_delay defaults to 65s.
@@ -69,6 +69,8 @@ def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 10.0, max_dela
         base_delay: Initial delay in seconds (10s is safer for rate limits)
         max_delay: Maximum delay per retry (65s to cover per-minute quota reset)
     """
+    RETRYABLE_STATUS_CODES = {429, 500, 503}
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -77,28 +79,24 @@ def retry_on_rate_limit(max_retries: int = 3, base_delay: float = 10.0, max_dela
             for attempt in range(max_retries + 1):
                 try:
                     result = func(*args, **kwargs)
-                    # Track retries in global stats
                     if retry_count > 0:
                         _write_stats.retries += retry_count
                     return result
                 except APIError as e:
-                    # Check if it's a rate limit error (429)
-                    if hasattr(e, 'response') and e.response.status_code == 429:
+                    status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
+                    if status_code in RETRYABLE_STATUS_CODES:
                         last_exception = e
                         retry_count += 1
                         if attempt < max_retries:
-                            # Use exponential backoff but cap at max_delay
-                            # For 429, we often need to wait for the per-minute quota to reset
                             delay = min(base_delay * (2 ** attempt), max_delay)
-                            print(f"  [Sheets] Rate limit hit (429), waiting {delay:.0f}s for quota reset (attempt {attempt + 1}/{max_retries})...")
+                            print(f"  [Sheets] API error ({status_code}), waiting {delay:.0f}s (attempt {attempt + 1}/{max_retries})...")
                             time.sleep(delay)
                             continue
                         else:
-                            print(f"  [Sheets] Rate limit exceeded after {max_retries} retries, giving up")
+                            print(f"  [Sheets] API error ({status_code}) after {max_retries} retries, giving up")
                     raise
                 except Exception:
                     raise
-            # If we exhausted retries, raise the last exception
             if last_exception:
                 raise last_exception
         return wrapper
@@ -225,6 +223,7 @@ class SequencerSheetsManager:
         self._worksheets[tab_name] = worksheet
         return worksheet
     
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def _validate_leads_headers(self, worksheet: gspread.Worksheet, expected_headers: List[str]):
         """Validate that leads tab has required headers."""
         all_rows = worksheet.get_all_values()
@@ -315,6 +314,7 @@ class SequencerSheetsManager:
         sheet.append_rows(rows, value_input_option="USER_ENTERED")
         return len(rows)
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def get_pending_tasks(self, limit: int = 100) -> List[QueueTask]:
         """
         Get pending tasks sorted by priority.
@@ -428,6 +428,7 @@ class SequencerSheetsManager:
         """Get the state worksheet."""
         return self.get_or_create_tab(SHEETS_TABS["state"], RunnerState.headers())
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def get_runner_state(self) -> RunnerState:
         """
         Get the current runner state.
@@ -447,6 +448,7 @@ class SequencerSheetsManager:
             print(f"  Warning: Could not parse state: {e}")
             return RunnerState()
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def save_runner_state(self, state: RunnerState):
         """
         Save the runner state (overwrites row 2).
@@ -498,6 +500,7 @@ class SequencerSheetsManager:
         tab_name = os.getenv("LEADS_SHEET_TAB", SHEETS_TABS["leads"])
         return self.get_or_create_tab(tab_name, EnhancedLead.headers())
     
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def list_all_tabs(self) -> List[Dict[str, Any]]:
         """
         List all worksheet tabs with metadata.
@@ -539,6 +542,7 @@ class SequencerSheetsManager:
 
         return len(rows)
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def get_all_leads(self, limit: int = 10000) -> List[EnhancedLead]:
         """
         Get all leads (for analysis/breakdown).
@@ -567,6 +571,7 @@ class SequencerSheetsManager:
 
         return leads
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def get_leads_by_status(self, status: str, limit: int = 100) -> List[EnhancedLead]:
         """
         Get leads with a specific status.
@@ -600,6 +605,7 @@ class SequencerSheetsManager:
 
         return leads
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def get_eligible_leads(self, limit: int = 100) -> List[EnhancedLead]:
         """
         Get leads that are send-eligible and have status NEW or APPROVED.
@@ -705,6 +711,7 @@ class SequencerSheetsManager:
 
                 return
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def claim_lead_for_sending(self, lead_id: str, expected_status: str = "NEW") -> bool:
         """
         Atomically claim a lead for sending (compare-and-set).
@@ -859,6 +866,7 @@ class SequencerSheetsManager:
         sheet.append_rows(rows, value_input_option="USER_ENTERED")
         return len(rows)
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def load_dedupe_keys(self) -> Dict[str, Dict[str, str]]:
         """
         Load all dedupe keys into memory for fast lookup.
@@ -980,6 +988,7 @@ class SequencerSheetsManager:
             ["email", "reason", "added_at"]
         )
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def get_blocked_emails(self) -> Set[str]:
         """
         Get all blocked email addresses.
@@ -1013,6 +1022,7 @@ class SequencerSheetsManager:
     # SAFETY METRICS
     # =========================================================================
 
+    @retry_on_rate_limit(max_retries=3, base_delay=10.0)
     def get_safety_metrics(self, lookback_days: int = 7) -> Dict[str, Any]:
         """
         Calculate safety metrics for the lookback period.
