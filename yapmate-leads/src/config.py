@@ -57,7 +57,7 @@ class LimitsConfig:
     """Safety limits and caps."""
     # Scraping limits
     max_scrape_per_run: int = 100
-    max_results_per_search: int = 50
+    max_results_per_search: int = 20
 
     # Enrichment limits
     max_enrich_per_run: int = 50
@@ -116,7 +116,7 @@ class YieldTargetConfig:
     target_email_rate_min: float = 0.20   # 20% email discovery rate
 
     # Safety limits
-    max_iterations: int = 5               # Max pivot iterations per task
+    max_iterations: int = 3               # Max pivot iterations per task
     max_runtime_seconds: int = 900        # 15 minutes max per task
 
     # Website crawling

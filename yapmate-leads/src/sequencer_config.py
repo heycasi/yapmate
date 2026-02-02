@@ -151,7 +151,7 @@ class QueueConfig:
     pm_session_offset: int = 500
 
     # Task settings
-    leads_per_task: int = 50
+    leads_per_task: int = 20
     tasks_per_day: int = 2  # AM + PM sessions
 
     # Queue management

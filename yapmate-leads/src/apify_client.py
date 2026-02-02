@@ -87,7 +87,8 @@ class ApifyLeadScraper:
             "maxImages": 0,
             "exportPlaceUrls": False,
             "additionalInfo": False,
-            "emailsOnly": False
+            "emailsOnly": False,
+            "skipClosedPlaces": True
         }
 
         print(f"🔍 Scraping Google Maps for {trade}s in {city}...", flush=True)

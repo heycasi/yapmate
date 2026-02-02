@@ -160,7 +160,7 @@ class PipelineConfig:
     target_email_rate_min: float = 0.20
 
     # Safety limits
-    max_iterations: int = 5
+    max_iterations: int = 3
     max_runtime_seconds: int = 900  # 15 minutes
 
     # Pivot strategies
@@ -215,7 +215,7 @@ class PipelineConfig:
             target_leads_total=parse_int("TARGET_LEADS_TOTAL", 50),
             target_emails_min=parse_int("TARGET_EMAILS_MIN", 10),
             target_email_rate_min=parse_float("TARGET_EMAIL_RATE_MIN", 0.20),
-            max_iterations=parse_int("MAX_ITERATIONS", 5),
+            max_iterations=parse_int("MAX_ITERATIONS", 3),
             max_runtime_seconds=parse_int("MAX_RUNTIME_SECONDS", 900),
             enable_deep_crawl=parse_bool("ENABLE_DEEP_CRAWL", True),
             enable_query_variants=parse_bool("ENABLE_QUERY_VARIANTS", True),
@@ -452,7 +452,9 @@ class PipelineOrchestrator:
                         print(f"[DISCOVERY] Targets met: {total_emails} emails, {self.result.email_rate:.1%} rate", flush=True)
                         break
                 else:
-                    print(f"[DISCOVERY] Iteration {iteration} returned no result, continuing...", flush=True)
+                    print(f"[DISCOVERY] Iteration {iteration} returned no result, stopping early to save API costs", flush=True)
+                    self.result.stopped_reason = "no_results"
+                    break
 
             # Final summary
             self.result.discovery_time = time.time() - discovery_start
