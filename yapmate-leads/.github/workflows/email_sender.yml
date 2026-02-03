@@ -1,29 +1,28 @@
 name: Email Sender
 
-# Runs every 15 minutes, but only sends during 3 UK time windows:
-#   Morning:       09:00 - 10:00 UK
-#   Afternoon:     13:00 - 14:00 UK
-#   Early evening: 17:00 - 18:00 UK
+# SIMPLE: Runs every 30 min during UK business hours, sends up to 25 emails per run.
+# Target: 150 emails/day (6 runs x 25 emails = 150)
 #
-# DST-robust: cron fires every 15 min, time guard checks actual UK hour.
-# Target: 100-150 emails/day, spread evenly across the 3 windows.
+# Schedule: 09:00, 09:30, 10:00, 13:00, 13:30, 14:00, 17:00, 17:30, 18:00 UK
+# That's 9 runs/day x 25 = 225 max capacity, DAILY_LIMIT caps at 150
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # UK business hours - covers both GMT and BST
+    # Morning: 09:00-10:30 UK (08:00-10:30 UTC in summer, 09:00-10:30 UTC in winter)
+    - cron: '0,30 8,9,10 * * 1-5'
+    # Afternoon: 13:00-14:30 UK
+    - cron: '0,30 12,13,14 * * 1-5'
+    # Evening: 17:00-18:30 UK
+    - cron: '0,30 16,17,18 * * 1-5'
   workflow_dispatch:
     inputs:
       send_limit:
-        description: 'Maximum emails to send (optional, defaults to remaining daily quota)'
+        description: 'Max emails to send this run'
         required: false
         type: number
       force_run:
-        description: 'Force run (bypass pause flags AND time guard)'
-        required: false
-        type: boolean
-        default: false
-      dry_run:
-        description: 'Dry run mode (validate but do not send)'
+        description: 'Bypass all guards'
         required: false
         type: boolean
         default: false
@@ -34,7 +33,6 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.11'
-  SEND_LIMIT_PER_RUN: '15'
 
 defaults:
   run:
@@ -60,59 +58,34 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Check UK time window
-        id: time_guard
-        if: github.event.inputs.force_run != 'true'
+      - name: Check UK business hours
+        id: time_check
         run: |
-          echo "============================================"
-          echo "TIME GUARD CHECK"
-          echo "============================================"
-          echo "Force run: ${{ github.event.inputs.force_run }}"
           python3 << 'EOF'
           import os
           from datetime import datetime
           import pytz
 
-          uk_tz = pytz.timezone("Europe/London")
-          now_uk = datetime.now(uk_tz)
-          uk_hour = now_uk.hour
-          uk_minute = now_uk.minute
+          uk = pytz.timezone("Europe/London")
+          now = datetime.now(uk)
+          hour = now.hour
+          weekday = now.weekday()  # 0=Mon, 6=Sun
 
-          # Allowed windows (UK time):
-          #   Morning:       09:00 - 10:00
-          #   Afternoon:     13:00 - 14:00
-          #   Early evening: 17:00 - 18:00
-          allowed_windows = [
-              (9, 0, 10, 0),
-              (13, 0, 14, 0),
-              (17, 0, 18, 0),
-          ]
+          # Weekdays only, during business windows
+          in_hours = (
+              weekday < 5 and  # Mon-Fri
+              ((9 <= hour < 11) or (13 <= hour < 15) or (17 <= hour < 19))
+          )
 
-          def in_window(hour, minute, windows):
-              current = hour * 60 + minute
-              for start_h, start_m, end_h, end_m in windows:
-                  start = start_h * 60 + start_m
-                  end = end_h * 60 + end_m
-                  if start <= current < end:
-                      return True
-              return False
+          print(f"UK time: {now.strftime('%Y-%m-%d %H:%M %Z')} (weekday={weekday})")
+          print(f"In business hours: {in_hours}")
 
-          print(f"Current UK time: {now_uk.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-          print(f"Target windows: 09-10, 13-14, 17-18 UK")
-
-          if in_window(uk_hour, uk_minute, allowed_windows):
-              print(f"PASS: UK time {uk_hour}:{uk_minute:02d} is in allowed window")
-              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                  f.write("skipped=false\n")
-          else:
-              print(f"SKIP: UK time {uk_hour}:{uk_minute:02d} not in allowed window")
-              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                  f.write("skipped=true\n")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"in_hours={'true' if in_hours else 'false'}\n")
           EOF
-          echo "============================================"
 
-      - name: Run email sender
-        if: steps.time_guard.outputs.skipped != 'true'
+      - name: Send emails
+        if: steps.time_check.outputs.in_hours == 'true' || github.event.inputs.force_run == 'true'
         env:
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
@@ -120,101 +93,33 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_FROM_NAME: ${{ secrets.EMAIL_FROM_NAME }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
-          SEND_ENABLED: ${{ secrets.SEND_ENABLED }}
-          DAILY_LIMIT: ${{ secrets.DAILY_LIMIT }}
-          SEND_LIMIT_PER_RUN: ${{ env.SEND_LIMIT_PER_RUN }}
-          WARMUP_ENABLED: ${{ secrets.WARMUP_ENABLED }}
-          WARMUP_START_DAILY_LIMIT: ${{ secrets.WARMUP_START_DAILY_LIMIT }}
-          WARMUP_RAMP_INCREMENT: ${{ secrets.WARMUP_RAMP_INCREMENT }}
-          WARMUP_MAX_CAP: ${{ secrets.WARMUP_MAX_CAP }}
-          WARMUP_START_DATE: ${{ secrets.WARMUP_START_DATE }}
-          DELAY_BETWEEN_SENDS: ${{ secrets.DELAY_BETWEEN_SENDS }}
+          SEND_ENABLED: 'true'
+          DAILY_LIMIT: '150'
+          SEND_LIMIT_PER_RUN: '25'
+          WARMUP_ENABLED: 'false'
+          DELAY_BETWEEN_SENDS: '0.5'
           FORCE_RUN: ${{ github.event.inputs.force_run == 'true' && 'true' || 'false' }}
-          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && 'true' || 'false' }}
         run: |
-          echo "============================================"
+          echo "=========================================="
           echo "EMAIL SENDER"
-          echo "============================================"
-          echo "Started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo ""
-          echo "Configuration:"
-          echo "  SEND_ENABLED: ${SEND_ENABLED:-false}"
-          echo "  DAILY_LIMIT: ${DAILY_LIMIT:-50}"
-          echo "  SEND_LIMIT_PER_RUN: ${SEND_LIMIT_PER_RUN:-15}"
-          echo "  FORCE_RUN: ${FORCE_RUN:-false}"
-          echo "  DRY_RUN: ${DRY_RUN:-false}"
+          echo "=========================================="
+          echo "Time: $(TZ=Europe/London date '+%Y-%m-%d %H:%M %Z')"
+          echo "Daily limit: 150"
+          echo "Per-run limit: 25"
           echo ""
 
-          # Build command with optional limit
-          cmd_args="--send-only"
+          ARGS="--send-only"
           if [ -n "${{ github.event.inputs.send_limit }}" ]; then
-            echo "Send limit: ${{ github.event.inputs.send_limit }}"
-            cmd_args="$cmd_args --send-limit ${{ github.event.inputs.send_limit }}"
-          else
-            echo "Send limit: (using daily quota)"
+            ARGS="$ARGS --send-limit ${{ github.event.inputs.send_limit }}"
+          fi
+          if [ "$FORCE_RUN" = "true" ]; then
+            ARGS="$ARGS --force-run"
           fi
 
-          if [ "${FORCE_RUN}" = "true" ]; then
-            echo "Force run: ENABLED (will bypass pause flags)"
-            cmd_args="$cmd_args --force-run"
-          fi
+          python scripts/run_sequencer.py $ARGS
 
-          if [ "${DRY_RUN}" = "true" ]; then
-            echo "Dry run: ENABLED (will validate but not send)"
-            cmd_args="$cmd_args --dry-run"
-          fi
-
-          python scripts/run_sequencer.py $cmd_args
-
-          echo ""
-          echo "============================================"
-          echo "EMAIL SENDER COMPLETED SUCCESSFULLY"
-          echo "============================================"
-
-      - name: Log skip
-        if: steps.time_guard.outputs.skipped == 'true'
+      - name: Skip notice
+        if: steps.time_check.outputs.in_hours != 'true' && github.event.inputs.force_run != 'true'
         run: |
-          echo "============================================"
-          echo "RUN SKIPPED (outside UK send window)"
-          echo "============================================"
-          echo "Send windows: 09-10, 13-14, 17-18 UK time"
-          echo "To force: use workflow_dispatch with force_run=true"
-
-  alert-on-failure:
-    runs-on: ubuntu-latest
-    needs: send-emails
-    if: failure()
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install alert dependencies
-        run: pip install requests python-dotenv pytz
-
-      - name: Send failure alert
-        env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          ALERT_TO_EMAIL: ${{ secrets.ALERT_TO_EMAIL }}
-          ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
-        run: |
-          echo "Sending failure alert email..."
-          python3 << 'EOF'
-          from src.ci_helpers import send_failure_alert
-
-          send_failure_alert(
-              workflow_name="Email Sender",
-              job_name="send-emails",
-              run_id="${{ github.run_id }}",
-              run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-              repo="${{ github.repository }}",
-              branch="${{ github.ref_name }}",
-              commit_sha="${{ github.sha }}",
-              error_summary="The email sender failed. This may indicate issues with Google Sheets, Resend API, or email delivery. Check the workflow logs for details."
-          )
-          EOF
+          echo "Skipped - outside UK business hours"
+          echo "Hours: 09-11, 13-15, 17-19 UK (Mon-Fri)"
