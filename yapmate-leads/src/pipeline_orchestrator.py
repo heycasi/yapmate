@@ -481,11 +481,15 @@ class PipelineOrchestrator:
 
     def run_eligibility_fixup(self, leads: List[EnhancedLead]) -> List[EnhancedLead]:
         """
-        Fix up eligibility for leads (auto-approve if enabled).
+        Fix up eligibility for leads using FULL auto-approve validation.
 
-        If AUTO_APPROVE_ENABLED, any lead with a valid email should be:
-        - status = APPROVED
+        Only approves leads that pass ALL checks in auto_approve.check_auto_approval():
         - send_eligible = True
+        - Email exists and sanitizes correctly
+        - Not a free email provider (gmail, yahoo, etc.)
+        - Not a placeholder domain (example.com, etc.)
+        - No malformed patterns
+        - Domain matches website (soft check)
 
         Returns:
             Updated leads list
@@ -496,21 +500,42 @@ class PipelineOrchestrator:
             print("[ELIGIBILITY] Auto-approve disabled, skipping fixup", flush=True)
             return leads
 
-        fixed_count = 0
-        for lead in leads:
-            # Check if lead has valid email but missing eligibility
-            if lead.email and not lead.send_eligible:
-                # Validate email is not invalid pattern
-                email_lower = lead.email.lower()
-                invalid_patterns = ["noreply@", "no-reply@", "donotreply@", "mailer-daemon@"]
-                if not any(pattern in email_lower for pattern in invalid_patterns):
-                    lead.send_eligible = True
-                    if lead.status == "NEW":
-                        lead.status = "APPROVED"
-                    fixed_count += 1
+        # Import the full auto-approve validation
+        from src.auto_approve import check_auto_approval
 
-        if fixed_count > 0:
-            print(f"[ELIGIBILITY] Fixed {fixed_count} leads (auto-approved with send_eligible=True)", flush=True)
+        approved_count = 0
+        rejected_count = 0
+
+        for lead in leads:
+            # Skip if already approved or already has send_eligible
+            if lead.status == "APPROVED" or lead.send_eligible:
+                continue
+
+            # Skip if no email at all
+            if not lead.email or not lead.email.strip():
+                continue
+
+            # Run FULL auto-approval validation (not just pattern check)
+            result = check_auto_approval(
+                email=lead.email,
+                website=getattr(lead, 'website', None),
+                send_eligible=True,  # We're checking if it SHOULD be eligible
+                business_name=lead.business_name,
+                allow_free_emails=False,
+            )
+
+            if result.approved:
+                lead.send_eligible = True
+                if lead.status == "NEW":
+                    lead.status = "APPROVED"
+                approved_count += 1
+            else:
+                rejected_count += 1
+
+        if approved_count > 0 or rejected_count > 0:
+            print(f"[ELIGIBILITY] Full validation: {approved_count} approved, {rejected_count} rejected", flush=True)
+
+        if approved_count > 0:
             # Batch update to sheets
             self._batch_update_eligibility(leads)
 

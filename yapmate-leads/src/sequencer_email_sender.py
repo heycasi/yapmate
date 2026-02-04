@@ -1265,6 +1265,9 @@ From: {self.from_email}
         print("PROCESSING LEADS")
         print("=" * 70)
 
+        # Import auto_approve for safety check
+        from src.auto_approve import check_auto_approval
+
         try:
             for i, lead in enumerate(leads, 1):
                 print(f"\n[{i}/{len(leads)}] {lead.business_name}")
@@ -1272,6 +1275,28 @@ From: {self.from_email}
                 print(f"  Email: {lead.email}")
                 print(f"  Status: {lead.status}")
                 print("-" * 40)
+
+                # SAFETY CHECK: Re-validate with full auto_approve before sending
+                # This catches any leads that were approved by weak/old logic
+                safety_check = check_auto_approval(
+                    email=lead.email,
+                    website=getattr(lead, 'website', None),
+                    send_eligible=lead.send_eligible,
+                    business_name=lead.business_name,
+                    allow_free_emails=False,
+                )
+
+                if not safety_check.approved:
+                    print(f"  ⚠️  SAFETY REJECTED: {safety_check.reason}")
+                    print(f"      Lead was APPROVED but fails full validation - skipping")
+                    skipped_count += 1
+                    # Mark as SKIPPED in sheet to prevent re-processing
+                    pending_updates.append({
+                        'lead_id': lead.lead_id,
+                        'status': 'SKIPPED',
+                        'eligibility_reason': f"Safety check failed: {safety_check.reason}",
+                    })
+                    continue
 
                 # DUPLICATE CHECK: Skip if we've already sent to this email
                 email_lower = (lead.email or "").lower().strip()
