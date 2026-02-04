@@ -1,0 +1,118 @@
+name: YapMate Leads Pipeline
+
+# Combined scrape + send workflow
+# Runs 5x daily on weekdays: 08:00, 10:00, 12:00, 14:00, 16:00 UTC
+# (roughly 08:00-16:00 UK depending on DST)
+
+on:
+  schedule:
+    - cron: '0 8,10,12,14,16 * * 1-5'
+  workflow_dispatch:
+
+concurrency:
+  group: yapmate-leads-pipeline
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+  # Hardcoded config - cannot be misconfigured
+  SEND_LIMIT_PER_RUN: '30'
+  DAILY_LIMIT: '150'
+  WARMUP_ENABLED: 'false'
+  AUTO_APPROVE_ENABLED: 'true'
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: yapmate-leads/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r yapmate-leads/requirements.txt
+
+      - name: Run Sequencer (Scrape + Enrich)
+        id: sequencer
+        working-directory: yapmate-leads
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
+          AUTO_APPROVE_ENABLED: ${{ env.AUTO_APPROVE_ENABLED }}
+        run: |
+          echo "=========================================="
+          echo "STEP 1: SEQUENCER (Scrape + Enrich)"
+          echo "=========================================="
+          echo "Time: $(TZ=Europe/London date '+%Y-%m-%d %H:%M %Z')"
+          echo ""
+
+          python scripts/run_sequencer.py
+
+          echo ""
+          echo "Sequencer completed successfully"
+
+      - name: Run Email Sender
+        id: sender
+        working-directory: yapmate-leads
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM_NAME: ${{ secrets.EMAIL_FROM_NAME }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          SEND_ENABLED: ${{ secrets.SEND_ENABLED }}
+          DAILY_LIMIT: ${{ env.DAILY_LIMIT }}
+          SEND_LIMIT_PER_RUN: ${{ env.SEND_LIMIT_PER_RUN }}
+          WARMUP_ENABLED: ${{ env.WARMUP_ENABLED }}
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "STEP 2: EMAIL SENDER"
+          echo "=========================================="
+          echo "Time: $(TZ=Europe/London date '+%Y-%m-%d %H:%M %Z')"
+          echo "SEND_ENABLED: ${SEND_ENABLED:-not set}"
+          echo "DAILY_LIMIT: ${DAILY_LIMIT}"
+          echo "SEND_LIMIT_PER_RUN: ${SEND_LIMIT_PER_RUN}"
+          echo ""
+
+          python scripts/run_sequencer.py --send-only
+
+          echo ""
+          echo "Email sender completed"
+
+      - name: Pipeline Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "PIPELINE SUMMARY"
+          echo "=========================================="
+          echo "Sequencer: ${{ steps.sequencer.outcome }}"
+          echo "Sender: ${{ steps.sender.outcome }}"
+          echo ""
+          if [ "${{ steps.sequencer.outcome }}" = "failure" ]; then
+            echo "❌ Pipeline failed at sequencer step"
+            echo "   Check logs above for: OpenAI quota, Apify errors, or Sheets issues"
+          elif [ "${{ steps.sender.outcome }}" = "failure" ]; then
+            echo "❌ Pipeline failed at sender step"
+            echo "   Check logs above for: SEND_ENABLED, eligible leads, or Resend errors"
+          elif [ "${{ steps.sender.outcome }}" = "skipped" ]; then
+            echo "⚠️  Sender was skipped (sequencer failed)"
+          else
+            echo "✅ Pipeline completed successfully"
+          fi
+          echo "=========================================="

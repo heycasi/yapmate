@@ -1083,69 +1083,41 @@ From: {self.from_email}
         print(f"  Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
         # =====================================================================
-        # GATE CHAIN - DETERMINISTIC LOGIC
+        # SIMPLIFIED GATE CHAIN - Only SEND_ENABLED matters
         # =====================================================================
-        
-        # Gate 1: SEND_ENABLED (fail-closed)
+
+        # Gate 1: SEND_ENABLED (fail-closed) - the only gate that matters
         send_enabled, enable_reason = self._check_send_enabled()
-        
-        # Gate 2: GLOBAL_PAUSE (environment override)
-        global_pause = os.getenv("GLOBAL_PAUSE", "false").lower() == "true"
-        
-        # Gate 3: EMERGENCY_STOP (environment override)
-        emergency_stop = os.getenv("EMERGENCY_STOP", "false").lower() == "true"
-        
-        # Gate 4: Sheet-based pause flag
+
+        # Get runner state for logging (but don't use sheet_paused to block)
         state = self.sheets.get_runner_state()
-        sheet_paused = state.sending_paused if state.sending_paused else False
-        
-        # Gate 5: Force run override
+
+        # Force run from env or parameter
         force_run_env = os.getenv("FORCE_RUN", "false").lower() == "true"
         force_run = force_run or force_run_env
-        
+
         # Calculate effective dry run
         effective_dry_run = dry_run or config.pipeline.dry_run or not send_enabled
-        
-        # Deterministic send allowed logic
-        # SEND_ALLOWED = SEND_ENABLED == true AND GLOBAL_PAUSE != true AND EMERGENCY_STOP != true AND (force_run == true OR sending_paused != true)
-        send_allowed = (
-            send_enabled and
-            not global_pause and
-            not emergency_stop and
-            (force_run or not sheet_paused)
-        )
-        
+
+        # Simplified: Only SEND_ENABLED blocks sending
+        send_allowed = send_enabled
+
         # Single explicit block reason
         block_reason = None
         if not send_enabled:
             block_reason = f"SEND_ENABLED is not 'true' - sending blocked"
-        elif global_pause:
-            block_reason = f"GLOBAL_PAUSE is 'true' - sending blocked"
-        elif emergency_stop:
-            block_reason = f"EMERGENCY_STOP is 'true' - sending blocked"
-        elif sheet_paused and not force_run:
-            block_reason = f"Sending is PAUSED in Google Sheet (reason: {state.pause_reason or 'No reason provided'})"
-        
-        # Print full gate chain
+
+        # Print simplified gate status
         print(f"\n  GATE CHECKS:")
         print(f"    SEND_ENABLED: {send_enabled} ({enable_reason})")
-        print(f"    GLOBAL_PAUSE: {global_pause}")
-        print(f"    EMERGENCY_STOP: {emergency_stop}")
-        print(f"    Sheet paused: {sheet_paused}")
-        if state.pause_reason:
-            print(f"      Pause reason: {state.pause_reason}")
         print(f"    FORCE_RUN: {force_run}")
         print(f"    DRY_RUN: {config.pipeline.dry_run}")
-        print(f"    SAFE_MODE: {config.pipeline.safe_mode}")
         print(f"    EFFECTIVE MODE: {'DRY RUN' if effective_dry_run else 'LIVE SEND'}")
         print(f"    SEND_ALLOWED: {send_allowed}")
-        
+
         if block_reason:
             print(f"\n  ⚠️  BLOCKED: {block_reason}")
-            if not send_enabled:
-                print(f"      Pipeline will run for validation/logging only")
-            elif force_run:
-                print(f"      Note: FORCE_RUN would bypass this, but other gates are blocking")
+            print(f"      Set SEND_ENABLED=true in GitHub Secrets to enable sending")
             return SendBatchResult(
                 total_attempted=0,
                 total_sent=0,
@@ -1157,25 +1129,6 @@ From: {self.from_email}
                 logs=[],
                 stopped_reason=block_reason
             )
-
-        # Check safety thresholds (only matters if actually sending and not force_run)
-        if send_allowed and not effective_dry_run and not force_run:
-            is_safe, pause_reason = self.check_safety_thresholds()
-            if not is_safe:
-                block_reason = f"Safety threshold exceeded: {pause_reason}"
-                print(f"\n  ⚠️  BLOCKED: {block_reason}")
-                self.pause_sending(pause_reason)
-                return SendBatchResult(
-                    total_attempted=0,
-                    total_sent=0,
-                    total_failed=0,
-                    total_blocked=0,
-                    total_invalid=0,
-                    total_sanitized=0,
-                    results=[],
-                    logs=[],
-                    stopped_reason=block_reason
-                )
 
         # =====================================================================
         # WARMUP STATUS & DAILY LIMIT
