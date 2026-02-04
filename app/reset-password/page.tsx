@@ -1,11 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
+  const searchParams = useSearchParams()
+  const returnPath = searchParams.get('return') || '/record'
+  console.log('[ResetPassword] returnPath=' + returnPath)
+
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -58,9 +63,9 @@ export default function ResetPasswordPage() {
 
       setSuccess(true)
 
-      // Redirect to dashboard after 2 seconds
+      // Redirect to return path (or /record) after 2 seconds
       setTimeout(() => {
-        router.push('/dashboard')
+        router.push(returnPath)
       }, 2000)
     } catch (err: any) {
       setError(err.message || 'Failed to reset password')
@@ -112,7 +117,7 @@ export default function ResetPasswordPage() {
               PASSWORD UPDATED
             </h2>
             <p className="text-yapmate-slate-300 text-sm">
-              Your password has been reset successfully. Redirecting to dashboard...
+              Your password has been reset successfully. Redirecting...
             </p>
           </div>
         </div>
@@ -182,5 +187,19 @@ export default function ResetPasswordPage() {
         </form>
       </div>
     </main>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
+          <div className="text-yapmate-white font-mono">Loading...</div>
+        </main>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   )
 }

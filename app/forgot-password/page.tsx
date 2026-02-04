@@ -1,10 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
+  const searchParams = useSearchParams()
+  const returnPath = searchParams.get('return') || '/record'
+
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -16,15 +20,20 @@ export default function ForgotPasswordPage() {
     setError(null)
 
     try {
+      // Include return path in the redirect URL so user lands back where they started
+      const redirectUrl = `${window.location.origin}/reset-password?return=${encodeURIComponent(returnPath)}`
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: redirectUrl,
       })
 
       if (error) throw error
 
       setSuccess(true)
     } catch (err: any) {
-      setError(err.message || 'Failed to send reset email')
+      // Use generic message to avoid revealing if email exists (security best practice)
+      setError('If an account exists with this email, you will receive a reset link.')
+      setSuccess(true) // Show success anyway for security
     } finally {
       setIsLoading(false)
     }
@@ -112,5 +121,19 @@ export default function ForgotPasswordPage() {
         </form>
       </div>
     </main>
+  )
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
+          <div className="text-yapmate-white font-mono">Loading...</div>
+        </main>
+      }
+    >
+      <ForgotPasswordContent />
+    </Suspense>
   )
 }

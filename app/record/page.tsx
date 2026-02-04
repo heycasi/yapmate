@@ -824,6 +824,12 @@ export default function RecordPage() {
                 I Have an Account
               </button>
               <button
+                onClick={() => router.push('/forgot-password?return=/record')}
+                className="w-full px-4 py-2 text-yapmate-amber text-sm underline"
+              >
+                Forgot password?
+              </button>
+              <button
                 onClick={() => setShowAccountPrompt(false)}
                 className="w-full px-6 py-3 text-yapmate-gray-light text-sm"
               >

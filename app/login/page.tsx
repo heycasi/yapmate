@@ -1,12 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { syncRevenueCatToSupabase } from '@/lib/iap-sync'
 
-export default function LoginPage() {
+function LoginContent() {
+  const searchParams = useSearchParams()
+  const returnPath = searchParams.get('return') || '/dashboard'
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -38,7 +42,7 @@ export default function LoginPage() {
         }
       }
 
-      router.push('/dashboard')
+      router.push(returnPath)
       router.refresh()
     } catch (err: any) {
       setError(err.message || 'Failed to log in')
@@ -107,7 +111,7 @@ export default function LoginPage() {
             />
             <div className="mt-2 text-right">
               <Link
-                href="/forgot-password"
+                href={`/forgot-password?return=${encodeURIComponent(returnPath)}`}
                 className="text-yapmate-slate-300 hover:text-yapmate-amber text-xs font-mono transition-colors duration-snap"
               >
                 Forgot password?
@@ -138,5 +142,19 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-yapmate-black p-6">
+          <div className="text-yapmate-white font-mono">Loading...</div>
+        </main>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   )
 }

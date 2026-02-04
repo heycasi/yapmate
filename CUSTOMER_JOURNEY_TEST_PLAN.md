@@ -291,6 +291,32 @@
 | 7.6 | Reset password | New password works | [ ] |
 | 7.7 | Log out | Session cleared | [ ] |
 
+### 2.7.1 Password Reset Flow (Detailed)
+
+| # | Test Case | Expected Result | Pass/Fail |
+|---|-----------|-----------------|-----------|
+| 7.8 | Navigate to /login | Login page loads | [ ] |
+| 7.9 | Click "Forgot password?" link | Navigates to /forgot-password | [ ] |
+| 7.10 | Enter email, submit | Success: "Check your email" shown | [ ] |
+| 7.11 | Check email for reset link | Email received with link | [ ] |
+| 7.12 | Click reset link in email | Opens /reset-password with token | [ ] |
+| 7.13 | Page shows password form | "Reset Password" heading visible | [ ] |
+| 7.14 | Enter mismatched passwords | Error: "Passwords do not match" | [ ] |
+| 7.15 | Enter matching passwords | Success: "Password Updated" shown | [ ] |
+| 7.16 | Auto-redirect after success | Redirects to /record (or return path) | [ ] |
+| 7.17 | Login with new password | Session established successfully | [ ] |
+
+### 2.7.2 Password Reset with Return Path
+
+| # | Test Case | Expected Result | Pass/Fail |
+|---|-----------|-----------------|-----------|
+| 7.18 | From /login?return=/record, click forgot | Goes to /forgot-password?return=/record | [ ] |
+| 7.19 | Complete reset from that flow | After success, redirects to /record | [ ] |
+| 7.20 | From /record modal, click "Forgot password?" | Goes to /forgot-password?return=/record | [ ] |
+| 7.21 | Console shows return path | `[ResetPassword] returnPath=/record` | [ ] |
+| 7.22 | Invalid/expired reset link | Shows "Invalid or Expired Link" error | [ ] |
+| 7.23 | Click "Request New Link" | Navigates to /forgot-password | [ ] |
+
 ### 2.8 Feature Gating
 
 | # | Test Case | Expected Result | Pass/Fail |
@@ -326,7 +352,7 @@
 | 10.7 | Check console for Pro user | `[Record] no_session_entitlement_active=true` | [ ] |
 | 10.8 | Check console for Pro user | `[Record] entitlement_type=pro` | [ ] |
 | 10.9 | Anonymous Pro user taps record | "Quick Setup Required" modal shown | [ ] |
-| 10.10 | Modal has correct buttons | "Create Account" + "I Have an Account" + Cancel | [ ] |
+| 10.10 | Modal has correct buttons | "Create Account" + "I Have an Account" + "Forgot password?" + Cancel | [ ] |
 | 10.11 | Tap Cancel | Modal closes, back to record page | [ ] |
 | 10.12 | Create account and return | Recording works after account creation | [ ] |
 | 10.13 | RevenueCat fails (offline) | Redirected to /pricing | [ ] |
