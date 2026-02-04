@@ -420,26 +420,82 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 }
 
 /**
+ * Redact an ID to first 3 + last 4 chars for safe logging
+ */
+function redactId(id: string | null | undefined): string {
+  if (!id || id.length < 8) return id || 'null'
+  return `${id.slice(0, 3)}...${id.slice(-4)}`
+}
+
+/**
  * Get current customer info (entitlements, subscriptions)
  */
 export async function getCustomerInfo(): Promise<IAPCustomerInfo | null> {
+  const platform = isIAPAvailable() ? 'ios' : 'web'
+  console.log(`[IAP] getCustomerInfo platform=${platform} configured=${isConfigured}`)
+
   if (!isIAPAvailable()) {
-    console.warn('[IAP] getCustomerInfo called on web')
+    console.warn('[IAP] getCustomerInfo called on web - returning null')
     return null
   }
 
   if (!isConfigured) {
-    console.error('[IAP] SDK not configured')
+    console.error('[IAP] getCustomerInfo SDK not configured - returning null')
     return null
   }
 
   try {
     const { Purchases } = await import('@revenuecat/purchases-capacitor')
     const result = await Purchases.getCustomerInfo()
+    const customerInfo = result.customerInfo
 
-    return result.customerInfo as IAPCustomerInfo
+    // Get app user ID if available (redacted for privacy)
+    let appUserId = 'unavailable'
+    try {
+      const appUserIdResult = await Purchases.getAppUserID()
+      appUserId = redactId(appUserIdResult?.appUserID)
+    } catch {
+      appUserId = 'fetch_failed'
+    }
+
+    // Extract entitlement diagnostics
+    const activeEntitlements = customerInfo?.entitlements?.active ?? {}
+    const activeEntitlementKeys = Object.keys(activeEntitlements)
+
+    const proEntitlement = activeEntitlements['pro']
+    const tradeEntitlement = activeEntitlements['trade']
+
+    const proActive = proEntitlement?.isActive === true
+    const tradeActive = tradeEntitlement?.isActive === true
+
+    // Build diagnostic summary (single-line JSON for easy grep)
+    const summary = {
+      appUserId,
+      originalAppUserId: redactId(customerInfo?.originalAppUserId),
+      activeEntitlementKeys,
+      proActive,
+      tradeActive,
+      proDetails: proActive ? {
+        productIdentifier: proEntitlement?.productIdentifier || 'unknown',
+        isSandbox: proEntitlement?.isSandbox ?? 'unknown',
+        expirationDate: proEntitlement?.expirationDate || 'none',
+        periodType: proEntitlement?.periodType || 'unknown',
+      } : null,
+      tradeDetails: tradeActive ? {
+        productIdentifier: tradeEntitlement?.productIdentifier || 'unknown',
+        isSandbox: tradeEntitlement?.isSandbox ?? 'unknown',
+        expirationDate: tradeEntitlement?.expirationDate || 'none',
+        periodType: tradeEntitlement?.periodType || 'unknown',
+      } : null,
+      allEntitlementKeys: Object.keys(customerInfo?.entitlements?.all ?? {}),
+      activeSubscriptions: customerInfo?.activeSubscriptions ?? [],
+    }
+
+    console.log(`[IAP] customer_info_summary=${JSON.stringify(summary)}`)
+
+    return customerInfo as IAPCustomerInfo
   } catch (error: any) {
-    console.error('[IAP] Failed to get customer info:', error)
+    console.error(`[IAP] getCustomerInfo failed error=${error?.message || error}`)
     return null
   }
 }
