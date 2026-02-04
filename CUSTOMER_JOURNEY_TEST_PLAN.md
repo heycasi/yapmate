@@ -317,14 +317,21 @@
 
 | # | Test Case | Expected Result | Pass/Fail |
 |---|-----------|-----------------|-----------|
-| 10.1 | Free user (no account) tries /record | Redirected to /login | [ ] |
-| 10.2 | Check console for free user | `[Record] redirecting_to_login_reason=free_no_session` | [ ] |
-| 10.3 | Anonymous Pro user accesses /record | Page loads, NOT redirected | [ ] |
-| 10.4 | Check console for Pro user | `[Record] no_session_entitlement_active=true` | [ ] |
-| 10.5 | Anonymous Pro user taps record | "Quick Setup Required" modal shown | [ ] |
-| 10.6 | Modal has correct buttons | "Create Account" + "I Have an Account" + Cancel | [ ] |
-| 10.7 | Tap Cancel | Modal closes, back to record page | [ ] |
-| 10.8 | Create account and return | Recording works after account creation | [ ] |
+| 10.1 | Free user (no account) tries /record | Redirected to /pricing | [ ] |
+| 10.2 | Check console for free user | `[Record] session_present=false` | [ ] |
+| 10.3 | Check console for free user | `[Record] no_session_entitlement_active=false` | [ ] |
+| 10.4 | Check console for free user | `[Record] redirecting_reason=free_no_session` | [ ] |
+| 10.5 | Anonymous Pro user accesses /record | Page loads, NOT redirected | [ ] |
+| 10.6 | Check console for Pro user | `[Record] session_present=false` | [ ] |
+| 10.7 | Check console for Pro user | `[Record] no_session_entitlement_active=true` | [ ] |
+| 10.8 | Check console for Pro user | `[Record] entitlement_type=pro` | [ ] |
+| 10.9 | Anonymous Pro user taps record | "Quick Setup Required" modal shown | [ ] |
+| 10.10 | Modal has correct buttons | "Create Account" + "I Have an Account" + Cancel | [ ] |
+| 10.11 | Tap Cancel | Modal closes, back to record page | [ ] |
+| 10.12 | Create account and return | Recording works after account creation | [ ] |
+| 10.13 | RevenueCat fails (offline) | Redirected to /pricing | [ ] |
+| 10.14 | Check console for RC failure | `[Record] no_session_revenuecat_error=<error>` | [ ] |
+| 10.15 | Check console for RC failure | `[Record] redirecting_reason=revenuecat_unavailable` | [ ] |
 
 ---
 

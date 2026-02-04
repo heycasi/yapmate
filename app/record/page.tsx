@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabase'
 import type { Invoice } from '@/lib/invoice'
 import Navigation from '@/components/Navigation'
 import { ensureCustomer } from '@/lib/customer-helpers'
-import { canCreateInvoice, getUserPlan } from '@/lib/plan-access'
-import { isIAPAvailable } from '@/lib/iap'
+import { canCreateInvoice } from '@/lib/plan-access'
+import { isIAPAvailable, getCustomerInfo, IAP_ENTITLEMENTS } from '@/lib/iap'
 
 // Recording limits
 const MAX_RECORDING_SECONDS = 180 // 3 minutes max
@@ -72,9 +72,11 @@ export default function RecordPage() {
       data: { session },
     } = await supabase.auth.getSession()
 
+    // Log session state for debugging
+    console.log('[Record] session_present=' + (session ? 'true' : 'false'))
+
     // CASE 1: User has Supabase session - proceed normally
     if (session) {
-      console.log('[Record] User has session, checking plan access')
       try {
         const accessCheck = await canCreateInvoice(session.user.id)
         setCanCreate(accessCheck.canCreate)
@@ -84,7 +86,7 @@ export default function RecordPage() {
         }
       } catch (err) {
         console.error('[Record] Error checking plan access:', err)
-        // On error, allow creation (fail open)
+        // On error, allow creation (fail open for logged-in users)
         setCanCreate(true)
       } finally {
         setIsCheckingAccess(false)
@@ -94,32 +96,60 @@ export default function RecordPage() {
 
     // CASE 2: No session - check if user has RevenueCat entitlement (anonymous purchase)
     // This supports Apple Guideline 5.1.1: Allow app usage after purchase without account
-    console.log('[Record] No session, checking RevenueCat entitlement...')
-
     if (isIAPAvailable()) {
       try {
-        // getUserPlan checks RevenueCat first (entitlement-first access)
-        const plan = await getUserPlan()
-        console.log('[Record] Anonymous user plan from RevenueCat:', plan)
+        // Get customer info directly from RevenueCat
+        const customerInfo = await getCustomerInfo()
 
-        if (plan !== 'free') {
-          // User has paid entitlement but no account
-          console.log('[Record] no_session_entitlement_active=true, plan=' + plan)
+        if (!customerInfo) {
+          console.log('[Record] no_session_entitlement_active=false')
+          console.log('[Record] no_session_revenuecat_error=null_customer_info')
+          console.log('[Record] redirecting_reason=revenuecat_unavailable')
+          router.push('/pricing')
+          return
+        }
+
+        // Check for active 'pro' or 'trade' entitlement using exact entitlement IDs
+        const proEntitlement = customerInfo.entitlements?.active?.[IAP_ENTITLEMENTS.PRO]
+        const tradeEntitlement = customerInfo.entitlements?.active?.[IAP_ENTITLEMENTS.TRADE]
+        const hasActiveEntitlement = proEntitlement?.isActive || tradeEntitlement?.isActive
+
+        if (hasActiveEntitlement) {
+          // User has paid entitlement but no account - allow access
+          const entitlementType = tradeEntitlement?.isActive ? 'trade' : 'pro'
+          console.log('[Record] no_session_entitlement_active=true')
+          console.log('[Record] no_session_revenuecat_error=none')
+          console.log('[Record] entitlement_type=' + entitlementType)
           setIsAnonymousPaidUser(true)
-          setCanCreate(true) // Allow them to see the page
+          setCanCreate(true)
           setIsCheckingAccess(false)
           return
         }
 
+        // No active entitlement found
         console.log('[Record] no_session_entitlement_active=false')
-      } catch (err) {
-        console.error('[Record] Error checking RevenueCat entitlement:', err)
+        console.log('[Record] no_session_revenuecat_error=none')
+        console.log('[Record] redirecting_reason=free_no_session')
+        router.push('/pricing')
+        return
+
+      } catch (err: any) {
+        // RevenueCat lookup failed - treat as not entitled, redirect to pricing
+        const errorReason = err?.message || err?.code || 'unknown_error'
+        console.error('[Record] RevenueCat lookup failed:', errorReason)
+        console.log('[Record] no_session_entitlement_active=false')
+        console.log('[Record] no_session_revenuecat_error=' + errorReason)
+        console.log('[Record] redirecting_reason=revenuecat_unavailable')
+        router.push('/pricing')
+        return
       }
     }
 
-    // CASE 3: No session AND no paid entitlement - redirect to login
-    console.log('[Record] redirecting_to_login_reason=free_no_session')
-    router.push('/login')
+    // CASE 3: Not on iOS (web) and no session - redirect to pricing
+    console.log('[Record] no_session_entitlement_active=false')
+    console.log('[Record] no_session_revenuecat_error=not_ios_platform')
+    console.log('[Record] redirecting_reason=free_no_session')
+    router.push('/pricing')
   }
 
   const startRecording = async () => {
