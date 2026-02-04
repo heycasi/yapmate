@@ -11,16 +11,22 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-6">
             <Link
-              href="/login"
+              href="/record"
               className="text-yapmate-amber hover:text-white font-semibold transition-colors text-sm py-2"
             >
-              LOG IN
+              RECORD
             </Link>
             <Link
               href="/pricing"
               className="text-yapmate-amber hover:text-white font-semibold transition-colors text-sm py-2"
             >
               PRICING
+            </Link>
+            <Link
+              href="/login"
+              className="text-yapmate-amber hover:text-white font-semibold transition-colors text-sm py-2"
+            >
+              LOG IN
             </Link>
           </div>
           <AppStoreBadge className="w-32" />
@@ -69,20 +75,28 @@ export default function HomePage() {
 
           {/* CTA Section */}
           <div className="flex flex-col items-center gap-6 mt-8">
-            {/* Primary CTA */}
+            {/* Primary CTA - Start Recording (for users who already have the app) */}
+            <Link
+              href="/record"
+              className="px-12 py-5 bg-yapmate-amber text-yapmate-black font-bold rounded-lg hover:bg-yapmate-amber/80 transition-all text-center text-lg shadow-lg shadow-yapmate-amber/20"
+            >
+              Start Recording
+            </Link>
+
+            {/* App Store CTA */}
             <a
               href="https://apps.apple.com/gb/app/yapmate/id6756750891"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-12 py-5 bg-yapmate-amber text-yapmate-black font-bold rounded-lg hover:bg-yapmate-amber/80 transition-all text-center text-lg shadow-lg shadow-yapmate-amber/20"
+              className="text-yapmate-amber hover:text-white transition-colors text-sm font-semibold"
             >
-              Download on App Store
+              Download on App Store →
             </a>
 
-            {/* Secondary CTA */}
+            {/* Pricing CTA */}
             <Link
               href="/pricing"
-              className="text-yapmate-amber hover:text-white transition-colors text-sm font-semibold"
+              className="text-yapmate-gray-light hover:text-white transition-colors text-sm"
             >
               View pricing
             </Link>
