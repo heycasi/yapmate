@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase'
 import type { Invoice } from '@/lib/invoice'
 import Navigation from '@/components/Navigation'
 import { ensureCustomer } from '@/lib/customer-helpers'
-import { canCreateInvoice } from '@/lib/plan-access'
+import { canCreateInvoice, getUserPlan } from '@/lib/plan-access'
+import { isIAPAvailable } from '@/lib/iap'
 
 // Recording limits
 const MAX_RECORDING_SECONDS = 180 // 3 minutes max
@@ -31,6 +32,8 @@ export default function RecordPage() {
   const [canCreate, setCanCreate] = useState(true)
   const [planLimitMessage, setPlanLimitMessage] = useState<string | null>(null)
   const [isCheckingAccess, setIsCheckingAccess] = useState(true)
+  const [isAnonymousPaidUser, setIsAnonymousPaidUser] = useState(false)
+  const [showAccountPrompt, setShowAccountPrompt] = useState(false)
 
   const router = useRouter()
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -63,30 +66,60 @@ export default function RecordPage() {
   }, [])
 
   const checkAuth = async () => {
+    setIsCheckingAccess(true)
+
     const {
       data: { session },
     } = await supabase.auth.getSession()
-    if (!session) {
-      router.push('/login')
+
+    // CASE 1: User has Supabase session - proceed normally
+    if (session) {
+      console.log('[Record] User has session, checking plan access')
+      try {
+        const accessCheck = await canCreateInvoice(session.user.id)
+        setCanCreate(accessCheck.canCreate)
+
+        if (!accessCheck.canCreate) {
+          setPlanLimitMessage(accessCheck.reason || 'Cannot create more invoices')
+        }
+      } catch (err) {
+        console.error('[Record] Error checking plan access:', err)
+        // On error, allow creation (fail open)
+        setCanCreate(true)
+      } finally {
+        setIsCheckingAccess(false)
+      }
       return
     }
 
-    // Check if user can create invoices
-    setIsCheckingAccess(true)
-    try {
-      const accessCheck = await canCreateInvoice(session.user.id)
-      setCanCreate(accessCheck.canCreate)
+    // CASE 2: No session - check if user has RevenueCat entitlement (anonymous purchase)
+    // This supports Apple Guideline 5.1.1: Allow app usage after purchase without account
+    console.log('[Record] No session, checking RevenueCat entitlement...')
 
-      if (!accessCheck.canCreate) {
-        setPlanLimitMessage(accessCheck.reason || 'Cannot create more invoices')
+    if (isIAPAvailable()) {
+      try {
+        // getUserPlan checks RevenueCat first (entitlement-first access)
+        const plan = await getUserPlan()
+        console.log('[Record] Anonymous user plan from RevenueCat:', plan)
+
+        if (plan !== 'free') {
+          // User has paid entitlement but no account
+          console.log('[Record] no_session_entitlement_active=true, plan=' + plan)
+          setIsAnonymousPaidUser(true)
+          setCanCreate(true) // Allow them to see the page
+          setIsCheckingAccess(false)
+          return
+        }
+
+        console.log('[Record] no_session_entitlement_active=false')
+      } catch (err) {
+        console.error('[Record] Error checking RevenueCat entitlement:', err)
       }
-    } catch (err) {
-      console.error('Error checking plan access:', err)
-      // On error, allow creation (fail open)
-      setCanCreate(true)
-    } finally {
-      setIsCheckingAccess(false)
     }
+
+    // CASE 3: No session AND no paid entitlement - redirect to login
+    console.log('[Record] redirecting_to_login_reason=free_no_session')
+    router.push('/login')
   }
 
   const startRecording = async () => {
@@ -99,6 +132,14 @@ export default function RecordPage() {
     // Block if user cannot create invoices
     if (!canCreate) {
       setError(planLimitMessage || 'Cannot create more invoices')
+      return
+    }
+
+    // For anonymous paid users, show account creation prompt
+    // Edge functions require Supabase auth, so we need an account to process recordings
+    if (isAnonymousPaidUser) {
+      console.log('[Record] Anonymous paid user tapped record - showing account prompt')
+      setShowAccountPrompt(true)
       return
     }
 
@@ -712,6 +753,54 @@ export default function RecordPage() {
           >
             REVIEW INVOICE
           </button>
+        </div>
+      )}
+
+      {/* ACCOUNT PROMPT MODAL - For anonymous paid users */}
+      {showAccountPrompt && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4">
+          <div className="bg-yapmate-gray-dark border border-gray-700 rounded-xl p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold text-white uppercase tracking-tight mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              Quick Setup Required
+            </h2>
+            <p className="text-yapmate-gray-lightest text-sm mb-4">
+              Your Pro subscription is active! To process voice recordings, we need to create a quick account. This takes 30 seconds.
+            </p>
+            <div className="space-y-3 text-sm mb-6">
+              <div className="flex items-start">
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
+                <span className="text-yapmate-gray-lightest">Your Pro subscription will transfer automatically</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
+                <span className="text-yapmate-gray-lightest">Invoices saved to cloud across all devices</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-yapmate-amber mr-3 text-lg">✓</span>
+                <span className="text-yapmate-gray-lightest">No extra charges - your trial continues</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => router.push('/signup?return=/record')}
+                className="w-full px-6 py-4 bg-yapmate-amber text-yapmate-black font-bold rounded-lg uppercase tracking-wide text-sm"
+              >
+                Create Account (30 sec)
+              </button>
+              <button
+                onClick={() => router.push('/login?return=/record')}
+                className="w-full px-6 py-4 border-2 border-yapmate-amber text-yapmate-amber font-bold rounded-lg uppercase tracking-wide text-sm"
+              >
+                I Have an Account
+              </button>
+              <button
+                onClick={() => setShowAccountPrompt(false)}
+                className="w-full px-6 py-3 text-yapmate-gray-light text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
