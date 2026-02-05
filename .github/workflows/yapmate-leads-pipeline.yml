@@ -42,7 +42,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r yapmate-leads/requirements.txt
 
-      - name: Run Sequencer (Scrape + Enrich)
+      - name: Run Pipeline (Scrape + Enrich, multi-iteration)
         id: sequencer
         working-directory: yapmate-leads
         env:
@@ -54,15 +54,22 @@ jobs:
           AUTO_APPROVE_ENABLED: ${{ env.AUTO_APPROVE_ENABLED }}
         run: |
           echo "=========================================="
-          echo "STEP 1: SEQUENCER (Scrape + Enrich)"
+          echo "STEP 1: PIPELINE (Scrape + Enrich)"
           echo "=========================================="
           echo "Time: $(TZ=Europe/London date '+%Y-%m-%d %H:%M %Z')"
           echo ""
 
-          python scripts/run_sequencer.py
+          # Use run_pipeline.py which loops through multiple city+trade
+          # combos (up to max_iterations=3) until email targets are met.
+          # Exit code 2 = targets not met (not an error, just low yield).
+          python scripts/run_pipeline.py --discovery-only || EXIT_CODE=$?
+          if [ "${EXIT_CODE:-0}" -eq 1 ]; then
+            echo "Pipeline failed with critical error"
+            exit 1
+          fi
 
           echo ""
-          echo "Sequencer completed successfully"
+          echo "Pipeline discovery completed"
 
       - name: Run Email Sender
         id: sender
