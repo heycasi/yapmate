@@ -60,9 +60,9 @@ jobs:
           echo ""
 
           # Use run_pipeline.py which loops through multiple city+trade
-          # combos (up to max_iterations=3) until email targets are met.
+          # combos (up to 8 iterations) until ~30 emails found.
           # Exit code 2 = targets not met (not an error, just low yield).
-          python scripts/run_pipeline.py --discovery-only || EXIT_CODE=$?
+          python scripts/run_pipeline.py --discovery-only --timeout 2700 || EXIT_CODE=$?
           if [ "${EXIT_CODE:-0}" -eq 1 ]; then
             echo "Pipeline failed with critical error"
             exit 1

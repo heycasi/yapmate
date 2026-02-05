@@ -155,13 +155,13 @@ class PipelineConfig:
     """Configuration for the end-to-end pipeline."""
 
     # Target thresholds
-    target_leads_total: int = 50
-    target_emails_min: int = 10
-    target_email_rate_min: float = 0.20
+    target_leads_total: int = 200
+    target_emails_min: int = 30
+    target_email_rate_min: float = 0.10
 
     # Safety limits
-    max_iterations: int = 3
-    max_runtime_seconds: int = 900  # 15 minutes
+    max_iterations: int = 8
+    max_runtime_seconds: int = 2700  # 45 minutes (leave 15 min for sending)
 
     # Pivot strategies
     enable_deep_crawl: bool = True
@@ -212,11 +212,11 @@ class PipelineConfig:
                 return default
 
         return cls(
-            target_leads_total=parse_int("TARGET_LEADS_TOTAL", 50),
-            target_emails_min=parse_int("TARGET_EMAILS_MIN", 10),
-            target_email_rate_min=parse_float("TARGET_EMAIL_RATE_MIN", 0.20),
-            max_iterations=parse_int("MAX_ITERATIONS", 3),
-            max_runtime_seconds=parse_int("MAX_RUNTIME_SECONDS", 900),
+            target_leads_total=parse_int("TARGET_LEADS_TOTAL", 200),
+            target_emails_min=parse_int("TARGET_EMAILS_MIN", 30),
+            target_email_rate_min=parse_float("TARGET_EMAIL_RATE_MIN", 0.10),
+            max_iterations=parse_int("MAX_ITERATIONS", 8),
+            max_runtime_seconds=parse_int("MAX_RUNTIME_SECONDS", 2700),
             enable_deep_crawl=parse_bool("ENABLE_DEEP_CRAWL", True),
             enable_query_variants=parse_bool("ENABLE_QUERY_VARIANTS", True),
             enable_social_fallback=parse_bool("ENABLE_SOCIAL_FALLBACK", True),
