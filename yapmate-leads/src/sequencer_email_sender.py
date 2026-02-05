@@ -336,90 +336,36 @@ class SequencerEmailSender:
     # EMAIL GENERATION
     # =========================================================================
 
-    def generate_subject(self, lead: EnhancedLead) -> str:
+    def generate_email(self, lead: EnhancedLead) -> tuple:
         """
-        Generate email subject line.
+        Generate a complete email (subject, HTML, plain text) from one template.
+
+        Uses generate_email_content() to ensure subject, HTML body, and plain
+        text body all come from the same randomly selected template.
 
         Args:
-            lead: Lead to generate subject for
+            lead: Lead to generate email for
 
         Returns:
-            Subject line
+            Tuple of (subject, html_body, text_body)
         """
-        # Import from existing templates module if available
-        try:
-            from src.templates import generate_email_subject
-            return generate_email_subject(lead.business_name, lead.trade)
-        except ImportError:
-            # Fallback
-            return f"Invoice software for {lead.trade}s - YapMate"
+        from src.templates import generate_email_content
+        return generate_email_content(lead.business_name)
+
+    def generate_subject(self, lead: EnhancedLead) -> str:
+        """Generate email subject line (standalone, for backwards compat)."""
+        from src.templates import generate_email_subject
+        return generate_email_subject(lead.business_name)
 
     def generate_html_body(self, lead: EnhancedLead) -> str:
-        """
-        Generate HTML email body.
-
-        Args:
-            lead: Lead to generate email for
-
-        Returns:
-            HTML email body
-        """
-        try:
-            from src.templates import generate_email_html
-            return generate_email_html(
-                business_name=lead.business_name,
-                hook=lead.ai_hook or "",
-                trade=lead.trade,
-                image_url=self.footer_image_url
-            )
-        except ImportError:
-            # Fallback basic HTML
-            return f"""
-            <html>
-            <body>
-            <p>Hi {lead.business_name},</p>
-            <p>{lead.ai_hook or "We noticed you're a " + lead.trade + " in " + lead.city + "."}</p>
-            <p>YapMate lets you create professional invoices just by speaking. No typing, no forms - just yap your job details and we handle the rest.</p>
-            <p>Perfect for busy tradespeople who'd rather be working than doing paperwork.</p>
-            <p>Learn more: <a href="https://www.yapmate.co.uk">www.yapmate.co.uk</a></p>
-            <p>Cheers,<br>The YapMate Team</p>
-            </body>
-            </html>
-            """
+        """Generate HTML email body (standalone, for backwards compat)."""
+        from src.templates import generate_email_html
+        return generate_email_html(business_name=lead.business_name)
 
     def generate_text_body(self, lead: EnhancedLead) -> str:
-        """
-        Generate plain text email body.
-
-        Args:
-            lead: Lead to generate email for
-
-        Returns:
-            Plain text email body
-        """
-        try:
-            from src.templates import generate_email_text
-            return generate_email_text(
-                business_name=lead.business_name,
-                hook=lead.ai_hook or "",
-                trade=lead.trade
-            )
-        except ImportError:
-            # Fallback basic text
-            return f"""
-Hi {lead.business_name},
-
-{lead.ai_hook or "We noticed you're a " + lead.trade + " in " + lead.city + "."}
-
-YapMate lets you create professional invoices just by speaking. No typing, no forms - just yap your job details and we handle the rest.
-
-Perfect for busy tradespeople who'd rather be working than doing paperwork.
-
-Learn more: www.yapmate.co.uk
-
-Cheers,
-The YapMate Team
-            """.strip()
+        """Generate plain text email body (standalone, for backwards compat)."""
+        from src.templates import generate_email_text
+        return generate_email_text(business_name=lead.business_name)
 
     # =========================================================================
     # SENDING
@@ -697,10 +643,8 @@ From: {self.from_email}
 
         # Step 6: Actually send the email
         try:
-            # Generate email content
-            subject = self.generate_subject(lead)
-            html_body = self.generate_html_body(lead)
-            text_body = self.generate_text_body(lead)
+            # Generate email content (subject + body from same template)
+            subject, html_body, text_body = self.generate_email(lead)
 
             # Log CTA link URL for deliverability verification
             from src.templates import APP_STORE_URL
@@ -725,7 +669,7 @@ From: {self.from_email}
             # Send via Resend
             response = resend.Emails.send(params)
             email_id = response.get("id", "unknown")
-            
+
             # Log Resend email ID for verification
             print(f"  ✓ Resend email ID: {email_id}")
 
@@ -868,10 +812,8 @@ From: {self.from_email}
 
         # Step 6: Actually send the email
         try:
-            # Generate email content
-            subject = self.generate_subject(lead)
-            html_body = self.generate_html_body(lead)
-            text_body = self.generate_text_body(lead)
+            # Generate email content (subject + body from same template)
+            subject, html_body, text_body = self.generate_email(lead)
 
             # Log CTA link URL for deliverability verification
             from src.templates import APP_STORE_URL

@@ -1,4 +1,8 @@
-"""Email HTML templates for lead outreach."""
+"""Email templates for lead outreach.
+
+3 fixed templates rotated randomly. No trade-specific wording.
+Each template has its own subject line, HTML body, and plain text body.
+"""
 
 import random
 
@@ -13,44 +17,68 @@ APPSTORE_BADGE_URL = "https://www.yapmate.co.uk/email/appstore-badge.png"
 INVOICE_IMAGE_URL = "https://www.yapmate.co.uk/invoice-showcase.png"
 
 
-def generate_email_html(
-    business_name: str,
-    hook: str,
-    trade: str,
-    image_url: str = None  # Kept for backwards compatibility, not used
-) -> str:
+# =========================================================================
+# TEMPLATE DEFINITIONS
+# =========================================================================
+# Each template is a dict with: subject, body_paragraphs (list of strings)
+# body_paragraphs use {business_name} placeholder only.
+
+TEMPLATES = [
+    {
+        # Template 1: Story + simple use case
+        "subject": "Built for tradies who work by voice",
+        "paragraphs": [
+            "I built YapMate after watching my uncle run his whole business by voice notes while my auntie ended up doing his invoices on her phone at night. I built it for him first, then realised it could help other tradies \u2014 that\u2019s how YapMate started.",
+            "With YapMate, you speak the job and it turns that into a proper invoice automatically (labour, materials, VAT, CIS where relevant). No forms. No typing.",
+            "If you want to try it, there\u2019s a 7-day free trial so you can test it properly.",
+        ],
+    },
+    {
+        # Template 3: Problem-first, generic
+        "subject": "Less paperwork, same work done",
+        "paragraphs": [
+            "A lot of people in trades lose time to paperwork \u2014 especially invoicing.",
+            "YapMate lets you talk through a job and get a proper invoice straight away, without typing everything out. It handles materials, labour, VAT and CIS correctly.",
+            "I built it originally for a family member who worked mostly by voice. You can test it with a 7-day free trial.",
+        ],
+    },
+    {
+        # Template 5: Benefit-led, clean
+        "subject": "Faster invoices without admin",
+        "paragraphs": [
+            "YapMate converts your spoken job details into a proper invoice instantly \u2014 including materials, labour, VAT and CIS where needed.",
+            "No forms. No manual data entry.",
+            "You can test it on a 7-day free trial.",
+        ],
+    },
+]
+
+
+def _pick_template() -> dict:
+    """Pick a random template from the pool."""
+    return random.choice(TEMPLATES)
+
+
+# =========================================================================
+# HTML EMAIL WRAPPER
+# =========================================================================
+
+def _wrap_html(business_name: str, body_paragraphs: list) -> str:
     """
-    Generate personalized email HTML (Outlook-safe)
+    Wrap body paragraphs in the standard HTML email layout.
 
-    Args:
-        business_name: Lead's business name
-        hook: AI-generated hook sentence
-        trade: Trade type (Plumber, Electrician, etc.)
-        image_url: Deprecated, kept for backwards compatibility
-
-    Returns:
-        HTML email content
+    Outlook-safe table-based layout with logo header, App Store CTA,
+    invoice screenshot, and unsubscribe footer.
     """
+    # Build paragraph HTML
+    paragraphs_html = ""
+    for p in body_paragraphs:
+        paragraphs_html += f"""
+                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
+                                {p}
+                            </p>"""
 
-    # Trade-specific context
-    trade_context = {
-        "Plumber": "boiler parts",
-        "Electrician": "wiring",
-        "Builder": "materials",
-        "Heating Engineer": "boiler parts",
-        "Gas Engineer": "boiler parts",
-        "Sparky": "wiring",
-        "Carpenter": "timber",
-        "Joiner": "timber",
-        "Roofer": "roofing materials",
-        "Plasterer": "plaster",
-        "Painter": "paint",
-        "Decorator": "materials"
-    }
-
-    materials = trade_context.get(trade, "materials")
-
-    html = f"""<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -87,27 +115,7 @@ def generate_email_html(
                             <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
                                 Hi {business_name},
                             </p>
-
-                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                {hook}
-                            </p>
-
-                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                We built YapMate for trades who want invoices done without the admin.
-                            </p>
-
-                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                Just talk through the job (labour, {materials}) and YapMate builds a clean PDF invoice instantly.
-                            </p>
-
-                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                Handles labour, materials, VAT, CIS and Reverse Charge properly.
-                            </p>
-
-                            <p style="margin: 0 0 30px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                No typing. No forms.
-                            </p>
-
+{paragraphs_html}
                         </td>
                     </tr>
 
@@ -145,8 +153,8 @@ def generate_email_html(
                     <tr>
                         <td style="padding: 0;">
                             <p style="margin: 0; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                Cheers,<br>
-                                Connor
+                                Connor<br>
+                                YapMate
                             </p>
                         </td>
                     </tr>
@@ -168,85 +176,117 @@ def generate_email_html(
 </html>
 """
 
-    return html
 
+# =========================================================================
+# PLAIN TEXT EMAIL WRAPPER
+# =========================================================================
 
-def generate_email_text(
-    business_name: str,
-    hook: str,
-    trade: str
-) -> str:
-    """
-    Generate plain-text version of email (for deliverability)
+def _wrap_text(business_name: str, body_paragraphs: list) -> str:
+    """Wrap body paragraphs in plain text email format."""
+    body = "\n\n".join(body_paragraphs)
+    return f"""Hi {business_name},
 
-    Args:
-        business_name: Lead's business name
-        hook: AI-generated hook sentence
-        trade: Trade type
+{body}
 
-    Returns:
-        Plain text email content
-    """
-
-    trade_context = {
-        "Plumber": "boiler parts",
-        "Electrician": "wiring",
-        "Builder": "materials",
-        "Heating Engineer": "boiler parts",
-        "Gas Engineer": "boiler parts",
-        "Sparky": "wiring",
-        "Carpenter": "timber",
-        "Joiner": "timber",
-        "Roofer": "roofing materials",
-        "Plasterer": "plaster",
-        "Painter": "paint",
-        "Decorator": "materials"
-    }
-
-    materials = trade_context.get(trade, "materials")
-
-    text = f"""Hi {business_name},
-
-{hook}
-
-We built YapMate for trades who want invoices done without the admin.
-
-Just talk through the job (labour, {materials}) and YapMate builds a clean PDF invoice instantly.
-
-Handles labour, materials, VAT, CIS and Reverse Charge properly.
-
-No typing. No forms.
+Connor
+YapMate
 
 Download YapMate on the App Store:
 {APP_STORE_URL}
-
-Cheers,
-Connor
 
 ---
 
 Unsubscribe: {UNSUBSCRIBE_URL}
 """
 
-    return text
 
+# =========================================================================
+# PUBLIC API (same signatures as before for backwards compatibility)
+# =========================================================================
 
-def generate_email_subject(business_name: str, trade: str) -> str:
+def generate_email_html(
+    business_name: str,
+    hook: str = "",
+    trade: str = "",
+    image_url: str = None,
+    _template: dict = None,
+) -> str:
     """
-    Generate email subject line
+    Generate HTML email from a randomly selected template.
 
     Args:
-        business_name: Lead's business name (not used)
-        trade: Trade type (not used)
+        business_name: Lead's business name
+        hook: Ignored (kept for backwards compatibility)
+        trade: Ignored (kept for backwards compatibility)
+        image_url: Ignored (kept for backwards compatibility)
+        _template: Internal - pre-selected template (used to keep
+                   HTML/text/subject in sync for the same email)
 
     Returns:
-        Email subject (randomly selected from 4 options)
+        HTML email content
     """
-    subject_lines = [
-        "Stop doing invoices at 9pm",
-        "Invoices done before you leave site",
-        "Talk the job. Invoice done.",
-        "Still typing invoices at night?"
-    ]
+    tpl = _template or _pick_template()
+    return _wrap_html(business_name, tpl["paragraphs"])
 
-    return random.choice(subject_lines)
+
+def generate_email_text(
+    business_name: str,
+    hook: str = "",
+    trade: str = "",
+    _template: dict = None,
+) -> str:
+    """
+    Generate plain-text email from a randomly selected template.
+
+    Args:
+        business_name: Lead's business name
+        hook: Ignored (kept for backwards compatibility)
+        trade: Ignored (kept for backwards compatibility)
+        _template: Internal - pre-selected template
+
+    Returns:
+        Plain text email content
+    """
+    tpl = _template or _pick_template()
+    return _wrap_text(business_name, tpl["paragraphs"])
+
+
+def generate_email_subject(
+    business_name: str = "",
+    trade: str = "",
+    _template: dict = None,
+) -> str:
+    """
+    Generate email subject line from a randomly selected template.
+
+    Args:
+        business_name: Ignored (kept for backwards compatibility)
+        trade: Ignored (kept for backwards compatibility)
+        _template: Internal - pre-selected template
+
+    Returns:
+        Email subject line
+    """
+    tpl = _template or _pick_template()
+    return tpl["subject"]
+
+
+def generate_email_content(business_name: str) -> tuple:
+    """
+    Generate a complete email (subject, HTML, plain text) from one template.
+
+    This ensures the subject, HTML body, and plain text body all come from
+    the same randomly selected template.
+
+    Args:
+        business_name: Lead's business name
+
+    Returns:
+        Tuple of (subject, html_body, text_body)
+    """
+    tpl = _pick_template()
+    return (
+        tpl["subject"],
+        _wrap_html(business_name, tpl["paragraphs"]),
+        _wrap_text(business_name, tpl["paragraphs"]),
+    )

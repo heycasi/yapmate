@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_dir))
 from dotenv import load_dotenv
 import resend
 from src.sheets_manager import SheetsManager
-from src.templates import generate_email_html, generate_email_text, generate_email_subject
+from src.templates import generate_email_content
 from src.notifications import notify_send_complete
 
 
@@ -165,21 +165,8 @@ def send_approved_leads(auto: bool = False, limit: int = None):
 
         print(f"\n[{i}/{leads_to_process}] {business_name} <{email}>")
 
-        # Generate email content (HTML + plain text for deliverability)
-        html_content = generate_email_html(
-            business_name=business_name,
-            hook=hook,
-            trade=trade,
-            image_url=image_url
-        )
-
-        text_content = generate_email_text(
-            business_name=business_name,
-            hook=hook,
-            trade=trade
-        )
-
-        subject = generate_email_subject(business_name, trade)
+        # Generate email content (subject + HTML + text from same template)
+        subject, html_content, text_content = generate_email_content(business_name)
 
         # Send via Resend with multipart (HTML + text) and List-Unsubscribe headers
         try:
