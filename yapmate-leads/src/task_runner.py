@@ -61,6 +61,9 @@ class TaskRunner:
         # Load environment (for non-secret config only)
         load_dotenv()
 
+        # Log config for debugging
+        print(f"[Config] leads_per_task={self.queue_config.leads_per_task} (Apify maxCrawledPlacesPerSearch)", flush=True)
+
         # Run MANDATORY pre-flight checks - FAILS HARD if invalid
         # No silent fallbacks. No degraded mode. All credentials must be valid.
         preflight = run_mandatory_preflight(
@@ -453,10 +456,12 @@ class TaskRunner:
                 return log_entry
 
             try:
+                max_results = self.queue_config.leads_per_task
+                print(f"  [Apify] maxCrawledPlacesPerSearch={max_results} query=\"{task.trade} in {task.city}, UK\"", flush=True)
                 raw_leads = self.scraper.scrape_leads(
                     trade=task.trade,
                     city=task.city,
-                    max_results=self.queue_config.leads_per_task
+                    max_results=max_results
                 )
                 log_entry.leads_found = len(raw_leads)
                 print(f"  Found {len(raw_leads)} raw leads", flush=True)

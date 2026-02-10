@@ -151,7 +151,11 @@ class QueueConfig:
     pm_session_offset: int = 500
 
     # Task settings
-    leads_per_task: int = 20
+    # NOTE: leads_per_task controls maxCrawledPlacesPerSearch in Apify.
+    # Top 20 Google Maps results are prominence-biased toward larger firms.
+    # Sole traders typically appear in positions 21-50+.
+    # Default: 50 to capture owner-operators. Override via LEADS_PER_TASK env.
+    leads_per_task: int = 50
     tasks_per_day: int = 2  # AM + PM sessions
 
     # Queue management
@@ -334,7 +338,10 @@ def _parse_int_env(name: str, default: int) -> int:
 # DEFAULT INSTANCES
 # =============================================================================
 
-DEFAULT_QUEUE_CONFIG = QueueConfig()
+# QueueConfig with env override for leads_per_task (Apify maxCrawledPlacesPerSearch)
+DEFAULT_QUEUE_CONFIG = QueueConfig(
+    leads_per_task=_parse_int_env("LEADS_PER_TASK", 50),  # Default 50, override via LEADS_PER_TASK
+)
 DEFAULT_SESSION_CONFIG = SessionConfig()
 DEFAULT_EMAIL_ELIGIBILITY_CONFIG = EmailEligibilityConfig()
 
