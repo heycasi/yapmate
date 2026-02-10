@@ -1,12 +1,17 @@
 name: YapMate Leads Pipeline
 
 # Combined scrape + send workflow
-# Runs 5x daily on weekdays: 08:00, 10:00, 12:00, 14:00, 16:00 UTC
-# (roughly 08:00-16:00 UK depending on DST)
+# Runs 4x daily on weekdays at UK-friendly times:
+#   - 11:00 UTC (11:00 UK winter / 12:00 UK summer)
+#   - 14:00 UTC (14:00 UK winter / 15:00 UK summer)
+#   - 16:30 UTC (16:30 UK winter / 17:30 UK summer)
+#   - 19:30 UTC (19:30 UK winter / 20:30 UK summer)
+# Targets: late morning, afternoon, end-of-day, evening
 
 on:
   schedule:
-    - cron: '0 8,10,12,14,16 * * 1-5'
+    - cron: '0 11,14 * * 1-5'    # 11:00 and 14:00 UTC
+    - cron: '30 16,19 * * 1-5'   # 16:30 and 19:30 UTC
   workflow_dispatch:
 
 concurrency:
