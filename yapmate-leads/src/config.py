@@ -57,7 +57,10 @@ class LimitsConfig:
     """Safety limits and caps."""
     # Scraping limits
     max_scrape_per_run: int = 100
-    max_results_per_search: int = 20
+    # NOTE: Top 20 Google Maps results are prominence-biased toward larger firms
+    # (more reviews, complete profiles, websites). Sole traders typically appear
+    # in positions 21-50+. Set to 50 to capture owner-operators.
+    max_results_per_search: int = 50
 
     # Enrichment limits
     max_enrich_per_run: int = 50
@@ -100,6 +103,10 @@ class AutoApproveConfig:
 
     # Domain matching
     require_domain_match: bool = False  # Soft warning if email != website domain
+
+    # Sole Trader Mode: allows personal email domains (gmail, btinternet, etc.)
+    # with extra validation to filter out larger businesses
+    sole_trader_mode: bool = True  # Default ON to target owner-operators
 
 
 @dataclass
@@ -342,6 +349,8 @@ def load_config() -> Config:
     if os.getenv("AUTO_APPROVE_MAX_PER_RUN"):
         config.auto_approve.max_per_run = int(os.getenv("AUTO_APPROVE_MAX_PER_RUN"))
     config.auto_approve.allow_free_emails = os.getenv("AUTO_APPROVE_ALLOW_FREE_EMAILS", "false").lower() == "true"
+    # Sole Trader Mode: allows personal emails with extra validation (default ON)
+    config.auto_approve.sole_trader_mode = os.getenv("SOLE_TRADER_MODE", "true").lower() == "true"
 
     # Scaling config (prep for production ramp-up - NOT enabled by default)
     config.scaling.scaling_enabled = os.getenv("SCALING_ENABLED", "false").lower() == "true"

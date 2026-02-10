@@ -502,9 +502,14 @@ class PipelineOrchestrator:
 
         # Import the full auto-approve validation
         from src.auto_approve import check_auto_approval
+        from src.config import get_config
+
+        config = get_config()
+        sole_trader_mode = config.auto_approve.sole_trader_mode
 
         approved_count = 0
         rejected_count = 0
+        sole_trader_scores = []
 
         for lead in leads:
             # Skip if already approved or already has send_eligible
@@ -515,6 +520,11 @@ class PipelineOrchestrator:
             if not lead.email or not lead.email.strip():
                 continue
 
+            # Extract review count from raw_data if available
+            review_count = None
+            if hasattr(lead, 'raw_data') and lead.raw_data:
+                review_count = lead.raw_data.get('reviewsCount') or lead.raw_data.get('totalScore')
+
             # Run FULL auto-approval validation (not just pattern check)
             result = check_auto_approval(
                 email=lead.email,
@@ -522,7 +532,12 @@ class PipelineOrchestrator:
                 send_eligible=True,  # We're checking if it SHOULD be eligible
                 business_name=lead.business_name,
                 allow_free_emails=False,
+                phone=getattr(lead, 'phone', None),
+                review_count=review_count,
+                sole_trader_mode=sole_trader_mode,
             )
+
+            sole_trader_scores.append(result.sole_trader_score)
 
             if result.approved:
                 lead.send_eligible = True
@@ -534,6 +549,9 @@ class PipelineOrchestrator:
 
         if approved_count > 0 or rejected_count > 0:
             print(f"[ELIGIBILITY] Full validation: {approved_count} approved, {rejected_count} rejected", flush=True)
+            if sole_trader_scores:
+                avg_score = sum(sole_trader_scores) / len(sole_trader_scores)
+                print(f"[ELIGIBILITY] Sole trader scores: min={min(sole_trader_scores)}, avg={avg_score:.0f}, max={max(sole_trader_scores)}", flush=True)
 
         if approved_count > 0:
             # Batch update to sheets

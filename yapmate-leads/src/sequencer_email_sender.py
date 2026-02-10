@@ -1209,6 +1209,10 @@ From: {self.from_email}
 
         # Import auto_approve for safety check
         from src.auto_approve import check_auto_approval
+        from src.config import get_config
+
+        config = get_config()
+        sole_trader_mode = config.auto_approve.sole_trader_mode
 
         try:
             for i, lead in enumerate(leads, 1):
@@ -1218,6 +1222,11 @@ From: {self.from_email}
                 print(f"  Status: {lead.status}")
                 print("-" * 40)
 
+                # Extract review count from raw_data if available
+                review_count = None
+                if hasattr(lead, 'raw_data') and lead.raw_data:
+                    review_count = lead.raw_data.get('reviewsCount') or lead.raw_data.get('totalScore')
+
                 # SAFETY CHECK: Re-validate with full auto_approve before sending
                 # This catches any leads that were approved by weak/old logic
                 safety_check = check_auto_approval(
@@ -1226,6 +1235,9 @@ From: {self.from_email}
                     send_eligible=lead.send_eligible,
                     business_name=lead.business_name,
                     allow_free_emails=False,
+                    phone=getattr(lead, 'phone', None),
+                    review_count=review_count,
+                    sole_trader_mode=sole_trader_mode,
                 )
 
                 if not safety_check.approved:

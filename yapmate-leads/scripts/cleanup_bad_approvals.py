@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.sequencer_sheets import SequencerSheetsManager
 from src.auto_approve import check_auto_approval
+from src.config import get_config
 
 
 def main():
@@ -50,16 +51,28 @@ def main():
     bad_leads = []
     good_leads = []
 
+    config = get_config()
+    sole_trader_mode = config.auto_approve.sole_trader_mode
+
     print("\nValidating APPROVED leads...")
+    print(f"  Sole Trader Mode: {sole_trader_mode}")
     print("-" * 70)
 
     for lead in approved_leads:
+        # Extract review count from raw_data if available
+        review_count = None
+        if hasattr(lead, 'raw_data') and lead.raw_data:
+            review_count = lead.raw_data.get('reviewsCount') or lead.raw_data.get('totalScore')
+
         result = check_auto_approval(
             email=lead.email,
             website=getattr(lead, 'website', None),
             send_eligible=getattr(lead, 'send_eligible', False),
             business_name=lead.business_name,
             allow_free_emails=False,
+            phone=getattr(lead, 'phone', None),
+            review_count=review_count,
+            sole_trader_mode=sole_trader_mode,
         )
 
         if result.approved:

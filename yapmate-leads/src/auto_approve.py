@@ -7,19 +7,212 @@ removing the need for manual review.
 Rules (all must pass):
 1. send_eligible == true
 2. Email passes sanitization
-3. Not a free email provider (gmail, yahoo, etc.)
+3. Not a free email provider (gmail, yahoo, etc.) - UNLESS sole_trader_mode
 4. Not a placeholder/example domain
 5. No malformed scraped strings
 6. Domain matches website domain (or subdomain)
+
+Sole Trader Mode:
+When enabled, allows personal email domains (gmail, btinternet, etc.) with
+extra validation to filter out larger businesses:
+- Reject if business name contains: ltd, limited, group, holdings, plc
+- For free email domains, require at least one sole trader signal:
+  - Mobile phone (07xxx)
+  - Low review count (≤25)
+  - Personal name pattern in business name
 """
 
 import re
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from src.email_sanitizer import sanitize_email, SanitizationResult
 from src.config import get_config
+
+
+# =============================================================================
+# SOLE TRADER DETECTION
+# =============================================================================
+
+# Corporate name patterns that indicate a larger business (NOT a sole trader)
+CORPORATE_NAME_PATTERNS = [
+    r'\bltd\b',
+    r'\blimited\b',
+    r'\bgroup\b',
+    r'\bholdings\b',
+    r'\bplc\b',
+    r'\binc\b',
+    r'\bcorp\b',
+    r'\bcorporation\b',
+    r'\b& sons\b',
+    r'\b& co\b',
+]
+
+# Common UK first names for detecting personal business names
+UK_FIRST_NAMES = {
+    'dave', 'david', 'john', 'mike', 'michael', 'steve', 'steven', 'paul',
+    'mark', 'gary', 'chris', 'christopher', 'andy', 'andrew', 'rob', 'robert',
+    'james', 'jim', 'tony', 'anthony', 'pete', 'peter', 'nick', 'nicholas',
+    'tom', 'thomas', 'dan', 'daniel', 'matt', 'matthew', 'rich', 'richard',
+    'brian', 'barry', 'keith', 'kevin', 'lee', 'martin', 'simon', 'wayne',
+    'alan', 'adam', 'ben', 'benjamin', 'carl', 'colin', 'craig', 'darren',
+    'dean', 'derek', 'doug', 'douglas', 'frank', 'fred', 'geoff', 'george',
+    'graham', 'greg', 'ian', 'jack', 'jason', 'jeff', 'joe', 'jon', 'karl',
+    'ken', 'larry', 'len', 'les', 'neil', 'nigel', 'pat', 'patrick', 'phil',
+    'ray', 'roger', 'ron', 'roy', 'russell', 'sam', 'scott', 'sean', 'shaun',
+    'stan', 'stuart', 'terry', 'tim', 'trevor', 'vic', 'will', 'william',
+}
+
+
+def is_corporate_name(business_name: str) -> bool:
+    """Check if business name contains corporate indicators."""
+    if not business_name:
+        return False
+    name_lower = business_name.lower()
+    for pattern in CORPORATE_NAME_PATTERNS:
+        if re.search(pattern, name_lower):
+            return True
+    return False
+
+
+def has_personal_name_pattern(business_name: str) -> bool:
+    """
+    Check if business name looks like a personal/sole trader name.
+
+    Examples that match:
+    - "Dave's Plumbing"
+    - "John Smith Electrical"
+    - "Mike the Plumber"
+    - "A. Jones Roofing"
+    """
+    if not business_name:
+        return False
+
+    name_lower = business_name.lower()
+
+    # Check for possessive pattern (Dave's, Mike's)
+    if "'" in business_name or "'" in business_name:
+        return True
+
+    # Check for first name at start
+    first_word = name_lower.split()[0] if name_lower.split() else ""
+    if first_word in UK_FIRST_NAMES:
+        return True
+
+    # Check for initial pattern (A. Smith, J. Brown)
+    if re.match(r'^[a-z]\.\s*[a-z]', name_lower):
+        return True
+
+    return False
+
+
+def calculate_sole_trader_score(
+    business_name: str,
+    email: Optional[str],
+    phone: Optional[str],
+    website: Optional[str],
+    review_count: Optional[int] = None,
+) -> int:
+    """
+    Calculate a 0-100 score indicating likelihood of being a sole trader.
+
+    Higher score = more likely to be a sole trader / owner-operator.
+
+    Scoring:
+    - No Ltd/Limited/Group/Holdings/Plc in name: +20
+    - Review count 0-10: +20, 11-25: +10
+    - Mobile phone (07xxx): +15
+    - Personal email domain: +15
+    - No website: +10
+    - Personal name pattern in business name: +10
+    - Has possessive in name (Dave's, Mike's): +10 (included in personal name)
+
+    Returns:
+        Score from 0-100
+    """
+    score = 0
+
+    # Check business name for corporate patterns
+    if not is_corporate_name(business_name):
+        score += 20
+
+    # Check for personal name pattern
+    if has_personal_name_pattern(business_name):
+        score += 10
+
+    # Review count (lower = more likely sole trader)
+    if review_count is not None:
+        if review_count <= 10:
+            score += 20
+        elif review_count <= 25:
+            score += 10
+
+    # Mobile phone (07xxx = personal mobile)
+    if phone:
+        phone_clean = re.sub(r'[^\d]', '', phone)
+        if phone_clean.startswith('07') or phone_clean.startswith('447'):
+            score += 15
+
+    # Personal email domain
+    if email and '@' in email:
+        email_domain = email.split('@')[1].lower()
+        if email_domain in FREE_EMAIL_PROVIDERS:
+            score += 15
+
+    # No website (sole traders often don't have websites)
+    if not website or not website.strip():
+        score += 10
+
+    return min(score, 100)
+
+
+def passes_sole_trader_validation(
+    business_name: str,
+    email: Optional[str],
+    phone: Optional[str],
+    review_count: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """
+    Extra validation for leads with personal email domains in sole trader mode.
+
+    For leads using gmail/btinternet/etc, we require at least one signal
+    that they're likely a sole trader, not a corporate using personal email.
+
+    Args:
+        business_name: Business name to check
+        email: Email address
+        phone: Phone number
+        review_count: Number of Google reviews (if available)
+
+    Returns:
+        Tuple of (passes, reason)
+    """
+    # First, reject if business name has corporate indicators
+    if is_corporate_name(business_name):
+        return False, f"Business name contains corporate indicator (Ltd/Limited/Group/etc)"
+
+    # For personal email domains, require at least ONE sole trader signal
+    signals = []
+
+    # Signal 1: Mobile phone (07xxx)
+    if phone:
+        phone_clean = re.sub(r'[^\d]', '', phone)
+        if phone_clean.startswith('07') or phone_clean.startswith('447'):
+            signals.append("mobile_phone")
+
+    # Signal 2: Low review count (≤25 or unknown)
+    if review_count is None or review_count <= 25:
+        signals.append("low_reviews")
+
+    # Signal 3: Personal name pattern
+    if has_personal_name_pattern(business_name):
+        signals.append("personal_name")
+
+    if signals:
+        return True, f"Sole trader signals: {', '.join(signals)}"
+    else:
+        return False, "No sole trader signals found (need mobile phone, low reviews, or personal name)"
 
 
 # =============================================================================
@@ -113,6 +306,7 @@ class ApprovalResult:
     email_sanitized: Optional[str]
     checks_passed: List[str]
     checks_failed: List[str]
+    sole_trader_score: int = 0  # 0-100 score indicating likelihood of sole trader
 
 
 def extract_domain_from_url(url: str) -> Optional[str]:
@@ -195,6 +389,9 @@ def check_auto_approval(
     send_eligible: bool,
     business_name: str,
     allow_free_emails: bool = False,
+    phone: Optional[str] = None,
+    review_count: Optional[int] = None,
+    sole_trader_mode: bool = True,
 ) -> ApprovalResult:
     """
     Check if a lead should be auto-approved.
@@ -205,6 +402,9 @@ def check_auto_approval(
         send_eligible: Whether lead passed eligibility checks
         business_name: Business name for logging
         allow_free_emails: If True, don't reject free email providers
+        phone: Phone number (used for sole trader validation)
+        review_count: Number of Google reviews (used for sole trader validation)
+        sole_trader_mode: If True, allows personal emails with extra validation
 
     Returns:
         ApprovalResult with approval status and reasons
@@ -308,20 +508,47 @@ def check_auto_approval(
     checks_passed.append("placeholder_check")
 
     # ==========================================================================
-    # Check 6: Free email providers
+    # Check 6: Free email providers (with Sole Trader Mode)
     # ==========================================================================
-    if not allow_free_emails and email_domain in FREE_EMAIL_PROVIDERS:
-        checks_failed.append(f"free_email: {email_domain} is a free email provider")
-        return ApprovalResult(
-            approved=False,
-            reason=f"Free email provider not allowed: {email_domain}",
-            email_original=email,
-            email_sanitized=clean_email,
-            checks_passed=checks_passed,
-            checks_failed=checks_failed,
-        )
+    is_free_email = email_domain in FREE_EMAIL_PROVIDERS
 
-    checks_passed.append("free_email_check")
+    if is_free_email:
+        if allow_free_emails:
+            # Explicitly allowed - skip all free email checks
+            checks_passed.append(f"free_email: allowed ({email_domain})")
+        elif sole_trader_mode:
+            # Sole Trader Mode: allow personal emails with extra validation
+            passes, reason = passes_sole_trader_validation(
+                business_name=business_name,
+                email=clean_email,
+                phone=phone,
+                review_count=review_count,
+            )
+            if passes:
+                checks_passed.append(f"sole_trader_mode: {reason}")
+            else:
+                checks_failed.append(f"sole_trader_mode: {reason}")
+                return ApprovalResult(
+                    approved=False,
+                    reason=f"Free email rejected (sole trader check failed): {reason}",
+                    email_original=email,
+                    email_sanitized=clean_email,
+                    checks_passed=checks_passed,
+                    checks_failed=checks_failed,
+                )
+        else:
+            # Neither allow_free_emails nor sole_trader_mode - reject
+            checks_failed.append(f"free_email: {email_domain} is a free email provider")
+            return ApprovalResult(
+                approved=False,
+                reason=f"Free email provider not allowed: {email_domain}",
+                email_original=email,
+                email_sanitized=clean_email,
+                checks_passed=checks_passed,
+                checks_failed=checks_failed,
+            )
+    else:
+        checks_passed.append("free_email_check: business domain")
 
     # ==========================================================================
     # Check 7: Domain matching (email domain vs website domain)
@@ -342,6 +569,16 @@ def check_auto_approval(
     # ==========================================================================
     # ALL CHECKS PASSED - APPROVE
     # ==========================================================================
+
+    # Calculate sole trader score for logging/diagnostics
+    score = calculate_sole_trader_score(
+        business_name=business_name,
+        email=clean_email,
+        phone=phone,
+        website=website,
+        review_count=review_count,
+    )
+
     return ApprovalResult(
         approved=True,
         reason=f"All {len(checks_passed)} checks passed",
@@ -349,6 +586,7 @@ def check_auto_approval(
         email_sanitized=clean_email,
         checks_passed=checks_passed,
         checks_failed=checks_failed,
+        sole_trader_score=score,
     )
 
 
@@ -368,9 +606,10 @@ def auto_approve_leads(
         allow_free_emails: Whether to allow free email providers
 
     Returns:
-        Dict with approval statistics
+        Dict with approval statistics including sole trader scores
     """
     config = get_config()
+    sole_trader_mode = config.auto_approve.sole_trader_mode
 
     stats = {
         'processed': 0,
@@ -379,6 +618,7 @@ def auto_approve_leads(
         'skipped': 0,
         'approval_reasons': [],
         'rejection_reasons': [],
+        'sole_trader_scores': [],  # Track scores for logging
     }
 
     print(f"\n" + "=" * 70)
@@ -387,6 +627,7 @@ def auto_approve_leads(
     print(f"  Leads to process: {len(leads)}")
     print(f"  Max per run: {max_per_run}")
     print(f"  Allow free emails: {allow_free_emails}")
+    print(f"  Sole Trader Mode: {sole_trader_mode}")
 
     # Collect ALL updates for true batch write (approved + rejected)
     all_updates = []
@@ -397,17 +638,29 @@ def auto_approve_leads(
 
         stats['processed'] += 1
 
-        # Run approval checks
+        # Extract review count from raw_data if available
+        review_count = None
+        if hasattr(lead, 'raw_data') and lead.raw_data:
+            review_count = lead.raw_data.get('reviewsCount') or lead.raw_data.get('totalScore')
+
+        # Run approval checks with sole trader mode
         result = check_auto_approval(
             email=lead.email,
             website=getattr(lead, 'website', None),
             send_eligible=lead.send_eligible,
             business_name=lead.business_name,
             allow_free_emails=allow_free_emails,
+            phone=getattr(lead, 'phone', None),
+            review_count=review_count,
+            sole_trader_mode=sole_trader_mode,
         )
+
+        # Track sole trader score
+        stats['sole_trader_scores'].append(result.sole_trader_score)
 
         print(f"  Email: {result.email_original}")
         print(f"  Sanitized: {result.email_sanitized or 'N/A'}")
+        print(f"  Sole Trader Score: {result.sole_trader_score}/100")
         print(f"  Approved: {result.approved}")
         print(f"  Reason: {result.reason}")
 
@@ -418,6 +671,7 @@ def auto_approve_leads(
                 'business': lead.business_name,
                 'email': result.email_sanitized,
                 'reason': result.reason,
+                'sole_trader_score': result.sole_trader_score,
             })
 
             # Queue for batch update (include send_eligible=True)
@@ -428,7 +682,7 @@ def auto_approve_leads(
                 'eligibility_reason': result.reason,
             })
 
-            print(f"  -> AUTO-APPROVED")
+            print(f"  -> AUTO-APPROVED (score: {result.sole_trader_score})")
         else:
             stats['rejected'] += 1
             stats['rejection_reasons'].append({
@@ -437,6 +691,7 @@ def auto_approve_leads(
                 'email': result.email_original,
                 'reason': result.reason,
                 'checks_failed': result.checks_failed,
+                'sole_trader_score': result.sole_trader_score,
             })
 
             # Queue rejection for batch update (keep as NEW)
@@ -481,6 +736,17 @@ def auto_approve_leads(
     print(f"  Approved:  {stats['approved']}")
     print(f"  Rejected:  {stats['rejected']}")
     print(f"  Skipped:   {stats['skipped']}")
+
+    # Sole trader score distribution
+    if stats['sole_trader_scores']:
+        scores = stats['sole_trader_scores']
+        avg_score = sum(scores) / len(scores)
+        print(f"\n  SOLE TRADER SCORES:")
+        print(f"    Min: {min(scores)}")
+        print(f"    Avg: {avg_score:.1f}")
+        print(f"    Max: {max(scores)}")
+        print(f"    Score ≥50 (likely sole trader): {sum(1 for s in scores if s >= 50)}/{len(scores)}")
+
     print("=" * 70)
 
     return stats
