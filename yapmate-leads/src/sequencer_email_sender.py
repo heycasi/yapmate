@@ -1209,10 +1209,9 @@ From: {self.from_email}
 
         # Import auto_approve for safety check
         from src.auto_approve import check_auto_approval
-        from src.config import get_config
 
-        config = get_config()
-        sole_trader_mode = config.auto_approve.sole_trader_mode
+        # get_config already imported at module level (line 29)
+        sole_trader_mode = get_config().auto_approve.sole_trader_mode
 
         try:
             for i, lead in enumerate(leads, 1):
