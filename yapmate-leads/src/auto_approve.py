@@ -551,6 +551,26 @@ def check_auto_approval(
         checks_passed.append("free_email_check: business domain")
 
     # ==========================================================================
+    # Check 6b: Corporate name rejection (Sole Trader Mode)
+    # ==========================================================================
+    # When sole_trader_mode is enabled, reject companies with corporate indicators
+    # like Ltd, Limited, Group, PLC, etc. - even if they have business emails.
+    # This ensures we're targeting owner-operators, not larger companies.
+    if sole_trader_mode and is_corporate_name(business_name):
+        checks_failed.append(f"corporate_name: '{business_name}' contains Ltd/Limited/Group/etc.")
+        return ApprovalResult(
+            approved=False,
+            reason=f"Corporate name pattern detected (sole trader mode): {business_name}",
+            email_original=email,
+            email_sanitized=clean_email,
+            checks_passed=checks_passed,
+            checks_failed=checks_failed,
+        )
+
+    if sole_trader_mode:
+        checks_passed.append("corporate_name_check: no corporate indicators")
+
+    # ==========================================================================
     # Check 7: Domain matching (email domain vs website domain)
     # ==========================================================================
     website_domain = extract_domain_from_url(website) if website else None
