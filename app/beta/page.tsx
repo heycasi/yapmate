@@ -21,7 +21,9 @@ export default function BetaSignupPage() {
     setMessage('')
 
     try {
-      const response = await fetch('/api/beta-invite', {
+      // Call Supabase Edge Function directly
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const response = await fetch(`${supabaseUrl}/functions/v1/beta-invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
