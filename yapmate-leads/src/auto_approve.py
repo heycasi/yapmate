@@ -167,52 +167,113 @@ def calculate_sole_trader_score(
     return min(score, 100)
 
 
+def estimate_business_size(
+    business_name: str,
+    review_count: Optional[int],
+    website: Optional[str],
+    phone: Optional[str],
+) -> str:
+    """
+    Estimate business size from available signals.
+
+    Returns:
+        'sole_trader': 1 person (owner-operator)
+        'small': 2-10 employees
+        'medium': 10+ employees (not our target market)
+    """
+    score = 0
+
+    # Review count is strongest signal
+    if review_count is None or review_count <= 10:
+        score += 3  # Likely sole trader
+    elif review_count <= 25:
+        score += 2  # Likely small
+    elif review_count <= 50:
+        score += 1  # Possibly small
+    else:
+        score -= 2  # Likely medium/large
+
+    # Corporate name = definitely not sole trader
+    if is_corporate_name(business_name):
+        score -= 3
+    elif has_personal_name_pattern(business_name):
+        score += 2  # Likely sole trader
+
+    # No website = smaller operation
+    if not website or not website.strip():
+        score += 1
+
+    # Mobile = owner's personal phone
+    if phone:
+        phone_clean = re.sub(r'[^\d]', '', phone)
+        if phone_clean.startswith('07') or phone_clean.startswith('447'):
+            score += 1
+
+    if score >= 4:
+        return 'sole_trader'
+    elif score >= 1:
+        return 'small'
+    else:
+        return 'medium'
+
+
 def passes_sole_trader_validation(
     business_name: str,
     email: Optional[str],
     phone: Optional[str],
+    website: Optional[str] = None,
     review_count: Optional[int] = None,
-) -> Tuple[bool, str]:
+    min_score: int = 40,
+) -> Tuple[bool, str, int]:
     """
     Extra validation for leads with personal email domains in sole trader mode.
 
-    For leads using gmail/btinternet/etc, we require at least one signal
-    that they're likely a sole trader, not a corporate using personal email.
+    For leads using gmail/btinternet/etc, we require a minimum sole trader
+    score (default 40, roughly 2 signals) to filter out larger businesses
+    using personal emails.
 
     Args:
         business_name: Business name to check
         email: Email address
         phone: Phone number
+        website: Website URL (if any)
         review_count: Number of Google reviews (if available)
+        min_score: Minimum sole trader score required (default 40)
 
     Returns:
-        Tuple of (passes, reason)
+        Tuple of (passes, reason, score)
     """
     # First, reject if business name has corporate indicators
     if is_corporate_name(business_name):
-        return False, f"Business name contains corporate indicator (Ltd/Limited/Group/etc)"
+        return False, f"Business name contains corporate indicator (Ltd/Limited/Group/etc)", 0
 
-    # For personal email domains, require at least ONE sole trader signal
+    # Calculate sole trader score
+    score = calculate_sole_trader_score(
+        business_name=business_name,
+        email=email,
+        phone=phone,
+        website=website,
+        review_count=review_count,
+    )
+
+    # Collect signals for logging
     signals = []
-
-    # Signal 1: Mobile phone (07xxx)
     if phone:
         phone_clean = re.sub(r'[^\d]', '', phone)
         if phone_clean.startswith('07') or phone_clean.startswith('447'):
             signals.append("mobile_phone")
-
-    # Signal 2: Low review count (≤25 or unknown)
     if review_count is None or review_count <= 25:
         signals.append("low_reviews")
-
-    # Signal 3: Personal name pattern
     if has_personal_name_pattern(business_name):
         signals.append("personal_name")
+    if not website or not website.strip():
+        signals.append("no_website")
 
-    if signals:
-        return True, f"Sole trader signals: {', '.join(signals)}"
+    # Require minimum score (roughly 2+ signals)
+    if score >= min_score:
+        return True, f"Sole trader score {score} (signals: {', '.join(signals) or 'none'})", score
     else:
-        return False, "No sole trader signals found (need mobile phone, low reviews, or personal name)"
+        return False, f"Sole trader score {score} below threshold {min_score} (signals: {', '.join(signals) or 'none'})", score
 
 
 # =============================================================================
@@ -412,6 +473,54 @@ def check_auto_approval(
     checks_passed = []
     checks_failed = []
 
+    # Get config for thresholds
+    config = get_config()
+    max_review_count = config.auto_approve.max_review_count
+    min_sole_trader_score = config.auto_approve.min_sole_trader_score
+
+    # ==========================================================================
+    # Check 0a: High review count rejection (business size filter)
+    # ==========================================================================
+    # Businesses with many reviews likely have admin staff and existing systems.
+    # YapMate targets sole traders/small businesses (1-10 staff) doing their
+    # own admin at night/weekends.
+    if sole_trader_mode and review_count is not None and review_count > max_review_count:
+        checks_failed.append(f"high_reviews: {review_count} reviews > {max_review_count} threshold")
+        return ApprovalResult(
+            approved=False,
+            reason=f"High review count ({review_count}) - likely established business with admin staff",
+            email_original=email or "",
+            email_sanitized=None,
+            checks_passed=checks_passed,
+            checks_failed=checks_failed,
+        )
+
+    if sole_trader_mode:
+        checks_passed.append(f"review_count_check: {review_count or 'unknown'} reviews <= {max_review_count}")
+
+    # ==========================================================================
+    # Check 0b: Business size estimation
+    # ==========================================================================
+    # Estimate if this is a sole trader, small business (2-10), or medium (10+)
+    if sole_trader_mode:
+        estimated_size = estimate_business_size(
+            business_name=business_name,
+            review_count=review_count,
+            website=website,
+            phone=phone,
+        )
+        if estimated_size == 'medium':
+            checks_failed.append(f"business_size: estimated as 'medium' (10+ employees)")
+            return ApprovalResult(
+                approved=False,
+                reason=f"Business appears too large (estimated 10+ employees based on signals)",
+                email_original=email or "",
+                email_sanitized=None,
+                checks_passed=checks_passed,
+                checks_failed=checks_failed,
+            )
+        checks_passed.append(f"business_size_check: estimated as '{estimated_size}'")
+
     # ==========================================================================
     # Check 1: Send eligibility
     # ==========================================================================
@@ -518,11 +627,14 @@ def check_auto_approval(
             checks_passed.append(f"free_email: allowed ({email_domain})")
         elif sole_trader_mode:
             # Sole Trader Mode: allow personal emails with extra validation
-            passes, reason = passes_sole_trader_validation(
+            # Requires minimum sole trader score (default 40, roughly 2 signals)
+            passes, reason, st_score = passes_sole_trader_validation(
                 business_name=business_name,
                 email=clean_email,
                 phone=phone,
+                website=website,
                 review_count=review_count,
+                min_score=min_sole_trader_score,
             )
             if passes:
                 checks_passed.append(f"sole_trader_mode: {reason}")
@@ -535,6 +647,7 @@ def check_auto_approval(
                     email_sanitized=clean_email,
                     checks_passed=checks_passed,
                     checks_failed=checks_failed,
+                    sole_trader_score=st_score,
                 )
         else:
             # Neither allow_free_emails nor sole_trader_mode - reject

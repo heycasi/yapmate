@@ -108,6 +108,15 @@ class AutoApproveConfig:
     # with extra validation to filter out larger businesses
     sole_trader_mode: bool = True  # Default ON to target owner-operators
 
+    # Business size targeting: Reject businesses with high review counts
+    # (they likely have admin staff and existing invoicing systems)
+    # Threshold: 50+ reviews = established business, not our target market
+    max_review_count: int = 50  # Reject if Google reviews > this
+
+    # Minimum sole trader score for personal email approval
+    # Score 40+ = roughly 2 sole trader signals (e.g., low reviews + mobile phone)
+    min_sole_trader_score: int = 40
+
 
 @dataclass
 class YieldTargetConfig:
@@ -154,6 +163,16 @@ TRADE_SYNONYMS: Dict[str, list] = {
     "cleaner": ["cleaning services", "domestic cleaner", "office cleaner"],
     "handyman": ["property maintenance", "odd jobs", "home repairs"],
 }
+
+
+# Query prefixes to target smaller/local businesses
+# These modify the Google Maps search query to find owner-operators
+# Empty string = original query (e.g., "Plumber in Glasgow, UK")
+QUERY_PREFIXES = [
+    "",              # Original query
+    "Local ",        # "Local plumber in Glasgow, UK"
+    "Independent ",  # "Independent plumber in Glasgow, UK"
+]
 
 
 @dataclass

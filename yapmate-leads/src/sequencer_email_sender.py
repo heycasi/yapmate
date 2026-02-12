@@ -1136,6 +1136,19 @@ From: {self.from_email}
         leads = self.sheets.get_eligible_leads(limit=send_limit)
         print(f"  Found {len(leads)} eligible leads")
 
+        # Sort by sole trader score (highest first) to prioritize small businesses
+        # This ensures we send to the most likely sole traders/small businesses first
+        if leads:
+            leads.sort(
+                key=lambda x: int(x.get('sole_trader_score') or 0),
+                reverse=True
+            )
+            # Log score distribution
+            scores = [int(x.get('sole_trader_score') or 0) for x in leads]
+            if scores:
+                print(f"  Sole trader scores: min={min(scores)}, max={max(scores)}, avg={sum(scores)//len(scores)}")
+                print(f"  Sending to highest-score leads first (targeting sole traders/small businesses)")
+
         if not leads:
             # Log why no eligible leads (breakdown already shown above)
             print(f"\n  ⚠️  NO ELIGIBLE LEADS")

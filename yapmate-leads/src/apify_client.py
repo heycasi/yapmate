@@ -7,6 +7,7 @@ Features:
 """
 
 import os
+import random
 import sys
 import threading
 import time
@@ -14,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from apify_client import ApifyClient
 from typing import List, Optional
 from src.models import Lead
+from src.config import QUERY_PREFIXES
 
 # Default timeout for Apify actor runs (seconds)
 DEFAULT_TIMEOUT_SECONDS = 180
@@ -58,7 +60,8 @@ class ApifyLeadScraper:
         self,
         trade: str,
         city: str,
-        max_results: int = 50
+        max_results: int = 50,
+        query_prefix: Optional[str] = None,
     ) -> List[Lead]:
         """
         Scrape Google Maps for tradespeople with heartbeat and hard timeout.
@@ -67,6 +70,8 @@ class ApifyLeadScraper:
             trade: Type of tradesperson (e.g., "Plumber", "Electrician")
             city: UK city (e.g., "Glasgow", "Liverpool")
             max_results: Maximum number of results to return
+            query_prefix: Optional prefix for query (e.g., "Local ", "Independent ")
+                         If None, randomly selects from QUERY_PREFIXES
 
         Returns:
             List of Lead objects
@@ -74,9 +79,16 @@ class ApifyLeadScraper:
         Raises:
             ApifyTimeoutError: If scraping exceeds timeout
         """
+        # Select query prefix (random if not specified)
+        # This helps target smaller/local businesses in Google Maps
+        if query_prefix is None:
+            query_prefix = random.choice(QUERY_PREFIXES)
+
+        search_query = f"{query_prefix}{trade} in {city}, UK"
+
         # Configure actor input
         run_input = {
-            "searchStringsArray": [f"{trade} in {city}, UK"],
+            "searchStringsArray": [search_query],
             "maxCrawledPlacesPerSearch": max_results,
             "language": "en",
             "countryCode": "gb",
@@ -91,7 +103,7 @@ class ApifyLeadScraper:
             "skipClosedPlaces": True
         }
 
-        print(f"🔍 Scraping Google Maps for {trade}s in {city}...", flush=True)
+        print(f"🔍 Scraping Google Maps: \"{search_query}\"", flush=True)
         print(f"   Timeout: {self.timeout_seconds} seconds", flush=True)
         print(f"   Heartbeat: every {HEARTBEAT_INTERVAL_SECONDS} seconds", flush=True)
 
