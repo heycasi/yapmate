@@ -43,11 +43,16 @@ export async function POST(request: NextRequest) {
     expiresAt.setDate(expiresAt.getDate() + DEFAULT_DAYS)
 
     // Check if already exists
-    const { data: existing } = await supabase
+    const { data: existing, error: selectError } = await supabase
       .from('beta_invites')
       .select('id, email, expires_at')
       .ilike('email', normalizedEmail)
-      .single()
+      .maybeSingle()
+
+    if (selectError) {
+      console.error('Beta invite select error:', selectError)
+      return NextResponse.json({ error: 'Database error: ' + selectError.message }, { status: 500 })
+    }
 
     if (existing) {
       // Check if still active
@@ -59,13 +64,18 @@ export async function POST(request: NextRequest) {
       }
 
       // Expired - update it
-      await supabase
+      const { error: updateError } = await supabase
         .from('beta_invites')
         .update({
           plan: DEFAULT_PLAN,
           expires_at: expiresAt.toISOString(),
         })
         .eq('id', existing.id)
+
+      if (updateError) {
+        console.error('Beta invite update error:', updateError)
+        return NextResponse.json({ error: 'Database error: ' + updateError.message }, { status: 500 })
+      }
     } else {
       // Insert new
       const { error: insertError } = await supabase
@@ -78,7 +88,7 @@ export async function POST(request: NextRequest) {
 
       if (insertError) {
         console.error('Beta invite insert error:', insertError)
-        return NextResponse.json({ error: 'Failed to create invite' }, { status: 500 })
+        return NextResponse.json({ error: 'Database error: ' + insertError.message }, { status: 500 })
       }
     }
 
