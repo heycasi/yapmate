@@ -7,7 +7,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY!
 
 // Default beta settings
 const DEFAULT_DAYS = 7
-const DEFAULT_PLAN = 'pro'
+const DEFAULT_PLAN: 'pro' | 'trade' = 'pro'
 
 export async function POST(request: NextRequest) {
   try {
