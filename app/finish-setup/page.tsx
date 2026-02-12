@@ -16,6 +16,7 @@ function FinishSetupContent() {
   const searchParams = useSearchParams()
   const plan = searchParams.get('plan') || 'pro'
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
+  const [isTrialing, setIsTrialing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -30,7 +31,15 @@ function FinishSetupContent() {
       if (customerInfo) {
         const status = getSubscriptionStatus(customerInfo)
         setSubscriptionPlan(status.plan)
-        console.log('[FinishSetup] Subscription verified:', status.plan)
+
+        // Check if user is on a RevenueCat trial
+        const entitlements = customerInfo.entitlements?.active || {}
+        const activeEnt = entitlements.trade || entitlements.pro
+        if (activeEnt?.periodType === 'TRIAL' || activeEnt?.periodType === 'INTRO') {
+          setIsTrialing(true)
+        }
+
+        console.log('[FinishSetup] Subscription verified:', status.plan, 'trialing:', isTrialing)
       } else {
         console.warn('[FinishSetup] No customer info found')
       }
@@ -65,7 +74,7 @@ function FinishSetupContent() {
             className="text-4xl font-bold mb-3 uppercase tracking-tight"
             style={{ fontFamily: 'Space Grotesk, sans-serif' }}
           >
-            Trial Started
+            {isTrialing ? 'Trial Started' : "You're Set Up"}
           </h1>
           <p className="text-yapmate-gray-lightest text-lg">
             Your {subscriptionPlan || plan} plan is active. You can start creating invoices right

@@ -52,8 +52,8 @@ export function useSubscription(): SubscriptionStatus {
         return
       }
 
-      // Get plan from user_preferences
-      const plan = await getUserPlan(session.user.id)
+      // Get plan from user_preferences (with email for beta invite check)
+      const plan = await getUserPlan(session.user.id, session.user.email)
 
       // Get subscription record if exists
       const { data: subscription } = await (supabase
@@ -69,9 +69,9 @@ export function useSubscription(): SubscriptionStatus {
             new Date(subscription.current_period_end) > new Date())
         : false
 
-      // Get feature access
-      const vatAccess = await checkVATAccess(session.user.id)
-      const cisAccess = await checkCISAccess(session.user.id)
+      // Get feature access (with email for beta invite check)
+      const vatAccess = await checkVATAccess(session.user.id, session.user.email)
+      const cisAccess = await checkCISAccess(session.user.id, session.user.email)
 
       setStatus({
         plan: isActive ? subscription.plan : plan,
@@ -102,8 +102,11 @@ export function useSubscription(): SubscriptionStatus {
 /**
  * Utility function to check if a user has an active subscription
  * (non-React version for use in API routes, etc.)
+ *
+ * @param userId - Supabase user ID
+ * @param email - Optional user email (for beta invite check)
  */
-export async function checkActiveSubscription(userId: string): Promise<{
+export async function checkActiveSubscription(userId: string, email?: string): Promise<{
   isActive: boolean
   plan: PricingPlan
   expiresAt: Date | null
@@ -117,7 +120,7 @@ export async function checkActiveSubscription(userId: string): Promise<{
     .single()
 
   if (!subscription) {
-    const plan = await getUserPlan(userId)
+    const plan = await getUserPlan(userId, email)
     return { isActive: false, plan, expiresAt: null }
   }
 

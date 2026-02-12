@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
-import { getUserPlan, canUseVAT, canUseCIS, canUseInvoiceBranding, type PricingPlan } from '@/lib/plan-access'
+import { getUserPlan, canUseVAT, canUseCIS, canUseInvoiceBranding, getBetaInviteForUser, type PricingPlan, type BetaInvite } from '@/lib/plan-access'
 import { BRANDING_PAYWALL_ERROR } from '@/lib/logo-upload'
 import { isIAPAvailable, restorePurchases, getCustomerInfo } from '@/lib/iap'
 import { syncRevenueCatToSupabase } from '@/lib/iap-sync'
@@ -59,6 +59,9 @@ export default function SettingsPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null)
   const [subscriptionExpiry, setSubscriptionExpiry] = useState<string | null>(null)
   const [willRenew, setWillRenew] = useState(false)
+
+  // Beta access
+  const [betaInvite, setBetaInvite] = useState<BetaInvite | null>(null)
 
   const router = useRouter()
   const supabase = createBrowserClient()
@@ -117,16 +120,23 @@ export default function SettingsPage() {
 
       setUser(session.user)
 
-      // Check plan access
-      const plan = await getUserPlan(session.user.id)
-      const vatAccess = await canUseVAT(session.user.id)
-      const cisAccess = await canUseCIS(session.user.id)
-      const brandingAccess = await canUseInvoiceBranding(session.user.id)
+      // Check plan access (with email for beta invite check)
+      const userEmail = session.user.email
+      const plan = await getUserPlan(session.user.id, userEmail)
+      const vatAccess = await canUseVAT(session.user.id, userEmail)
+      const cisAccess = await canUseCIS(session.user.id, userEmail)
+      const brandingAccess = await canUseInvoiceBranding(session.user.id, userEmail)
 
       setUserPlan(plan)
       setCanAccessVAT(vatAccess)
       setCanAccessCIS(cisAccess)
       setCanAccessBranding(brandingAccess)
+
+      // Check for beta invite
+      if (userEmail) {
+        const invite = await getBetaInviteForUser(userEmail)
+        setBetaInvite(invite)
+      }
 
       // Load subscription status (iOS only)
       await loadSubscriptionStatus()
@@ -338,7 +348,7 @@ export default function SettingsPage() {
     setIsUploadingLogo(true)
 
     try {
-      const result = await uploadLogo(file, user.id)
+      const result = await uploadLogo(file, user.id, user.email)
 
       if (!result.success) {
         setLogoError(result.error || 'Upload failed')
@@ -787,11 +797,30 @@ export default function SettingsPage() {
                     Current Plan
                   </span>
                   <span className="text-sm font-mono font-bold text-yapmate-white uppercase">
-                    {userPlan === 'trade' && !isTradeEnabled() ? 'Pro' : userPlan}
+                    {betaInvite
+                      ? `${userPlan === 'trade' && !isTradeEnabled() ? 'Pro' : userPlan} (beta)`
+                      : userPlan === 'trade' && !isTradeEnabled() ? 'Pro' : userPlan}
                   </span>
                 </div>
 
-                {subscriptionStatus && subscriptionStatus !== 'expired' && (
+                {/* Beta invite expiry */}
+                {betaInvite && (
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-xs font-mono uppercase text-yapmate-slate-300">
+                      Beta Expires
+                    </span>
+                    <span className="text-sm font-mono text-yapmate-status-green">
+                      {new Date(betaInvite.expires_at).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                )}
+
+                {/* RevenueCat subscription status (only show if not on beta) */}
+                {!betaInvite && subscriptionStatus && subscriptionStatus !== 'expired' && (
                   <>
                     <div className="flex justify-between items-start mb-2">
                       <span className="text-xs font-mono uppercase text-yapmate-slate-300">
@@ -823,7 +852,7 @@ export default function SettingsPage() {
                   </>
                 )}
 
-                {(!subscriptionStatus || subscriptionStatus === 'expired') && userPlan === 'free' && (
+                {!betaInvite && (!subscriptionStatus || subscriptionStatus === 'expired') && userPlan === 'free' && (
                   <p className="text-xs font-mono text-yapmate-slate-400 mt-1">
                     No active subscription
                   </p>

@@ -122,9 +122,9 @@ function InvoiceEditContent() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Enforce plan-based access control
-      const vatAccess = await canUseVAT(user.id)
-      const cisAccess = await canUseCIS(user.id)
+      // Enforce plan-based access control (with email for beta invite check)
+      const vatAccess = await canUseVAT(user.id, user.email)
+      const cisAccess = await canUseCIS(user.id, user.email)
 
       // Force VAT/CIS to false if user doesn't have access
       const finalVatRegistered = vatAccess ? invoice.vat_registered : false
@@ -232,7 +232,7 @@ function InvoiceEditContent() {
         }
 
         // Check branding access before including in PDF (server-side enforcement)
-        const canBrand = await canUseInvoiceBranding(session.user.id)
+        const canBrand = await canUseInvoiceBranding(session.user.id, session.user.email)
 
         // Extract branding info ONLY if user has access (paid plans)
         if (canBrand && data && (data.invoice_logo_url || data.invoice_company_name)) {

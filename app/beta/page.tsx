@@ -27,11 +27,18 @@ export default function BetaSignupPage() {
         body: JSON.stringify({ email }),
       })
 
-      const data = await response.json()
+      let data
+      try {
+        data = await response.json()
+      } catch (parseError) {
+        setStatus('error')
+        setMessage(`API error (${response.status}): Could not parse response`)
+        return
+      }
 
       if (!response.ok) {
         setStatus('error')
-        setMessage(data.error || 'Something went wrong')
+        setMessage(data.error || `Error ${response.status}: ${response.statusText}`)
         return
       }
 
@@ -41,7 +48,7 @@ export default function BetaSignupPage() {
 
     } catch (error) {
       setStatus('error')
-      setMessage('Something went wrong. Please try again.')
+      setMessage('Connection error: ' + (error instanceof Error ? error.message : 'Unknown error'))
     }
   }
 

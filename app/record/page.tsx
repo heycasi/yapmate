@@ -76,7 +76,7 @@ export default function RecordPage() {
     if (session) {
       setIsLoggedIn(true)
       try {
-        const accessCheck = await canCreateInvoice(session.user.id)
+        const accessCheck = await canCreateInvoice(session.user.id, session.user.email)
         setCanCreate(accessCheck.canCreate)
         if (!accessCheck.canCreate) {
           setPlanLimitMessage(accessCheck.reason || 'Upgrade to create more invoices')
@@ -458,10 +458,10 @@ export default function RecordPage() {
       // Ensure customer record exists and get customer_id
       const customerId = await ensureCustomer(session.user.id, extractedInvoice.customerName)
 
-      // Enforce plan-based access control
+      // Enforce plan-based access control (with email for beta invite check)
       const { canUseVAT, canUseCIS } = await import('@/lib/plan-access')
-      const vatAccess = await canUseVAT(session.user.id)
-      const cisAccess = await canUseCIS(session.user.id)
+      const vatAccess = await canUseVAT(session.user.id, session.user.email)
+      const cisAccess = await canUseCIS(session.user.id, session.user.email)
 
       // Force VAT/CIS to false if user doesn't have access
       const finalVatRegistered = vatAccess && extractedInvoice.vatRegistered

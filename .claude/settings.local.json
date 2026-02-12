@@ -34,7 +34,8 @@
       "Bash(gh api:*)",
       "Bash(gh run cancel:*)",
       "Bash(gh workflow view:*)",
-      "Bash(gh workflow list:*)"
+      "Bash(gh workflow list:*)",
+      "Bash(gh run watch:*)"
     ]
   }
 }

@@ -4,12 +4,25 @@
  *
  * Implements entitlement-first access (Guideline 5.1.1):
  * 1. Check RevenueCat entitlements first (works without login)
- * 2. Fall back to Supabase user_preferences.plan (requires login)
+ * 2. Check beta_invites table by email (no-card beta access)
+ * 3. Fall back to Supabase user_preferences.plan (requires login)
  */
 
 import { createBrowserClient } from '@/lib/supabase'
 import { getCustomerInfo, getActivePlan, isIAPAvailable } from '@/lib/iap'
 import { isTradeEnabled } from '@/lib/runtime-config'
+
+// ============================================================================
+// Beta Invite Types
+// ============================================================================
+
+export interface BetaInvite {
+  id: string
+  email: string
+  plan: PricingPlan
+  expires_at: string
+  created_at: string
+}
 
 // ============================================================================
 // Types and Constants
@@ -55,17 +68,60 @@ const PLAN_LIMITS: Record<PricingPlan, PlanLimits> = {
 }
 
 // ============================================================================
+// Beta Invite Functions
+// ============================================================================
+
+/**
+ * Check if user has an active beta invite by email
+ * Returns the beta invite if active and not expired, null otherwise
+ */
+export async function checkBetaInvite(email: string): Promise<BetaInvite | null> {
+  if (!email) return null
+
+  try {
+    const supabase = createBrowserClient()
+
+    const { data, error } = await (supabase
+      .from('beta_invites') as any)
+      .select('*')
+      .ilike('email', email)
+      .gt('expires_at', new Date().toISOString())
+      .single()
+
+    if (error || !data) {
+      return null
+    }
+
+    console.log('[PlanAccess] Active beta invite found:', data.plan, 'expires:', data.expires_at)
+    return data as BetaInvite
+  } catch (error) {
+    console.warn('[PlanAccess] Failed to check beta invite:', error)
+    return null
+  }
+}
+
+/**
+ * Get beta invite details for display in UI
+ * Returns null if no active beta or user not logged in
+ */
+export async function getBetaInviteForUser(email?: string): Promise<BetaInvite | null> {
+  if (!email) return null
+  return checkBetaInvite(email)
+}
+
+// ============================================================================
 // Core Functions
 // ============================================================================
 
 /**
  * Get the user's current pricing plan
- * Entitlement-first: Checks RevenueCat first, then Supabase
+ * Entitlement-first: Checks RevenueCat first, then beta invite, then Supabase
  *
  * @param userId - Optional Supabase user ID (not required for logged-out users)
+ * @param email - Optional user email (for beta invite check)
  * @returns Current pricing plan
  */
-export async function getUserPlan(userId?: string): Promise<PricingPlan> {
+export async function getUserPlan(userId?: string, email?: string): Promise<PricingPlan> {
   // Step 1: Check RevenueCat entitlements (works without login)
   if (isIAPAvailable()) {
     try {
@@ -84,7 +140,16 @@ export async function getUserPlan(userId?: string): Promise<PricingPlan> {
     }
   }
 
-  // Step 2: Fall back to Supabase (requires user ID)
+  // Step 2: Check beta invite by email
+  if (email) {
+    const betaInvite = await checkBetaInvite(email)
+    if (betaInvite) {
+      console.log('[PlanAccess] Plan from beta invite:', betaInvite.plan)
+      return betaInvite.plan as PricingPlan
+    }
+  }
+
+  // Step 3: Fall back to Supabase user_preferences (requires user ID)
   if (userId) {
     try {
       const supabase = createBrowserClient()
@@ -140,11 +205,13 @@ export async function getUserInvoiceCount(userId: string): Promise<number> {
  * Returns { canCreate: boolean, reason?: string }
  *
  * @param userId - Optional Supabase user ID (logged-in users only have invoice counts)
+ * @param email - Optional user email (for beta invite check)
  */
 export async function canCreateInvoice(
-  userId?: string
+  userId?: string,
+  email?: string
 ): Promise<{ canCreate: boolean; reason?: string; currentCount?: number; limit?: number }> {
-  const plan = await getUserPlan(userId)
+  const plan = await getUserPlan(userId, email)
   const limits = getPlanLimits(plan)
 
   // Pro and Trade have unlimited invoices
@@ -176,9 +243,12 @@ export async function canCreateInvoice(
 /**
  * Check if a user can use VAT features
  * Works for both logged-in and logged-out users (via RevenueCat)
+ *
+ * @param userId - Optional Supabase user ID
+ * @param email - Optional user email (for beta invite check)
  */
-export async function canUseVAT(userId?: string): Promise<boolean> {
-  const plan = await getUserPlan(userId)
+export async function canUseVAT(userId?: string, email?: string): Promise<boolean> {
+  const plan = await getUserPlan(userId, email)
   const limits = getPlanLimits(plan)
   return limits.canUseVAT
 }
@@ -188,14 +258,17 @@ export async function canUseVAT(userId?: string): Promise<boolean> {
  * Works for both logged-in and logged-out users (via RevenueCat)
  *
  * NOTE: CIS features are Trade-only. Always returns false when Trade tier is disabled.
+ *
+ * @param userId - Optional Supabase user ID
+ * @param email - Optional user email (for beta invite check)
  */
-export async function canUseCIS(userId?: string): Promise<boolean> {
+export async function canUseCIS(userId?: string, email?: string): Promise<boolean> {
   // CIS is a Trade-only feature - disabled when Trade tier is disabled
   if (!isTradeEnabled()) {
     return false
   }
 
-  const plan = await getUserPlan(userId)
+  const plan = await getUserPlan(userId, email)
   const limits = getPlanLimits(plan)
   return limits.canUseCIS
 }
@@ -206,9 +279,12 @@ export async function canUseCIS(userId?: string): Promise<boolean> {
  *
  * Works for both logged-in and logged-out users (via RevenueCat)
  * Only Pro and Trade plans have branding access.
+ *
+ * @param userId - Optional Supabase user ID
+ * @param email - Optional user email (for beta invite check)
  */
-export async function canUseInvoiceBranding(userId?: string): Promise<boolean> {
-  const plan = await getUserPlan(userId)
+export async function canUseInvoiceBranding(userId?: string, email?: string): Promise<boolean> {
+  const plan = await getUserPlan(userId, email)
   const limits = getPlanLimits(plan)
   const canUse = limits.canUseBranding
 

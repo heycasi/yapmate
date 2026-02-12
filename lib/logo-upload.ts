@@ -118,13 +118,14 @@ async function resizeImage(file: File): Promise<Blob> {
  * Uploads a logo file to Supabase Storage
  * @param file - The image file to upload
  * @param userId - The user's ID (used as folder name)
+ * @param email - Optional user email (for beta invite check)
  * @returns Upload result with URL or error
  *
  * NOTE: This function enforces paywall - free users cannot upload logos.
  */
-export async function uploadLogo(file: File, userId: string): Promise<UploadResult> {
+export async function uploadLogo(file: File, userId: string, email?: string): Promise<UploadResult> {
   // Check plan access first (server-side enforcement)
-  const canBrand = await canUseInvoiceBranding(userId)
+  const canBrand = await canUseInvoiceBranding(userId, email)
   if (!canBrand) {
     console.log('[LogoUpload] branding_save_attempt_blocked: free user', userId.slice(0, 8))
     return {

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import AppStoreBadge from '@/components/AppStoreBadge'
 import Footer from '@/components/Footer'
 import { createBrowserClient } from '@/lib/supabase'
-import { getUserPlan, getPlanDisplayName, type PricingPlan } from '@/lib/plan-access'
+import { getUserPlan, getPlanDisplayName, getBetaInviteForUser, type PricingPlan, type BetaInvite } from '@/lib/plan-access'
 import {
   isIAPAvailable,
   purchaseProduct,
@@ -35,6 +35,8 @@ export default function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [currentPlan, setCurrentPlan] = useState<PricingPlan | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [betaInvite, setBetaInvite] = useState<BetaInvite | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false)
   const [isPurchasing, setIsPurchasing] = useState(false)
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(false)
@@ -57,8 +59,15 @@ export default function PricingPage() {
 
     if (session) {
       setIsLoggedIn(true)
-      const plan = await getUserPlan(session.user.id)
+      setUserEmail(session.user.email || null)
+      const plan = await getUserPlan(session.user.id, session.user.email)
       setCurrentPlan(plan)
+
+      // Check for beta invite
+      if (session.user.email) {
+        const invite = await getBetaInviteForUser(session.user.email)
+        setBetaInvite(invite)
+      }
     }
   }
 
@@ -291,11 +300,9 @@ export default function PricingPage() {
         <p className="text-xl md:text-2xl text-yapmate-gray-lightest max-w-2xl mx-auto">
           Simple plans for UK trades. Start free. Upgrade when it saves you time.
         </p>
-        {isIOS() && (
+        {isIOS() && !betaInvite && (
           <p className="text-sm text-yapmate-gray-light mt-4">
-            {tradeEnabled
-              ? '7-day free trial included with Pro & Trade plans'
-              : '7-day free trial included with Pro plan'}
+            Apple may offer a free trial for eligible new subscribers
           </p>
         )}
       </section>
@@ -333,7 +340,7 @@ export default function PricingPage() {
         <div className="max-w-5xl mx-auto px-6 mb-8">
           <div className="bg-yapmate-gray-dark border border-yapmate-amber rounded-xl p-6 text-center">
             <p className="text-white font-semibold mb-4">
-              Download YapMate on iOS to start your free trial
+              Download YapMate on iOS to subscribe
             </p>
             <a
               href="https://apps.apple.com/gb/app/yapmate/id6756750891"
@@ -347,8 +354,27 @@ export default function PricingPage() {
         </div>
       )}
 
+      {/* Beta Access Banner */}
+      {betaInvite && (
+        <div className="max-w-5xl mx-auto px-6 mb-8">
+          <div className="bg-yapmate-gray-dark border-2 border-yapmate-status-green rounded-xl p-6 text-center">
+            <p className="text-yapmate-status-green font-semibold mb-2 uppercase tracking-wide">
+              Beta Access Active
+            </p>
+            <p className="text-yapmate-gray-lightest text-sm">
+              You have {getPlanDisplayName(betaInvite.plan as PricingPlan)} access until{' '}
+              {new Date(betaInvite.expires_at).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+              })}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Current Plan Display */}
-      {isLoggedIn && currentPlan && (
+      {isLoggedIn && currentPlan && !betaInvite && (
         <div className="max-w-5xl mx-auto px-6 mb-8">
           <div className="bg-yapmate-gray-dark border border-gray-800 rounded-xl p-4 text-center">
             <span className="text-yapmate-gray-light text-sm uppercase tracking-wide mr-2">Current Plan:</span>
@@ -460,9 +486,9 @@ export default function PricingPage() {
               </li>
             </ul>
 
-            {currentPlan === 'pro' ? (
+            {currentPlan === 'pro' || (betaInvite && betaInvite.plan === 'pro') ? (
               <div className="w-full px-8 py-4 bg-yapmate-gray-dark border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
-                Current Plan
+                {betaInvite ? 'Beta Access Active' : 'Current Plan'}
               </div>
             ) : (
               <button
@@ -470,7 +496,7 @@ export default function PricingPage() {
                 disabled={isPurchasing || isLoadingOfferings}
                 className="w-full px-8 py-4 bg-yapmate-amber text-yapmate-black font-bold rounded-lg hover:bg-yapmate-amber/80 transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPurchasing ? 'Processing...' : isWeb() ? 'Download App' : 'Start Free Trial'}
+                {isPurchasing ? 'Processing...' : isWeb() ? 'Download App' : 'Subscribe on iOS'}
               </button>
             )}
           </div>
@@ -518,9 +544,9 @@ export default function PricingPage() {
               </li>
             </ul>
 
-            {currentPlan === 'trade' ? (
+            {currentPlan === 'trade' || (betaInvite && betaInvite.plan === 'trade') ? (
               <div className="w-full px-8 py-4 border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
-                Current Plan
+                {betaInvite ? 'Beta Access Active' : 'Current Plan'}
               </div>
             ) : isIOS() && !shouldShowTradeAsPurchasable ? (
               <div className="w-full px-8 py-4 border border-gray-800 text-yapmate-gray-light font-semibold rounded-lg text-center uppercase tracking-wide text-sm">
@@ -532,7 +558,7 @@ export default function PricingPage() {
                 disabled={isPurchasing || isLoadingOfferings || (isIOS() && !shouldShowTradeAsPurchasable)}
                 className="w-full px-8 py-4 border-2 border-yapmate-amber text-yapmate-amber hover:bg-yapmate-amber hover:text-yapmate-black font-bold rounded-lg transition-all text-center uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPurchasing ? 'Processing...' : isWeb() ? 'Download App' : 'Start Free Trial'}
+                {isPurchasing ? 'Processing...' : isWeb() ? 'Download App' : 'Subscribe on iOS'}
               </button>
             )}
           </div>
@@ -610,7 +636,7 @@ export default function PricingPage() {
             </button>
             {openFaq === 0 && (
               <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
-                Yes. All paid plans include a 7-day free trial on iOS. Cancel anytime during the trial period at no cost.
+                Yes. Start with 3 free invoices on the Free plan. Apple may offer a trial period for eligible new subscribers on paid plans.
               </div>
             )}
           </div>
@@ -621,12 +647,12 @@ export default function PricingPage() {
               onClick={() => toggleFaq(1)}
               className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-800/30 transition-colors"
             >
-              <span className="font-semibold">What happens after my free trial?</span>
+              <span className="font-semibold">How does billing work?</span>
               <span className="text-yapmate-amber text-xl">{openFaq === 1 ? '−' : '+'}</span>
             </button>
             {openFaq === 1 && (
               <div className="px-6 pb-4 text-yapmate-gray-lightest text-sm leading-relaxed">
-                After 7 days, you&apos;ll be charged the monthly rate unless you cancel. You can cancel anytime via your iOS subscription settings.
+                Subscriptions are billed monthly through Apple. You can cancel anytime via your iOS subscription settings and keep access until the end of your billing period.
               </div>
             )}
           </div>

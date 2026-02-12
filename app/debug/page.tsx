@@ -65,7 +65,7 @@ function DebugContent() {
 
       if (session?.user) {
         // Get user plan
-        currentPlan = await getUserPlan(session.user.id)
+        currentPlan = await getUserPlan(session.user.id, session.user.email)
 
         // Get last subscription record
         const { data: subData } = await supabase

@@ -49,7 +49,7 @@ export default function TermsPage() {
             </ul>
             <p className="mt-3">
               Subscriptions are processed through Apple In-App Purchases and are subject to Apple&apos;s terms and conditions.
-              All subscriptions include a 7-day free trial period for first-time subscribers.
+              Apple may offer a free trial period for eligible new subscribers.
             </p>
           </section>
 
