@@ -152,10 +152,10 @@ class QueueConfig:
 
     # Task settings
     # NOTE: leads_per_task controls maxCrawledPlacesPerSearch in Apify.
-    # Top 20 Google Maps results are prominence-biased toward larger firms.
-    # Sole traders typically appear in positions 21-50+.
-    # Default: 50 to capture owner-operators. Override via LEADS_PER_TASK env.
-    leads_per_task: int = 50
+    # Reduced from 50 to 20 to cut Apify costs ~60%.
+    # Most emails are found in top 20 results anyway.
+    # Override via LEADS_PER_TASK env.
+    leads_per_task: int = 20
     tasks_per_day: int = 2  # AM + PM sessions
 
     # Queue management

@@ -132,7 +132,7 @@ class YieldTargetConfig:
     target_email_rate_min: float = 0.20   # 20% email discovery rate
 
     # Safety limits
-    max_iterations: int = 3               # Max pivot iterations per task
+    max_iterations: int = 1               # Reduced from 3 to 1 to cut Apify costs
     max_runtime_seconds: int = 900        # 15 minutes max per task
 
     # Website crawling
@@ -140,7 +140,7 @@ class YieldTargetConfig:
 
     # Pivot strategies
     enable_deep_crawl: bool = True        # Iteration 2: deeper contact crawl
-    enable_query_variants: bool = True    # Iteration 3: query synonyms/radius
+    enable_query_variants: bool = False   # Disabled to reduce Apify costs
     enable_social_fallback: bool = True   # Try Facebook/Instagram if no website
 
     # Logging
