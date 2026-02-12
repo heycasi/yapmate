@@ -5,6 +5,11 @@ import { createClient } from '@supabase/supabase-js'
 const DEFAULT_DAYS = 7
 const DEFAULT_PLAN: 'pro' | 'trade' = 'pro'
 
+// Health check endpoint
+export async function GET() {
+  return NextResponse.json({ status: 'ok', route: 'beta-invite' })
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Check environment variables
