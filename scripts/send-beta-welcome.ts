@@ -116,7 +116,7 @@ const htmlContent = `
     <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px; text-align: center;">
       <p style="color: #f59e0b; font-weight: 700; margin: 0 0 5px 0; font-size: 14px;">STEP 1</p>
       <p style="color: #ffffff; font-size: 18px; font-weight: 600; margin: 0 0 15px 0;">Download the app</p>
-      <a href="https://apps.apple.com/gb/app/yapmate/id6756750891" style="display: inline-block;">
+      <a href="https://www.yapmate.co.uk/app" style="display: inline-block;">
         <img src="https://www.yapmate.co.uk/email/appstore-badge.png" alt="Download on the App Store" style="height: 50px; width: auto;" />
       </a>
     </div>
@@ -177,7 +177,7 @@ YOUR ACCESS DETAILS:
 GETTING STARTED:
 
 1. Download YapMate from the App Store:
-   https://apps.apple.com/gb/app/yapmate/id6756750891
+   https://www.yapmate.co.uk/app
 
 2. Create an account using this email address:
    ${recipientEmail}
