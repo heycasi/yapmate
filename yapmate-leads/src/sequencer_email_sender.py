@@ -1140,11 +1140,11 @@ From: {self.from_email}
         # This ensures we send to the most likely sole traders/small businesses first
         if leads:
             leads.sort(
-                key=lambda x: int(x.get('sole_trader_score') or 0),
+                key=lambda x: int(getattr(x, 'sole_trader_score', 0) or 0),
                 reverse=True
             )
             # Log score distribution
-            scores = [int(x.get('sole_trader_score') or 0) for x in leads]
+            scores = [int(getattr(x, 'sole_trader_score', 0) or 0) for x in leads]
             if scores:
                 print(f"  Sole trader scores: min={min(scores)}, max={max(scores)}, avg={sum(scores)//len(scores)}")
                 print(f"  Sending to highest-score leads first (targeting sole traders/small businesses)")
