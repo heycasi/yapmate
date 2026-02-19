@@ -292,6 +292,7 @@ class EnhancedLead:
     replied_at: Optional[datetime] = None
     bounced_at: Optional[datetime] = None
     complained_at: Optional[datetime] = None
+    last_event: Optional[str] = None  # Most recent Resend webhook event type
 
     # Task reference
     task_id: Optional[str] = None  # Which queue task generated this lead
@@ -333,6 +334,7 @@ class EnhancedLead:
             self.replied_at.isoformat() if self.replied_at else "",
             self.bounced_at.isoformat() if self.bounced_at else "",
             self.complained_at.isoformat() if self.complained_at else "",
+            self.last_event or "",
             self.task_id or "",
         ]
 
@@ -371,6 +373,7 @@ class EnhancedLead:
             "replied_at",
             "bounced_at",
             "complained_at",
+            "last_event",
             "task_id",
         ]
 
@@ -472,7 +475,8 @@ class EnhancedLead:
             replied_at=parse_datetime(row[28]) if len(row) > 28 else None,
             bounced_at=parse_datetime(row[29]) if len(row) > 29 else None,
             complained_at=parse_datetime(row[30]) if len(row) > 30 else None,
-            task_id=str(row[31]) if len(row) > 31 and row[31] else None,
+            last_event=str(row[31]) if len(row) > 31 and row[31] else None,
+            task_id=str(row[32]) if len(row) > 32 and row[32] else None,
         )
 
 

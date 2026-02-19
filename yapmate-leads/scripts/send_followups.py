@@ -156,8 +156,8 @@ def send_followup(lead_data, followup_num, sheets, dry_run=False):
     # Send via Resend
     try:
         from_name = os.getenv("EMAIL_FROM_NAME", "Connor from YapMate")
-        from_email = os.getenv("EMAIL_FROM", "connor@yapmate.co.uk")
-        reply_to = os.getenv("EMAIL_REPLY_TO", "connor@yapmate.co.uk")
+        from_email = os.getenv("EMAIL_FROM", "support@yapmate.co.uk")
+        reply_to = os.getenv("EMAIL_REPLY_TO", "support@yapmate.co.uk")
 
         params = {
             "from": f"{from_name} <{from_email}>",

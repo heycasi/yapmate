@@ -33,8 +33,8 @@ class APIConfig:
 
     # Resend
     resend_api_key: Optional[str] = None
-    email_from: str = "Connor from YapMate <connor@yapmate.co.uk>"
-    email_reply_to: str = "connor@yapmate.co.uk"
+    email_from: str = "Connor from YapMate <support@yapmate.co.uk>"
+    email_reply_to: str = "support@yapmate.co.uk"
 
     # Alerts
     alert_to_email: str = "support@yapmate.co.uk"
