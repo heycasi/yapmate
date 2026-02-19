@@ -1,0 +1,60 @@
+name: YapMate Leads Follow-Ups
+
+# Send follow-up emails once daily at 10:00 UTC (10:00 UK winter / 11:00 UK summer)
+# Follow-up 1: 3 days after initial send (gentle nudge)
+# Follow-up 2: 7 days after initial send (value-add with blog CTA)
+
+on:
+  schedule:
+    - cron: '0 10 * * 1-5'  # 10:00 UTC, weekdays only
+  workflow_dispatch:
+
+concurrency:
+  group: yapmate-leads-followups
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  send-followups:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: yapmate-leads/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r yapmate-leads/requirements.txt
+
+      - name: Send follow-up emails
+        working-directory: yapmate-leads
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM_NAME: ${{ secrets.EMAIL_FROM_NAME }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          SEND_ENABLED: ${{ secrets.SEND_ENABLED }}
+        run: |
+          echo "=========================================="
+          echo "FOLLOW-UP EMAIL SENDER"
+          echo "=========================================="
+          echo "Time: $(TZ=Europe/London date '+%Y-%m-%d %H:%M %Z')"
+          echo ""
+
+          python scripts/send_followups.py --limit 10
+
+          echo ""
+          echo "Follow-up sender completed"
