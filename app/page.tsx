@@ -23,6 +23,12 @@ export default function HomePage() {
               PRICING
             </Link>
             <Link
+              href="/blog"
+              className="text-yapmate-amber hover:text-white font-semibold transition-colors text-sm py-2"
+            >
+              BLOG
+            </Link>
+            <Link
               href="/login"
               className="text-yapmate-amber hover:text-white font-semibold transition-colors text-sm py-2"
             >
