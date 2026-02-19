@@ -259,9 +259,9 @@ class EmailSenderConfig:
     delay_between_sends_seconds: float = 0.5
 
     # Resend configuration
-    from_email: str = "support@yapmate.co.uk"
-    from_name: str = "YapMate"
-    reply_to: str = "support@yapmate.co.uk"
+    from_email: str = "connor@yapmate.co.uk"
+    from_name: str = "Connor from YapMate"
+    reply_to: str = "connor@yapmate.co.uk"
 
 
 # =============================================================================

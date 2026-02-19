@@ -342,6 +342,7 @@ class SequencerEmailSender:
 
         Uses generate_email_content() to ensure subject, HTML body, and plain
         text body all come from the same randomly selected template.
+        Passes the AI hook and trade for personalisation.
 
         Args:
             lead: Lead to generate email for
@@ -350,7 +351,11 @@ class SequencerEmailSender:
             Tuple of (subject, html_body, text_body)
         """
         from src.templates import generate_email_content
-        return generate_email_content(lead.business_name)
+        return generate_email_content(
+            lead.business_name,
+            hook=lead.ai_hook or "",
+            trade=getattr(lead, 'trade', "") or "",
+        )
 
     def generate_subject(self, lead: EnhancedLead) -> str:
         """Generate email subject line (standalone, for backwards compat)."""
@@ -360,12 +365,12 @@ class SequencerEmailSender:
     def generate_html_body(self, lead: EnhancedLead) -> str:
         """Generate HTML email body (standalone, for backwards compat)."""
         from src.templates import generate_email_html
-        return generate_email_html(business_name=lead.business_name)
+        return generate_email_html(business_name=lead.business_name, hook=lead.ai_hook or "", trade=getattr(lead, 'trade', "") or "")
 
     def generate_text_body(self, lead: EnhancedLead) -> str:
         """Generate plain text email body (standalone, for backwards compat)."""
         from src.templates import generate_email_text
-        return generate_email_text(business_name=lead.business_name)
+        return generate_email_text(business_name=lead.business_name, hook=lead.ai_hook or "", trade=getattr(lead, 'trade', "") or "")
 
     # =========================================================================
     # SENDING

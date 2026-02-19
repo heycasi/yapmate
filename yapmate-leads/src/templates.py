@@ -1,292 +1,280 @@
 """Email templates for lead outreach.
 
-3 fixed templates rotated randomly. No trade-specific wording.
-Each template has its own subject line, HTML body, and plain text body.
+Strategy:
+- Plain text style (looks like a human wrote it, not a marketing blast)
+- AI hook is used as the opening line (personalised per lead)
+- 3 initial templates rotated randomly
+- 2 follow-up templates for sequence (Day 3, Day 7)
+- Subject lines are curiosity-driven, not product-focused
 """
 
 import random
 
 
 # Constants
-# Use yapmate.co.uk/app redirect for better deliverability (links match sending domain)
-# This redirects to: https://apps.apple.com/gb/app/yapmate/id6756750891
 APP_STORE_URL = "https://www.yapmate.co.uk/app"
+LANDING_PAGE_URL = "https://www.yapmate.co.uk/try"
 UNSUBSCRIBE_URL = "https://www.yapmate.co.uk/unsubscribe"
-LOGO_URL = "https://www.yapmate.co.uk/email/yapmate-logo.png"
-APPSTORE_BADGE_URL = "https://www.yapmate.co.uk/email/appstore-badge.png"
-INVOICE_IMAGE_URL = "https://www.yapmate.co.uk/invoice-showcase.png"
+BLOG_CIS_URL = "https://www.yapmate.co.uk/blog/cis-deductions-explained"
 
 
 # =========================================================================
-# TEMPLATE DEFINITIONS
+# SUBJECT LINES (rotated independently of body template)
 # =========================================================================
-# Each template is a dict with: subject, body_paragraphs (list of strings)
-# body_paragraphs use {business_name} placeholder only.
+# Curiosity-driven, no product name, looks like a person emailing
+
+SUBJECT_LINES = [
+    "quick question about your invoicing",
+    "do you still do invoices manually?",
+    "thought of you when I built this",
+    "saves about an hour a day",
+    "how do you handle invoices after a long day?",
+    "invoicing on the drive home",
+    "30 seconds — that's it",
+]
+
+FOLLOW_UP_1_SUBJECTS = [
+    "did you get a chance to look?",
+    "just following up",
+    "meant to ask",
+]
+
+FOLLOW_UP_2_SUBJECTS = [
+    "thought this might help",
+    "CIS deductions — quick guide",
+    "useful if you're a subbie",
+]
+
+
+# =========================================================================
+# INITIAL EMAIL TEMPLATES
+# =========================================================================
+# {hook} = AI-generated personalised opening line
+# {business_name} = lead's business name
+# Plain text tone — short, direct, mate-to-mate
 
 TEMPLATES = [
     {
-        # Template 1: Story + simple use case
-        "subject": "Built for tradies who work by voice",
         "paragraphs": [
-            "I built YapMate after watching my uncle run his whole business by voice notes while my auntie ended up doing his invoices on her phone at night. I built it for him first, then realised it could help other tradies \u2014 that\u2019s how YapMate started.",
-            "With YapMate, you speak the job and it turns that into a proper invoice automatically (labour, materials, VAT, CIS where relevant). No forms. No typing.",
-            "If you want to try it, there\u2019s a 7-day free trial so you can test it properly.",
+            "{hook}",
+            "I built an app called YapMate — you talk into your phone for 30 seconds (job details, materials, labour) and it spits out a proper invoice. VAT calculated, CIS deductions if you're a subbie. No typing, no spreadsheets.",
+            "Free to try for 7 days if you fancy a look.",
         ],
     },
     {
-        # Template 3: Problem-first, generic
-        "subject": "Less paperwork, same work done",
         "paragraphs": [
-            "A lot of people in trades lose time to paperwork \u2014 especially invoicing.",
-            "YapMate lets you talk through a job and get a proper invoice straight away, without typing everything out. It handles materials, labour, VAT and CIS correctly.",
-            "I built it originally for a family member who worked mostly by voice. You can test it with a 7-day free trial.",
+            "{hook}",
+            "I've been working on something for tradespeople who hate the admin side. You literally speak your job details into your phone and get a formatted invoice back — VAT, CIS, the works. Takes about 30 seconds.",
+            "It's called YapMate. Free trial, no card needed.",
         ],
     },
     {
-        # Template 5: Benefit-led, clean
-        "subject": "Faster invoices without admin",
         "paragraphs": [
-            "YapMate converts your spoken job details into a proper invoice instantly \u2014 including materials, labour, VAT and CIS where needed.",
-            "No forms. No manual data entry.",
-            "You can test it on a 7-day free trial.",
+            "{hook}",
+            "Built this for my uncle originally — he'd come home knackered and still have invoices to do. Now he just talks into his phone in the van and they're done before he gets home.",
+            "It's called YapMate. Handles VAT and CIS automatically. 7-day free trial if you want to try it.",
         ],
     },
 ]
 
 
-def _pick_template() -> dict:
+# =========================================================================
+# FOLLOW-UP TEMPLATES
+# =========================================================================
+
+FOLLOW_UP_1_TEMPLATES = [
+    {
+        "paragraphs": [
+            "I dropped you an email a few days ago about YapMate — the voice-to-invoice app.",
+            "No worries if it's not for you, just wanted to make sure it didn't get buried. A few {trade}s have started using it this week.",
+            "Here's the link if you want a quick look: {landing_url}",
+        ],
+    },
+    {
+        "paragraphs": [
+            "Just a quick follow up on my last email.",
+            "Basically — you talk, it invoices. 30 seconds, done. Handles VAT and CIS.",
+            "Free to try: {landing_url}",
+        ],
+    },
+]
+
+FOLLOW_UP_2_TEMPLATES = [
+    {
+        "paragraphs": [
+            "Last one from me — I put together a quick guide on CIS deductions that might be useful if you're a subcontractor.",
+            "It covers what you need on your invoices, how the 20% deduction works, and common mistakes: {blog_url}",
+            "And if you ever want to try the voice invoicing, the offer's still there: {landing_url}",
+        ],
+    },
+    {
+        "paragraphs": [
+            "Wrote a guide on CIS invoicing that a few subbies have found useful — {blog_url}",
+            "Also still happy for you to try YapMate free if the admin's getting to you: {landing_url}",
+            "Either way, hope it helps.",
+        ],
+    },
+]
+
+
+# =========================================================================
+# TEMPLATE SELECTION
+# =========================================================================
+
+def _pick_template(templates=None):
     """Pick a random template from the pool."""
-    return random.choice(TEMPLATES)
+    return random.choice(templates or TEMPLATES)
+
+
+def _pick_subject(subjects=None):
+    """Pick a random subject line."""
+    return random.choice(subjects or SUBJECT_LINES)
 
 
 # =========================================================================
-# HTML EMAIL WRAPPER
+# PLAIN TEXT EMAIL (primary format)
 # =========================================================================
 
-def _wrap_html(business_name: str, body_paragraphs: list) -> str:
-    """
-    Wrap body paragraphs in the standard HTML email layout.
+def _build_plain_text(business_name, paragraphs, hook="", trade=""):
+    """Build plain text email body."""
+    body_parts = []
+    for p in paragraphs:
+        formatted = p.format(
+            hook=hook,
+            business_name=business_name,
+            trade=trade or "tradesperson",
+            landing_url=LANDING_PAGE_URL,
+            blog_url=BLOG_CIS_URL,
+            app_url=APP_STORE_URL,
+        )
+        body_parts.append(formatted)
 
-    Outlook-safe table-based layout with logo header, App Store CTA,
-    invoice screenshot, and unsubscribe footer.
-    """
-    # Build paragraph HTML
-    paragraphs_html = ""
-    for p in body_paragraphs:
-        paragraphs_html += f"""
-                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                {p}
-                            </p>"""
+    body = "\n\n".join(body_parts)
 
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YapMate</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-    <table role="presentation" style="width: 100%; border-collapse: collapse;">
-        <tr>
-            <td style="padding: 30px 20px;">
-                <table role="presentation" style="max-width: 600px; margin: 0 auto;">
-
-                    <!-- Logo Header -->
-                    <tr>
-                        <td style="padding: 30px 0 40px 0; text-align: center;">
-                            <table role="presentation" style="margin: 0 auto; border-collapse: collapse;">
-                                <tr>
-                                    <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 30px 40px; border-radius: 12px; text-align: center;">
-                                        <a href="{APP_STORE_URL}" style="text-decoration: none; display: inline-block;">
-                                            <img src="{LOGO_URL}"
-                                                 alt="YapMate"
-                                                 style="display: block; max-width: 400px; width: 100%; height: auto; border: 0;">
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-
-                    <!-- Email Body -->
-                    <tr>
-                        <td style="padding: 0;">
-
-                            <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                Hi {business_name},
-                            </p>
-{paragraphs_html}
-                        </td>
-                    </tr>
-
-                    <!-- CTA Section -->
-                    <tr>
-                        <td style="padding: 0 0 30px 0; text-align: center;">
-                            <p style="margin: 0 0 12px; color: #1a1a1a; font-size: 16px; font-weight: 500;">
-                                Download YapMate on the App Store
-                            </p>
-                            <a href="{APP_STORE_URL}" style="text-decoration: none; display: inline-block;">
-                                <img src="{APPSTORE_BADGE_URL}"
-                                     alt="Download on the App Store"
-                                     height="40"
-                                     style="display: block; height: 40px; width: auto; border: 0;">
-                            </a>
-                            <p style="margin: 10px 0 0; font-size: 13px; color: #666666;">
-                                <a href="{APP_STORE_URL}" style="color: #0066cc; text-decoration: none;">{APP_STORE_URL}</a>
-                            </p>
-                        </td>
-                    </tr>
-
-                    <!-- Invoice Screenshot -->
-                    <tr>
-                        <td style="padding: 0 0 30px 0;">
-                            <a href="{APP_STORE_URL}" style="display: block; text-decoration: none;">
-                                <img src="{INVOICE_IMAGE_URL}"
-                                     alt="YapMate invoice example"
-                                     width="600"
-                                     style="width: 100%; max-width: 600px; height: auto; display: block; border: 0;">
-                            </a>
-                        </td>
-                    </tr>
-
-                    <!-- Signoff -->
-                    <tr>
-                        <td style="padding: 0;">
-                            <p style="margin: 0; color: #1a1a1a; font-size: 16px; line-height: 1.6;">
-                                Connor<br>
-                                YapMate
-                            </p>
-                        </td>
-                    </tr>
-
-                    <!-- Unsubscribe -->
-                    <tr>
-                        <td style="padding: 30px 0 0 0;">
-                            <p style="margin: 0; text-align: center; color: #999999; font-size: 12px;">
-                                <a href="{UNSUBSCRIBE_URL}" style="color: #999999; text-decoration: underline;">Unsubscribe</a>
-                            </p>
-                        </td>
-                    </tr>
-
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-"""
-
-
-# =========================================================================
-# PLAIN TEXT EMAIL WRAPPER
-# =========================================================================
-
-def _wrap_text(business_name: str, body_paragraphs: list) -> str:
-    """Wrap body paragraphs in plain text email format."""
-    body = "\n\n".join(body_paragraphs)
     return f"""Hi {business_name},
 
 {body}
 
+Cheers,
 Connor
-YapMate
 
-Download YapMate on the App Store:
-{APP_STORE_URL}
+—
+Search "YapMate" on the App Store or visit {LANDING_PAGE_URL}
 
----
-
-Unsubscribe: {UNSUBSCRIBE_URL}
-"""
+Unsubscribe: {UNSUBSCRIBE_URL}"""
 
 
 # =========================================================================
-# PUBLIC API (same signatures as before for backwards compatibility)
+# MINIMAL HTML EMAIL (looks like plain text, not a marketing blast)
 # =========================================================================
 
-def generate_email_html(
-    business_name: str,
-    hook: str = "",
-    trade: str = "",
-    image_url: str = None,
-    _template: dict = None,
-) -> str:
-    """
-    Generate HTML email from a randomly selected template.
+def _build_html(business_name, paragraphs, hook="", trade=""):
+    """Build minimal HTML email that looks like plain text."""
+    body_parts = []
+    for p in paragraphs:
+        formatted = p.format(
+            hook=hook,
+            business_name=business_name,
+            trade=trade or "tradesperson",
+            landing_url=LANDING_PAGE_URL,
+            blog_url=BLOG_CIS_URL,
+            app_url=APP_STORE_URL,
+        )
+        # Convert URLs to links
+        for url in [LANDING_PAGE_URL, BLOG_CIS_URL, APP_STORE_URL]:
+            if url in formatted:
+                formatted = formatted.replace(url, f'<a href="{url}" style="color:#0066cc">{url}</a>')
+        body_parts.append(f'<p style="margin:0 0 16px;color:#1a1a1a;font-size:15px;line-height:1.6;">{formatted}</p>')
 
-    Args:
-        business_name: Lead's business name
-        hook: Ignored (kept for backwards compatibility)
-        trade: Ignored (kept for backwards compatibility)
-        image_url: Ignored (kept for backwards compatibility)
-        _template: Internal - pre-selected template (used to keep
-                   HTML/text/subject in sync for the same email)
+    paragraphs_html = "\n".join(body_parts)
 
-    Returns:
-        HTML email content
-    """
-    tpl = _template or _pick_template()
-    return _wrap_html(business_name, tpl["paragraphs"])
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<div style="max-width:580px;margin:0 auto;padding:20px;">
 
+<p style="margin:0 0 16px;color:#1a1a1a;font-size:15px;line-height:1.6;">Hi {business_name},</p>
 
-def generate_email_text(
-    business_name: str,
-    hook: str = "",
-    trade: str = "",
-    _template: dict = None,
-) -> str:
-    """
-    Generate plain-text email from a randomly selected template.
+{paragraphs_html}
 
-    Args:
-        business_name: Lead's business name
-        hook: Ignored (kept for backwards compatibility)
-        trade: Ignored (kept for backwards compatibility)
-        _template: Internal - pre-selected template
+<p style="margin:0 0 16px;color:#1a1a1a;font-size:15px;line-height:1.6;">
+Cheers,<br>Connor
+</p>
 
-    Returns:
-        Plain text email content
-    """
-    tpl = _template or _pick_template()
-    return _wrap_text(business_name, tpl["paragraphs"])
+<p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #eee;color:#999;font-size:12px;">
+Search "YapMate" on the App Store or visit <a href="{LANDING_PAGE_URL}" style="color:#999">{LANDING_PAGE_URL}</a><br>
+<a href="{UNSUBSCRIBE_URL}" style="color:#999;text-decoration:underline;">Unsubscribe</a>
+</p>
+
+</div>
+</body>
+</html>"""
 
 
-def generate_email_subject(
-    business_name: str = "",
-    trade: str = "",
-    _template: dict = None,
-) -> str:
-    """
-    Generate email subject line from a randomly selected template.
+# =========================================================================
+# PUBLIC API
+# =========================================================================
 
-    Args:
-        business_name: Ignored (kept for backwards compatibility)
-        trade: Ignored (kept for backwards compatibility)
-        _template: Internal - pre-selected template
-
-    Returns:
-        Email subject line
-    """
-    tpl = _template or _pick_template()
-    return tpl["subject"]
-
-
-def generate_email_content(business_name: str) -> tuple:
+def generate_email_content(business_name, hook="", trade=""):
     """
     Generate a complete email (subject, HTML, plain text) from one template.
 
-    This ensures the subject, HTML body, and plain text body all come from
-    the same randomly selected template.
-
     Args:
         business_name: Lead's business name
+        hook: AI-generated personalised opening line
+        trade: Lead's trade type (for follow-ups)
 
     Returns:
         Tuple of (subject, html_body, text_body)
     """
-    tpl = _pick_template()
+    tpl = _pick_template(TEMPLATES)
+    subject = _pick_subject(SUBJECT_LINES)
     return (
-        tpl["subject"],
-        _wrap_html(business_name, tpl["paragraphs"]),
-        _wrap_text(business_name, tpl["paragraphs"]),
+        subject,
+        _build_html(business_name, tpl["paragraphs"], hook=hook, trade=trade),
+        _build_plain_text(business_name, tpl["paragraphs"], hook=hook, trade=trade),
     )
+
+
+def generate_followup1_content(business_name, trade=""):
+    """Generate follow-up 1 email (Day 3)."""
+    tpl = _pick_template(FOLLOW_UP_1_TEMPLATES)
+    subject = _pick_subject(FOLLOW_UP_1_SUBJECTS)
+    return (
+        subject,
+        _build_html(business_name, tpl["paragraphs"], trade=trade),
+        _build_plain_text(business_name, tpl["paragraphs"], trade=trade),
+    )
+
+
+def generate_followup2_content(business_name, trade=""):
+    """Generate follow-up 2 email (Day 7) — includes blog CTA."""
+    tpl = _pick_template(FOLLOW_UP_2_TEMPLATES)
+    subject = _pick_subject(FOLLOW_UP_2_SUBJECTS)
+    return (
+        subject,
+        _build_html(business_name, tpl["paragraphs"], trade=trade),
+        _build_plain_text(business_name, tpl["paragraphs"], trade=trade),
+    )
+
+
+# =========================================================================
+# BACKWARDS COMPATIBILITY (old API still works)
+# =========================================================================
+
+def generate_email_html(business_name, hook="", trade="", image_url=None, _template=None):
+    """Generate HTML email body."""
+    tpl = _template or _pick_template(TEMPLATES)
+    return _build_html(business_name, tpl["paragraphs"], hook=hook, trade=trade)
+
+
+def generate_email_text(business_name, hook="", trade="", _template=None):
+    """Generate plain text email body."""
+    tpl = _template or _pick_template(TEMPLATES)
+    return _build_plain_text(business_name, tpl["paragraphs"], hook=hook, trade=trade)
+
+
+def generate_email_subject(business_name="", trade="", _template=None):
+    """Generate email subject line."""
+    return _pick_subject(SUBJECT_LINES)
