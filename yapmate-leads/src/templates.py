@@ -13,7 +13,7 @@ import random
 
 # Constants
 APP_STORE_URL = "https://www.yapmate.co.uk/app"
-LANDING_PAGE_URL = "https://www.yapmate.co.uk/try"
+LANDING_PAGE_URL = "https://www.yapmate.co.uk/app"
 UNSUBSCRIBE_URL = "https://www.yapmate.co.uk/unsubscribe"
 BLOG_CIS_URL = "https://www.yapmate.co.uk/blog/cis-deductions-explained"
 
@@ -57,22 +57,23 @@ TEMPLATES = [
     {
         "paragraphs": [
             "{hook}",
-            "I built an app called YapMate — you talk into your phone for 30 seconds (job details, materials, labour) and it spits out a proper invoice. VAT calculated, CIS deductions if you're a subbie. No typing, no spreadsheets.",
-            "Free to try for 7 days if you fancy a look.",
+            "I built YapMate — you talk into your phone for 30 seconds, job details and materials, and it spits out a proper invoice. VAT and CIS done automatically.",
+            "No typing. No forms. Free for 7 days.",
+            "Have a look: {app_url}",
         ],
     },
     {
         "paragraphs": [
             "{hook}",
-            "I've been working on something for tradespeople who hate the admin side. You literally speak your job details into your phone and get a formatted invoice back — VAT, CIS, the works. Takes about 30 seconds.",
-            "It's called YapMate. Free trial, no card needed.",
+            "YapMate lets you invoice by voice. Speak your job details in the van and get a formatted PDF back — VAT, CIS, materials, the works. Takes about 30 seconds.",
+            "Free trial, no card needed: {app_url}",
         ],
     },
     {
         "paragraphs": [
             "{hook}",
-            "Built this for my uncle originally — he'd come home knackered and still have invoices to do. Now he just talks into his phone in the van and they're done before he gets home.",
-            "It's called YapMate. Handles VAT and CIS automatically. 7-day free trial if you want to try it.",
+            "Most {trade}s I've spoken to spend their evenings doing invoices. YapMate does them in 30 seconds — you just talk through the job and it handles the rest. VAT, CIS, materials all sorted.",
+            "Worth a look if admin's eating your evenings: {app_url}",
         ],
     },
 ]
@@ -85,16 +86,16 @@ TEMPLATES = [
 FOLLOW_UP_1_TEMPLATES = [
     {
         "paragraphs": [
-            "I dropped you an email a few days ago about YapMate — the voice-to-invoice app.",
-            "No worries if it's not for you, just wanted to make sure it didn't get buried. A few {trade}s have started using it this week.",
-            "Here's the link if you want a quick look: {landing_url}",
+            "Dropped you an email a few days ago about YapMate — voice-to-invoice for {trade}s.",
+            "No worries if it's not for you. A few {trade}s have started using it this week and the main thing they say is it saves them doing admin at night.",
+            "Free to try: {app_url}",
         ],
     },
     {
         "paragraphs": [
-            "Just a quick follow up on my last email.",
-            "Basically — you talk, it invoices. 30 seconds, done. Handles VAT and CIS.",
-            "Free to try: {landing_url}",
+            "Quick follow up on my last email.",
+            "You talk, it invoices. 30 seconds, done. VAT and CIS handled.",
+            "Free to try: {app_url}",
         ],
     },
 ]
@@ -102,16 +103,15 @@ FOLLOW_UP_1_TEMPLATES = [
 FOLLOW_UP_2_TEMPLATES = [
     {
         "paragraphs": [
-            "Last one from me — I put together a quick guide on CIS deductions that might be useful if you're a subcontractor.",
-            "It covers what you need on your invoices, how the 20% deduction works, and common mistakes: {blog_url}",
-            "And if you ever want to try the voice invoicing, the offer's still there: {landing_url}",
+            "Last one from me — put together a quick guide on CIS deductions that might be useful if you're a subcontractor.",
+            "Covers what you need on your invoices, how the 20% deduction works, and common mistakes: {blog_url}",
+            "And if you want to try the voice invoicing: {app_url}",
         ],
     },
     {
         "paragraphs": [
-            "Wrote a guide on CIS invoicing that a few subbies have found useful — {blog_url}",
-            "Also still happy for you to try YapMate free if the admin's getting to you: {landing_url}",
-            "Either way, hope it helps.",
+            "Wrote a guide on CIS invoicing a few subbies have found useful — {blog_url}",
+            "YapMate's still free to try if the admin's getting to you: {app_url}",
         ],
     },
 ]
@@ -151,7 +151,10 @@ def _build_plain_text(business_name, paragraphs, hook="", trade=""):
 
     body = "\n\n".join(body_parts)
 
-    return f"""Hi {business_name},
+    # Use first name if business_name looks like a person's name
+    greeting_name = business_name
+
+    return f"""Hi {greeting_name},
 
 {body}
 
@@ -159,7 +162,7 @@ Cheers,
 Connor
 
 —
-Search "YapMate" on the App Store or visit {LANDING_PAGE_URL}
+Try YapMate free: {APP_STORE_URL}
 
 Unsubscribe: {UNSUBSCRIBE_URL}"""
 
@@ -203,7 +206,7 @@ Cheers,<br>Connor
 </p>
 
 <p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #eee;color:#999;font-size:12px;">
-Search "YapMate" on the App Store or visit <a href="{LANDING_PAGE_URL}" style="color:#999">{LANDING_PAGE_URL}</a><br>
+Try YapMate free: <a href="{APP_STORE_URL}" style="color:#0066cc">{APP_STORE_URL}</a><br>
 <a href="{UNSUBSCRIBE_URL}" style="color:#999;text-decoration:underline;">Unsubscribe</a>
 </p>
 

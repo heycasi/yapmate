@@ -166,6 +166,34 @@ class WebsiteEmailExtractor:
         "sentry.io", "sentry-next.wixpress.com",  # Error tracking
     }
 
+    # Free email providers — valid for UK tradespeople who use personal
+    # email as their business contact. These are allowed even when they
+    # don't match the website domain (because they never will).
+    FREE_EMAIL_DOMAINS = {
+        "gmail.com", "googlemail.com",
+        "yahoo.com", "yahoo.co.uk", "ymail.com",
+        "hotmail.com", "hotmail.co.uk",
+        "outlook.com", "outlook.co.uk",
+        "live.com", "live.co.uk",
+        "msn.com",
+        "icloud.com", "me.com", "mac.com",
+        "aol.com",
+        "btinternet.com", "btopenworld.com",  # BT (common UK ISP)
+        "sky.com",  # Sky (common UK ISP)
+        "virginmedia.com",  # Virgin Media
+        "talktalk.net",  # TalkTalk
+        "ntlworld.com",  # NTL (now Virgin)
+        "blueyonder.co.uk",  # Blueyonder (now Virgin)
+        "tiscali.co.uk",  # Tiscali (legacy UK ISP)
+        "plus.net",  # Plusnet (UK ISP)
+        "mail.com",
+        "gmx.com", "gmx.co.uk",
+        "protonmail.com", "proton.me", "pm.me",
+        "fastmail.com",
+        "tutanota.com",
+        "zoho.com",
+    }
+
     # File extensions that indicate non-HTML content
     NON_HTML_EXTENSIONS = {
         ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
@@ -400,9 +428,12 @@ class WebsiteEmailExtractor:
         if any(email.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js"]):
             return False
 
-        # Domain must match website
+        # Domain must match website — BUT allow known free email providers.
+        # Many UK tradespeople use gmail/yahoo/hotmail as their business contact
+        # email. If it's on their website, it's their legitimate contact address.
         if website_domain and not self._domain_matches(email, website_domain):
-            return False
+            if email_domain not in self.FREE_EMAIL_DOMAINS:
+                return False
 
         return True
 
@@ -411,21 +442,28 @@ class WebsiteEmailExtractor:
         email_lower = email.lower()
         return any(email_lower.startswith(prefix) for prefix in self.ROLE_PREFIXES)
 
+    def _is_free_email(self, email: str) -> bool:
+        """Check if email is from a free email provider."""
+        return self._get_email_domain(email) in self.FREE_EMAIL_DOMAINS
+
     def _prioritize_emails(self, emails: List[str]) -> List[str]:
         """
         Sort emails by priority.
 
-        Personal emails (john@...) come before role emails (info@...).
+        Order: domain-matching personal > domain-matching role >
+               free-provider personal > free-provider role
 
         Args:
             emails: List of valid emails
 
         Returns:
-            Sorted list with personal emails first
+            Sorted list with best emails first
         """
-        personal = [e for e in emails if not self._is_role_email(e)]
-        role = [e for e in emails if self._is_role_email(e)]
-        return personal + role
+        domain_personal = [e for e in emails if not self._is_role_email(e) and not self._is_free_email(e)]
+        domain_role = [e for e in emails if self._is_role_email(e) and not self._is_free_email(e)]
+        free_personal = [e for e in emails if not self._is_role_email(e) and self._is_free_email(e)]
+        free_role = [e for e in emails if self._is_role_email(e) and self._is_free_email(e)]
+        return domain_personal + domain_role + free_personal + free_role
 
     # =========================================================================
     # PAGE FETCHING
